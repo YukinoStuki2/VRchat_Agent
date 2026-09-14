@@ -1,6 +1,6 @@
 {
   "name": "com.yukino.vrchat-readonly-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "VRChat Read-Only MCP Diagnostics",
   "description": "Read-only VRChat avatar inventory, analysis, validation, and authoring decision support for MCP for Unity.",
   "unity": "2022.3",

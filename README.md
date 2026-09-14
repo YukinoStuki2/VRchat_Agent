@@ -12,10 +12,10 @@ requests.
 `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.2.0`。
 
 然后添加本工具包（公开仓库）：
-`https://github.com/YukinoStuki2/VRchat_Agent.git#v0.1.0`
+`https://github.com/YukinoStuki2/VRchat_Agent.git#v0.1.1`
 
 私有仓库使用 SSH 地址，且 Windows 必须具有该仓库的读取权限：
-`ssh://git@github.com/YukinoStuki2/VRchat_Agent.git#v0.1.0`
+`ssh://git@github.com/YukinoStuki2/VRchat_Agent.git#v0.1.1`
 
 本包位于仓库根目录，无需 `?path=`。不要同时保留 Assets 中或本地路径安装的重复副本。
 等待编译完成，在 MCP 面板 Rescan，保持 Project Scoped Tools 开启。

@@ -1,0 +1,16 @@
+{
+  "name": "com.yukino.vrchat-readonly-mcp",
+  "version": "0.1.0",
+  "displayName": "VRChat Read-Only MCP Diagnostics",
+  "description": "Read-only VRChat avatar inventory, analysis, validation, and authoring decision support for MCP for Unity.",
+  "unity": "2022.3",
+  "licensesUrl": "https://opensource.org/license/mit",
+  "dependencies": {
+    "com.coplaydev.unity-mcp": "10.2.0",
+    "com.unity.nuget.newtonsoft-json": "3.0.2"
+  },
+  "keywords": ["vrchat", "avatar", "readonly", "mcp", "diagnostics"],
+  "author": {
+    "name": "Yukino / Hermes Agent"
+  }
+}

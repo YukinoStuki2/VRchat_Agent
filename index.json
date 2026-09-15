@@ -1,0 +1,75 @@
+{
+  "name": "Yukino VRChat Agent — ALCOM / VPM",
+  "author": "Yukino / Hermes Agent",
+  "id": "com.yukino.vrchat-agent.vpm",
+  "url": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm/index.json",
+  "packages": {
+    "com.yukino.vrchat-readonly-mcp": {
+      "versions": {
+        "0.1.2": {
+          "name": "com.yukino.vrchat-readonly-mcp",
+          "version": "0.1.2",
+          "displayName": "VRChat Read-Only MCP Diagnostics",
+          "description": "Read-only VRChat avatar inventory, analysis, validation, and authoring decision support for MCP for Unity.",
+          "unity": "2022.3",
+          "licensesUrl": "https://opensource.org/license/mit",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2"
+          },
+          "keywords": [
+            "vrchat",
+            "avatar",
+            "readonly",
+            "mcp",
+            "diagnostics"
+          ],
+          "author": {
+            "name": "Yukino / Hermes Agent",
+            "url": "https://github.com/YukinoStuki2"
+          },
+          "url": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm-0.1.0/VPM~/packages/com.yukino.vrchat-readonly-mcp-0.1.2.zip",
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/blob/vpm/ALCOM.md",
+          "changelogUrl": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm-0.1.0/ALCOM.md",
+          "license": "MIT",
+          "vpmDependencies": {},
+          "zipSHA256": "ea10e82f6a459ad6c74d63c138c1ac2578d5877bfa0f914909ccf042cebf85d5"
+        }
+      }
+    },
+    "com.yukino.vrchat-managed-editing": {
+      "versions": {
+        "0.1.0-preview.2": {
+          "name": "com.yukino.vrchat-managed-editing",
+          "version": "0.1.0-preview.2",
+          "displayName": "VRChat Agent — Managed BlendShape Editing (Preview)",
+          "description": "Optional operator-gated BlendShape editing. Default locked; restricted bridge required. Candidate awaiting real Unity validation.",
+          "unity": "2022.3",
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2"
+          },
+          "author": {
+            "name": "Yukino / Hermes Agent",
+            "url": "https://github.com/YukinoStuki2"
+          },
+          "keywords": [
+            "vrchat",
+            "blendshape",
+            "mcp",
+            "permission",
+            "preview"
+          ],
+          "url": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm-0.1.0/VPM~/packages/com.yukino.vrchat-managed-editing-0.1.0-preview.2.zip",
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/blob/vpm/ALCOM.md",
+          "changelogUrl": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm-0.1.0/ALCOM.md",
+          "vpmDependencies": {
+            "com.yukino.vrchat-readonly-mcp": "0.1.2"
+          },
+          "zipSHA256": "f5406ce470c51f543063b20afb66fdb13e164a61a3c0dc374347c49a5811415f"
+        }
+      }
+    }
+  }
+}

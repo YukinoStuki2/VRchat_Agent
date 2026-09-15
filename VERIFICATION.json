@@ -1,0 +1,119 @@
+{
+  "local_checks_passed": true,
+  "independent_source_reviews_passed": true,
+  "unity_verified": false,
+  "source_sha256": {
+    "Editor.meta": "402db29be595b74ce171971c8f29baa1577cd8c63662acba0e0da493bcbb3eea",
+    "Editor/DynamicsStackPerformanceTools.cs": "424cf8481b11e550f4ca58f8502a76a02366ff4d1e5df72695667adb18ddba45",
+    "Editor/DynamicsStackPerformanceTools.cs.meta": "fe3c34579916dc530304b0a3d386d0c10965feaa6d5541ee94565fda24a60846",
+    "Editor/MaterialAnimatorExpressionTools.cs": "f6e66faed7a97740968328284c69285f631be4bdca9467ff897de4c7f24a64ee",
+    "Editor/MaterialAnimatorExpressionTools.cs.meta": "64bcf06bbf5442a3f8817945cb302e770be89f3df11069cf9538afbd557a8096",
+    "Editor/OutfitValidationTools.cs": "56d7e014be305277470df98a4d21d2a964febb802629243473c93a6daed3c79f",
+    "Editor/OutfitValidationTools.cs.meta": "8b8f74ccfc0c262cbe6b8881ceb6b0f7332a3928778720fe660a3deec223c9ac",
+    "Editor/ProjectAvatarTools.cs": "1b347b3fcc095576ec2fc3746bc87dbd2b64f73aca34f14976781f19ed81f461",
+    "Editor/ProjectAvatarTools.cs.meta": "e4706f77bc1bf44d40c2a24d5e540d4cdc43b172a498174ca2513eb3c40a250a",
+    "Editor/ReadOnlyCommon.cs": "4d55ebe06253a78f9a3e30a33949d7065fc6edcc35bf72f6b49f754d6c7baaa2",
+    "Editor/ReadOnlyCommon.cs.meta": "5c0915afd3423c80af98bd56e367ff221c21b8f645e91a3e93361c1bdd1f9950",
+    "Editor/Yukino.VRChatReadonlyMcp.Editor.asmdef": "d8498d4847cbfbc8661f4743160888b3f62f14270165cd9778ccd41a5b851d17",
+    "Editor/Yukino.VRChatReadonlyMcp.Editor.asmdef.meta": "deb1f041ab9ab447b54a3f5071feda6382000156b4c37d778f1ec163a84f1df6",
+    "LICENSE": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
+    "LICENSE.meta": "084b808dcf38266468844abe0fb1eceddf9e23735626fe0f80359c861e833fac",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor.meta": "22d6de9f8bd92fd1a95e0d6fe19635a0551b50b9bce8163f73d491e5cb1603e6",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/AssemblyInfo.cs": "477c2b7d763bec9ff20b52decddda88f2e69743da4a46232ce3776dceacc2767",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/AssemblyInfo.cs.meta": "dd6d40366b549f21711cec132cf5c0cffe31b292f0237cb3106009a213b73778",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/Core.meta": "4b436a89af6e60c422a9e291a807860ef94d512cb572adb25b51b06eeda1cad0",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/Core/GatePolicy.cs": "256f8333a5bea2386269b1719fbb3f46daf4077d130216c28aef4f59b531151f",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/Core/GatePolicy.cs.meta": "c56880f4c6776a4b8516c3b82490720034f7c9e70ca6f3a2adaa53ca9853e395",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/FacePreview.cs": "ec7ebba1f0980853857f79394c27497a4d71bc242f024365c821bb3cd8d5deaa",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/FacePreview.cs.meta": "92a454364e4a50dc9a88e5486825a5de8573b7faf8501b27063771249b931d93",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedSession.cs": "873f35cb019b27336d325272045f3fdb3a0b703ee463dfd42c69bab6e93cf6b2",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedSession.cs.meta": "d429d20f1ed79f154f911839bf37fa0af20f1cb910a9a86092ac4267b273447c",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedTools.cs": "68fad81977a9ace8a8c8f1a22a67d676c5b9b69614d075229ae1ae6e92d76501",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedTools.cs.meta": "a1fe03ca1d2ac69ed9c08aadb5c9901470eb88c3f06e22a082c3f48a5e148813",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedWindow.cs": "adf7b382b22fbd1795502a33ea075add70fa685e2ad040c10eaeebaab5b629ad",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/ManagedWindow.cs.meta": "47df008fefa6675e310d56cdb554b4d22aae96bba8149d148ee61d1ec603f4e2",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/Yukino.VRChatManagedEditing.Editor.asmdef": "549689a3bcca306737a7e10b109e60bb1cc1195fc55fac967250e63736f563ff",
+    "Packages~/com.yukino.vrchat-managed-editing/Editor/Yukino.VRChatManagedEditing.Editor.asmdef.meta": "7d004c3dd628303e39d27f397943543242695b2a2ecab2838da6cc5c7315ccbc",
+    "Packages~/com.yukino.vrchat-managed-editing/LICENSE": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
+    "Packages~/com.yukino.vrchat-managed-editing/LICENSE.meta": "1977ede0316cfc2a78671af9033d6b831aa1769c89d2312019833235c3f66584",
+    "Packages~/com.yukino.vrchat-managed-editing/README.md": "8ac59f395ec3feee7894e4515482c76ba53e9c2eda174d3d1d9e73c39c2c032c",
+    "Packages~/com.yukino.vrchat-managed-editing/README.md.meta": "3ee65a216d659356eb27a8d0185269e437e0f6e7374dea28b37733ea8556c0f8",
+    "Packages~/com.yukino.vrchat-managed-editing/THIRD_PARTY_NOTICES.md": "5cc26e1cd3e85a9de54125e560565a8dc0b80e7c496711da507754d426951379",
+    "Packages~/com.yukino.vrchat-managed-editing/THIRD_PARTY_NOTICES.md.meta": "daf54ee89956e38a3ec43a7f27bde0be1c1cde3538cd1351740f2ad5164ca9e3",
+    "Packages~/com.yukino.vrchat-managed-editing/package.json": "f19b16447afadb36f373587de30dd33ad0fcecb60df03b76df6bd122dff5874f",
+    "Packages~/com.yukino.vrchat-managed-editing/package.json.meta": "83691f3abdf2432d0e78b9862b3ccdb2b75c88d3c9c9dbc71bbe99802ac9a99d",
+    "README.md": "4070650c80ab012043cb3b0495fb8095c729d6443f203b47232db3276ec24132",
+    "README.md.meta": "bf07542c364f2741ca91228cc502eec654c52c4f031bca29c1a7409c20899d34",
+    "START_HERE.md": "9a68ccc49e1c0f494751dbb982ea6f57c21d1b0e29e6fe9bd5f231227c21109c",
+    "THIRD_PARTY_NOTICES.md": "c07a239bd9791dff71cb6706ceccbfe04c6b3cbf25d3c765e5a135b07653e1e7",
+    "THIRD_PARTY_NOTICES.md.meta": "1a368edee316e1c1731ac27b9a315d8f255e1754f044199bc2417dae3abe788c",
+    "Tests~/UNITY_ACCEPTANCE.md": "ffbf08cffae7aa00b3c9f6ba7a843234fefc430b7b5f80e47814f25fa3163d8d",
+    "Tests~/Unity/ManagedSmokeTests.cs": "c0a034f18c0b872dc484d03af5cfa2b53dd6d793c6b128ecefbe14eceebd757c",
+    "Tests~/Unity/Yukino.VRChatManagedEditing.Tests.asmdef": "22742e0d7d9ca6de2a703c046961652ca89af240703d07a47e8abfd1c3ecf412",
+    "Tests~/core/.gitignore": "fc08a64d494e6bd86fcae168dc6ced37f71271e7fa60fa390f94809c66fbfb8a",
+    "Tests~/core/CoreTests.csproj": "6cf7a72327bc01be815cb38858e8be203e2b829413612d5d7aeccde789a86a47",
+    "Tests~/core/NuGet.Config": "2142cfb2dfa2c7feefbe40fabcc68b0dfecadafa99a1db9b70239d977cf2a7ef",
+    "Tests~/core/Program.cs": "c0e8c0a6f34419b6a16111321b9d80e6531120d382df199007e59d1e70130e06",
+    "Tests~/core/README.md": "5cabf815f3ef5590090481f24938f79b6cf20de5ed5bb17907c3b702fc4ed2f0",
+    "Tests~/core/compatibility/CoreCompatibility.csproj": "611a4ecf332c34f0ac965b24fff31a0b14beddae9c039ddad58b8dabdf5b7566",
+    "Tests~/core/run.py": "df79385945ccd9746b612411a1c335b76e3bc1528a1d88b60a9b4a931d2d3552",
+    "Tests~/syntax/Program.cs": "2b0d357e40b29bfc09f9835343b4f261aa75fbff9f21e6bab37b4bf8ddb2ef76",
+    "Tests~/syntax/SyntaxCheck.csproj": "ddb22c1182974da536ce6b814270d9c64b825dabe8d48d7bb3996e15cab3a10a",
+    "Tests~/test_distribution.py": "994f1d88979985a23cd2a140080548f46cdd6bee1cee2752c9e65789094d4efc",
+    "Tests~/test_managed_wiring.py": "fae22ed318575ff06e101a8f860c9e609d3ba2dac8151b61ceae19e213ba4df9",
+    "Tests~/test_preview_ui.py": "dea058bca1e78211c18b4501bf74fa879f65a1e3bc070f786fefedaed0142b41",
+    "Tools~/build_candidate.py": "f33ae926023ca009015caec60181464c658b4fbaac241130af7feb45675728f5",
+    "Tools~/managed_bridge/.gitignore": "862263fa1f46c20f0d1e4dac5ffcc75abd55c08211b2c3864c5f8764b9d87793",
+    "Tools~/managed_bridge/README.zh-CN.md": "0fbac8f25716a9663955eb8a25075faa60374759d90622078ca64ff24235a46a",
+    "Tools~/managed_bridge/TDD.md": "1ff2c1fba6fca80b947b27f1fbfc89e635a58db73bbd1c453f0a2650c30ac678",
+    "Tools~/managed_bridge/bridge.py": "66359bf6de0bb616efccb423280aea6329fe16c309c84154bd90ba32fd9dbe96",
+    "Tools~/managed_bridge/test_bridge.py": "7498c44d9aa529674e5138d9e1ef45c98533cf7855dcadd8626e17551782f539",
+    "Tools~/managed_bridge/test_sdk_handshake.py": "fb217da65ec4b093412d492b62cf804a2877c48ae4dd59ae539472f4464aa01f",
+    "package.json": "f5849d5c9eb5ae5a64b1a749a4e9b03322286724e2b9a7bfae416017b0c30382",
+    "package.json.meta": "d836b957d052b05f70ee1840640c7c30499de97bf1dec6b461945372ebb8a2f5"
+  },
+  "scope": "Source candidate verified on Linux. Windows/Coplay/Unity compilation, rendering, Undo, and native images are NOT verified.",
+  "evidence_origin": "Counts summarized from locally executed checks and independent source reviews; raw machine logs and local paths intentionally omitted.",
+  "checks": [
+    {
+      "name": "core",
+      "passed": 15
+    },
+    {
+      "name": "core_netstandard21",
+      "exit_code": 0
+    },
+    {
+      "name": "CSharp9_syntax_only",
+      "files": 6,
+      "errors": 0
+    },
+    {
+      "name": "source_and_distribution",
+      "passed": 25,
+      "subtests_passed": 24
+    },
+    {
+      "name": "bridge_loopback_HTTP_not_Unity",
+      "passed": 25
+    },
+    {
+      "name": "real_MCP_client_with_fixture_not_Unity",
+      "passed": 1
+    },
+    {
+      "name": "readonly_v011_exact_bytes",
+      "files": 21
+    },
+    {
+      "name": "readonly_regression_temporary_copy",
+      "passed": 38
+    }
+  ],
+  "review_scopes": [
+    "Unity bounded source delta",
+    "MCP bridge and nullable-array delta",
+    "distribution inventory and verification attachment safety"
+  ],
+  "delivery_zip_sha256": "4039d3ff889a0a543d028b89cf139dc1d9d3815728f6f3833045a4417dce9d5a"
+}

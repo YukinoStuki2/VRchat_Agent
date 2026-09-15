@@ -1,0 +1,10 @@
+{
+  "name": "Yukino.VRChatManagedEditing.Tests",
+  "references": ["Yukino.VRChatManagedEditing.Editor"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "overrideReferences": true,
+  "precompiledReferences": ["Newtonsoft.Json.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

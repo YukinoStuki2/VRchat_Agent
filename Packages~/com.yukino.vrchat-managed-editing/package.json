@@ -1,0 +1,14 @@
+{
+  "name": "com.yukino.vrchat-managed-editing",
+  "version": "0.1.0-preview.1",
+  "displayName": "VRChat Agent — Managed BlendShape Editing (Preview)",
+  "description": "Optional operator-gated BlendShape editing. Default locked; restricted bridge required. Candidate awaiting real Unity validation.",
+  "unity": "2022.3",
+  "license": "MIT",
+  "dependencies": {
+    "com.coplaydev.unity-mcp": "10.2.0",
+    "com.unity.nuget.newtonsoft-json": "3.0.2"
+  },
+  "author": {"name": "Yukino / Hermes Agent"},
+  "keywords": ["vrchat", "blendshape", "mcp", "permission", "preview"]
+}

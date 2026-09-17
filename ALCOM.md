@@ -20,12 +20,13 @@ https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm/index.json
 |---|---|---|
 | VRChat Read-Only MCP Diagnostics | `0.1.2` | 只读诊断；不依赖编辑包 |
 | VRChat Agent — Managed BlendShape Editing (Preview) | `0.1.0-preview.2` | 可选受控编辑；会依赖并安装只读包 `0.1.2` |
+| Yukino Agent Connection Manager (Preview) | `0.1.0-preview.1` | Windows Unity 菜单连接管理；依赖前两包代码，但不授权编辑 |
 
 **看不到编辑包时**：开启ALCOM的“显示预发行软件包 / Show Prerelease Packages”，再刷新仓库。只想使用只读诊断就不要开启或安装编辑包。预览版不会冒充稳定版。
 
 ## 首次安装：基础依赖只需另外处理一次
 
-本仓库只提供我们自己的两个工具包，**不重新发布、自动安装或升级 Coplay MCP、Unity、VRChat SDK**。
+本仓库只提供我们自己的工具包，**不重新发布、自动安装或升级 Coplay MCP、Unity、VRChat SDK**。
 
 必须先在Unity Package Manager → Add package from git URL 安装官方固定依赖：
 
@@ -56,9 +57,19 @@ https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.2.0
 - 新版编辑包如需不同只读版本，由明确的VPM依赖关系提示/解决。
 - 包版本回退只能回退代码，**不会恢复已经改过的模型权重**；模型仍使用Undo、精确恢复或工程备份。
 
-## Windows受限入口仍需单独启动
+## Unity 菜单一键连接（可选新预览包）
 
-ALCOM管理Unity项目插件，**不会启动/更新Windows Python脚本、安装后台服务、建立SSH隧道或改Hermes配置**。
+在 ALCOM 显示预发行版本后，安装 **Yukino Agent Connection Manager (Preview)**。菜单 **Tools → Yukino → Agent Connection Manager**。
+
+- 首次填写本机 Python 3.11+、uvx、OpenSSH 路径及服务器信息；密钥/ssh-agent与主机指纹需本机预先配置。
+- 点击一键连接后依次启动固定版基础 MCP、Unity Connect、受限 Bridge 和 SSH；有明确停止、失败清理和端口冲突检查。
+- 连接窗口关闭、重编译和退出会请求断开；更新前先断开并关闭 Unity。
+- **ALCOM 安装/更新本身仍不启动任何服务或隧道，不修改 Hermes，也不开放模型修改权限。** 本包将桥接脚本一起更新，只有 Unity 本地按钮能启动。
+- 完整首次配置、安全边界和验收限制：[启动器 README](Packages~/com.yukino.vrchat-agent-launcher/README.md)。Windows / Unity 实机结果与管理机测试严格分开，尚未验收的能力不得当作稳定版。
+
+## 保留手工启动方式（不安装连接管理包）
+
+只安装原只读/受控编辑包时，Windows Bridge 和 SSH 仍需单独启动。下面是首批 VPM 分发的历史说明：
 
 本轮VPM只改分发元数据与README，C#及.meta不变。受控入口与 `managed-v0.1.0-preview.1` 同一版本兼容。源码可从这个固定快照下载：
 
@@ -75,6 +86,10 @@ https://github.com/YukinoStuki2/VRchat_Agent/archive/refs/tags/vpm-0.1.0.zip
 - Git `main`、`v0.1.1`、`managed-v0.1.0-preview.1` 保持原样；不是把候选版宣布为正式模型编辑能力。
 
 ## 版本记录
+
+### 连接管理预览 `0.1.0-preview.1`
+
+新增独立 `com.yukino.vrchat-agent-launcher`，通过 `VPM~/build_launcher.py` 从独立审核清单追加，不重建或替换前两包。窗口、监督程序和固定受限 Bridge 同包更新。基础 Coplay 仍使用官方来源。
 
 ### VPM首批分发
 

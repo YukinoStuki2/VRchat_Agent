@@ -1,0 +1,13 @@
+{
+  "name": "Yukino.VRChatAgentLauncher.Editor",
+  "rootNamespace": "Yukino.VRChatAgentLauncher",
+  "references": [
+    "MCPForUnity.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "allowUnsafeCode": false,
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

@@ -1,0 +1,37 @@
+name: Launcher preview checks
+on:
+  push:
+    branches: [launcher-preview]
+    paths: ['Packages~/com.yukino.vrchat-agent-launcher/**', 'Tests~/test_launcher*', 'Tests~/launcher*', '.github/workflows/launcher-preview.yml']
+  workflow_dispatch:
+env:
+  PYTHONUTF8: '1'
+permissions:
+  contents: read
+jobs:
+  windows-ownership:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Native ownership in real Windows kernel
+        run: python -B "Tests~/launcher_windows_live.py"
+      - name: Supervisor and protocol tests (no Unity or real SSH)
+        run: python -B -m unittest discover -s "Tests~" -p "test_launcher_*.py" -v
+  linux-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: python -B -m unittest discover -s 'Tests~' -p 'test_launcher_*.py' -v
+      - name: Compile with test doubles (NOT Unity API verification)
+        run: dotnet run --project 'Tests~/launcher-compile/LauncherCompile.csproj' --disable-build-servers

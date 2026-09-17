@@ -1,0 +1,31 @@
+{
+  "local_checks_passed": true,
+  "independent_source_reviews_passed": true,
+  "unity_verified": false,
+  "native_windows_process_ci_passed": true,
+  "ci_url": "https://github.com/YukinoStuki2/VRchat_Agent/actions/runs/35236588024",
+  "source_sha256": {
+    "Editor/CoplayAdapter.cs": "a416c4f99e6f8d1cc0c81d3bf217d2a98ba37cebdebed74dab6e9af166c18fbd",
+    "Editor/CoplayAdapter.cs.meta": "2fe9b7a4eee754673dbd017565721640e1149c2ab3bafd84a122009080e88850",
+    "Editor/LauncherSession.cs": "5607c92581b3bde89ee163283ee8b89d3d985696b76f69ab16994b713af93029",
+    "Editor/LauncherSession.cs.meta": "a68e92ecd1cd4f84424bacb197e0a9274b1b7d65f23b14e868bdbf595143412d",
+    "Editor/LauncherSettings.cs": "0b2d0b76bde1b7e422c685bd2f3c290394b9b2fcaf0c2cd0e44455455b47261c",
+    "Editor/LauncherSettings.cs.meta": "ffc4cecb765cebe469c68652fc8be212ddbc9dfb50bb48bf95bf1e1439302869",
+    "Editor/LauncherWindow.cs": "70a2d069f29fd496bac508c555df131972360cdb96abd15cbb26a3aa63746666",
+    "Editor/LauncherWindow.cs.meta": "18d5fe2421346a8fa1df078e542edf8a0eb3fe9e971110ab8690bc330984f64e",
+    "Editor/Runtime~/bridge.py": "66359bf6de0bb616efccb423280aea6329fe16c309c84154bd90ba32fd9dbe96",
+    "Editor/Runtime~/launcher_supervisor.py": "403011b0cf5870ee9de0f9d5cf4aedd1d0c10df7df03ee96bba847d42f908878",
+    "Editor/Runtime~/windows_processes.py": "cc5b5ece947cf793f20dc93c685d08676ce0294b280fa73f607b0ab60e0dc995",
+    "Editor/Yukino.VRChatAgentLauncher.Editor.asmdef": "5a00c262cc9735fa6eb6105308ff78c2449bb4a4cc7ba95c1a111fa0c2769b46",
+    "Editor/Yukino.VRChatAgentLauncher.Editor.asmdef.meta": "26131fcaf79532e232b54b59ff1a596d75027aa1f626ef481aad03ee8a3ec2b8",
+    "Editor.meta": "9c88668b7c051b3fbcb710b32715b50f7c13e2eebf9dc5236b3eec356e91c202",
+    "LICENSE": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
+    "LICENSE.meta": "5a7fe922b718564d474c1ddf8315e5ddd21e31c7165e31fb0e906ef8429b0fd0",
+    "README.md": "de2869d931d22710660c16b365732db5f9125ebcd57cee77c38371b46a0b180a",
+    "README.md.meta": "e34412fc70b734548ad712a1cfbbd98a7345aafbaf0dd19e863e2847b987f889",
+    "THIRD_PARTY_NOTICES.md": "b48bc25f87ed8fc4809dcf11c342ea7b2409a4867415da058da59134eecf9b00",
+    "THIRD_PARTY_NOTICES.md.meta": "4823773d73cac604407f15e60f088ed7faabac67c46458eb0c50f6325a04cc43",
+    "package.json": "9dc4e7c281599848c96b21d542fa6d88b1bf96926003c609c77a4d475b95daea",
+    "package.json.meta": "78c554f6896587ce07e36eb759e065c04b356eadcdb3eaec90b711012c1e319d"
+  }
+}

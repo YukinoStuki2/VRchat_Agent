@@ -15,7 +15,7 @@ namespace UnityEditor {
  public class InitializeOnLoadAttribute:Attribute{}
  public class MenuItem:Attribute { public MenuItem(string x){} }
  public static class AssemblyReloadEvents { public static event Action beforeAssemblyReload; public static void Fire()=>beforeAssemblyReload?.Invoke(); }
- public static class EditorApplication { public static event Action quitting,update; public static double timeSinceStartup; public static void FireUpdate()=>update?.Invoke(); public static void Quit()=>quitting?.Invoke(); }
+ public static class EditorApplication { public static event Action quitting,update; public static double timeSinceStartup; public static bool isCompiling, isUpdating, isPlayingOrWillChangePlaymode; public static void FireUpdate()=>update?.Invoke(); public static void Quit()=>quitting?.Invoke(); }
  public class EditorWindow { public UnityEngine.Vector2 minSize; public void Repaint(){} public static T GetWindow<T>(string s) where T:new()=>new T(); }
  public static class SessionState { static readonly Dictionary<string,object> d=new Dictionary<string,object>(); public static string GetString(string k,string v)=>d.ContainsKey(k)?(string)d[k]:v; public static void SetString(string k,string v)=>d[k]=v; public static bool GetBool(string k,bool v)=>d.ContainsKey(k)?(bool)d[k]:v; public static void SetBool(string k,bool v)=>d[k]=v; public static void EraseString(string k)=>d.Remove(k); public static void EraseBool(string k)=>d.Remove(k); }
  public static class EditorPrefs { public static bool GetBool(string k,bool v)=>SessionState.GetBool(k,v); public static void SetBool(string k,bool v)=>SessionState.SetBool(k,v); public static string GetString(string k,string v)=>SessionState.GetString(k,v); public static void SetString(string k,string v)=>SessionState.SetString(k,v); }
@@ -27,6 +27,7 @@ namespace UnityEditor {
  // Real Unity 2022 also has a namesake; keep ambiguity exposed if source forgets qualification.
  public class PackageInfo {}
 }
+namespace UnityEditor.Compilation { public static class CompilationPipeline { public static event Action<object> compilationStarted; public static void Fire()=>compilationStarted?.Invoke(null); } }
 namespace UnityEditor.PackageManager { public class PackageInfo {
  public string name,version,resolvedPath;
  public static string CoplayVersion="10.2.0";

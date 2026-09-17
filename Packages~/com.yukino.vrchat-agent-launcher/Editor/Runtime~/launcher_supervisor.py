@@ -211,15 +211,23 @@ def probe_sidecar():
     return good
 
 
+class ProjectIdentityMismatch(ValueError):
+    """Only observed different path or multiple valid instances, not timeouts."""
+
+
 def project_matches(session, expected):
     instances = session.resource('mcpforunity://instances')
     rows = instances['instances']
     require(instances.get('transport') == 'http' and type(instances.get('instance_count')) is int)
-    require(type(rows) is list and len(rows) == instances['instance_count'] == 1)
-    require(type(rows[0]['id']) is str and bool(rows[0]['id']))
+    require(type(rows) is list and len(rows) == instances['instance_count'])
+    require(all(type(row) is dict and type(row.get('id')) is str and bool(row['id']) for row in rows))
+    require(len({row['id'] for row in rows}) == len(rows))
+    if len(rows) > 1:raise ProjectIdentityMismatch()
+    require(len(rows) == 1)
     project = session.resource('mcpforunity://project/info')
     actual = absolute_path(project['data']['projectRoot'])
-    require(ntpath.normcase(ntpath.normpath(actual)) == ntpath.normcase(ntpath.normpath(expected)))
+    if ntpath.normcase(ntpath.normpath(actual)) != ntpath.normcase(ntpath.normpath(expected)):
+        raise ProjectIdentityMismatch()
     # Reject concurrent changes while reading project information.
     after = session.resource('mcpforunity://instances')
     require(after == instances)
@@ -229,12 +237,16 @@ def project_matches(session, expected):
 def probe_project(expected):
     session = MCPSession(18081, 'mcp-for-unity-server')
     good = False
+    mismatch = False
     try:
         session.initialize()
         good = project_matches(session, expected)
+    except ProjectIdentityMismatch:
+        mismatch = True
     except PROBE_ERRORS:
         pass
     if not session.close():raise CleanupUnresolved()
+    if mismatch:raise ProjectIdentityMismatch()
     return good
 
 
@@ -292,7 +304,8 @@ MESSAGES = {
     'SSH_REFUSED': 'SSH 服务拒绝连接，请检查主机与服务端口。',
     'SSH_TIMEOUT': 'SSH 连接超时，请检查地址、端口与网络。',
     'PROCESS_EXITED': '本次启动的进程意外退出，正在清理；不自动重启。',
-    'PROJECT_CHANGED': '唯一工程身份检查失败，已停止隧道。',
+    'PROJECT_CHANGED': '检测到不同工程或多个实例，已停止隧道，不自动恢复。',
+    'PROJECT_UNAVAILABLE': '暂时无法确认工程（可能正在导入／编译或连接中断），已停止隧道；不代表工程已更换。',
     'CLEANUP_FAILED': '清理尚未完全确认；不允许自动重试，请本地检查。',
     'INTERNAL_ERROR': '启动器遇到错误；已请求清理，请检查 Python 3.11+ 和本地程序路径。'
 }
@@ -356,6 +369,13 @@ def supervise(raw, owner):
     def check():
         if cancelled():raise Cancelled()
         if any(child is not None and child.poll() is not None for child in (ssh,sidecar)):raise LaunchError('PROCESS_EXITED')
+    def checked_project():
+        try:ready=probe_project(c['expected_project'])
+        except ProjectIdentityMismatch:
+            check()
+            raise
+        check()  # a local import/reload stop request can arrive during the probe
+        return ready
     def wait(predicate,seconds,code):
         end=time.monotonic()+seconds
         while True:
@@ -373,7 +393,7 @@ def supervise(raw, owner):
             wait(lambda:port_open(18081),120,'START_TIMEOUT')
             if not probe_sidecar():raise LaunchError('SIDECAR_INVALID')
         write_status(c,'sidecar_ready','SIDECAR_READY')
-        wait(lambda:probe_project(c['expected_project']),40,'PROJECT_TIMEOUT')
+        wait(checked_project,40,'PROJECT_TIMEOUT')
         check();relay=Relay();relay.start()
         if not relay.verify():raise LaunchError('BRIDGE_INVALID')
         write_status(c,'bridge_ready','BRIDGE_READY');check()
@@ -385,19 +405,20 @@ def supervise(raw, owner):
             return progress.ready
         wait(forwarded,30,'SSH_TIMEOUT')
         check()
-        if not probe_project(c['expected_project']):raise LaunchError('PROJECT_CHANGED')
+        if not checked_project():raise LaunchError('PROJECT_UNAVAILABLE')
         write_status(c,'connected','CONNECTED')
         next_identity=time.monotonic()+5
         while True:
             check()
             if progress.error:raise LaunchError(progress.error)
             if time.monotonic()>=next_identity:
-                if not probe_project(c['expected_project']):raise LaunchError('PROJECT_CHANGED')
+                if not checked_project():raise LaunchError('PROJECT_UNAVAILABLE')
                 next_identity=time.monotonic()+5
             time.sleep(0.25)
     except (Cancelled,KeyboardInterrupt):pass
     except CleanupUnresolved:
         readiness_clean=False;error='CLEANUP_FAILED'
+    except ProjectIdentityMismatch:error='PROJECT_CHANGED'
     except LaunchError as e:error=str(e)
     except Exception:error='INTERNAL_ERROR'
     finally:

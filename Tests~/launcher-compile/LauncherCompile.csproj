@@ -2,6 +2,6 @@
   <PropertyGroup><AssemblyName>MCPForUnity.Editor</AssemblyName><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Packages~/com.yukino.vrchat-agent-launcher/Editor/*.cs" />
-    <Compile Include="Stubs.cs" /><Compile Include="Program.cs" />
+    <Compile Include="Stubs.cs" /><Compile Include="Program.cs" /><Compile Include="RecoveryTests.cs" />
   </ItemGroup>
 </Project>

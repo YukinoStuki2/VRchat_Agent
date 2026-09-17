@@ -15,20 +15,22 @@ namespace Yukino.VRChatAgentLauncher
         private void OnEnable()
         {
             settings = LauncherSettings.Load();
+            LauncherSession.WindowOpen = true;
             minSize = new Vector2(510, 570);
             EditorApplication.update += Repaint;
         }
         private void OnDisable()
         {
             EditorApplication.update -= Repaint;
-            if (LauncherSession.Busy) LauncherSession.RequestStop("连接窗口关闭：停止本窗口启动的隧道。");
+            LauncherSession.WindowClosed();
         }
+        private void OnDestroy() { LauncherSession.WindowClosed(true); }
         private void OnGUI()
         {
             if (settings == null) settings = LauncherSettings.Load();
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.LabelField("Yukino Agent 连接管理 · Preview", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("点击连接才会启动：固定版基础 MCP → Unity Connect → 受限 Bridge → SSH。不会开启 Preview/Apply 权限。关闭本窗口、重编译或退出会断开；更新前请先断开。", MessageType.Info);
+            EditorGUILayout.HelpBox("点击连接才会启动：固定版基础 MCP → Unity Connect → 受限 Bridge → SSH。不会开启 Preview/Apply 权限。关闭窗口或退出会取消恢复；可选导入后恢复连接，权限仍关闭。更新前请先断开。", MessageType.Info);
             EditorGUILayout.LabelField("启动阶段", LauncherSession.Phase);
             EditorGUILayout.HelpBox(LauncherSession.Message, MessageType.None);
             try
@@ -38,7 +40,7 @@ namespace Yukino.VRChatAgentLauncher
             }
             catch { EditorGUILayout.LabelField("Unity HTTP", "未能读取；请核对 Coplay 版本"); }
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(LauncherSession.Busy))
+            using (new EditorGUI.DisabledScope(LauncherSession.Busy || LauncherSession.RecoveryPending))
             {
                 EditorGUILayout.LabelField("设置（仅本机，不写入工程 Git）", EditorStyles.boldLabel);
                 settings.python = Executable("Python 3.11+", settings.python);
@@ -50,6 +52,7 @@ namespace Yukino.VRChatAgentLauncher
                 settings.sshPort = EditorGUILayout.IntField("SSH 服务端口", settings.sshPort);
                 settings.remotePort = EditorGUILayout.IntField("管理机受限转发端口", settings.remotePort);
                 EditorGUILayout.LabelField("本机固定端口", "MCP 18081 → 受限 Bridge 18082");
+                settings.autoRecoverAfterImport = EditorGUILayout.ToggleLeft("导入／重编译后恢复连接（默认关闭，不恢复编辑权限）", settings.autoRecoverAfterImport);
                 if (GUILayout.Button("保存设置")) { settings.Save(); notice = "已保存到本机 EditorPrefs。"; }
                 if (GUILayout.Button("准备 Coplay 本地设置"))
                 {
@@ -64,7 +67,7 @@ namespace Yukino.VRChatAgentLauncher
                 using (new EditorGUI.DisabledScope(!safetyAcknowledged))
                     if (GUILayout.Button("一键连接", GUILayout.Height(32))) { settings.Save(); LauncherSession.Start(settings); }
             }
-            using (new EditorGUI.DisabledScope(!LauncherSession.Busy))
+            using (new EditorGUI.DisabledScope(!LauncherSession.Busy && !LauncherSession.RecoveryPending))
                 if (GUILayout.Button("断开连接（撤销权限并清理自有进程）")) LauncherSession.RequestStop();
             if (GUILayout.Button("刷新状态")) LauncherSession.Tick();
             using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(LauncherSession.LastRun)))

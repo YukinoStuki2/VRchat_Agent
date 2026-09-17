@@ -1,7 +1,7 @@
 name: Launcher preview checks
 on:
   push:
-    branches: [launcher-preview]
+    branches: [launcher-preview, launcher-recovery]
     paths: ['Packages~/com.yukino.vrchat-agent-launcher/**', 'Tests~/test_launcher*', 'Tests~/launcher*', '.github/workflows/launcher-preview.yml']
   workflow_dispatch:
 env:

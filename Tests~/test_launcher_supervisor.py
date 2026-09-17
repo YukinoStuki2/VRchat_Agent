@@ -113,7 +113,7 @@ class ReadinessTests(unittest.TestCase):
         row = {'id': 'Avatar@123', 'name': 'Avatar'}
         for count, path, good in [(0, r'C:\Projects\Avatar', False), (2, r'C:\Projects\Avatar', False),
                                   (1, r'C:\Other', False), (1, 'c:/projects/avatar/', True)]:
-            instances = resource(uri, {'success': True, 'transport': 'http', 'instance_count': count, 'instances': [row]*count})
+            instances = resource(uri, {'success': True, 'transport': 'http', 'instance_count': count, 'instances': [dict(row,id='Avatar@'+str(i)) for i in range(count)]})
             results = [initialized('mcp-for-unity-server'), 202, instances]
             if count == 1:
                 results.append(resource('mcpforunity://project/info', {'success': True, 'data': {'projectRoot': path}}))
@@ -121,7 +121,9 @@ class ReadinessTests(unittest.TestCase):
             results += [204, 404]
             fake = FakeHTTP(results)
             with patch.object(s.http.client, 'HTTPConnection', side_effect=fake.factory):
-                self.assertEqual(s.probe_project(r'C:\Projects\Avatar'), good)
+                if count > 1 or path == r'C:\Other':
+                    with self.assertRaises(s.ProjectIdentityMismatch):s.probe_project(r'C:\Projects\Avatar')
+                else:self.assertEqual(s.probe_project(r'C:\Projects\Avatar'), good)
             self.assertFalse(any(c[2] and c[2]['method'].startswith('tools/') for c in fake.calls))
 
     def test_bridge_complete_catalog_and_inactive_status_no_delete(self):
@@ -263,6 +265,42 @@ class CleanupRegressionTests(unittest.TestCase):
             with patch.object(s,'port_open',side_effect=lambda p:p==18081),patch.object(s,'probe_sidecar',return_value=True),patch.object(s,'probe_project',side_effect=[True,False]),patch.object(s,'Relay',return_value=relay),patch.object(s,'write_status',side_effect=status):
                 self.assertEqual(s.supervise(c,owner),1)
             self.assertNotIn('connected',phases);child.stop.assert_called_once()
+
+class ImportDiagnosticTests(unittest.TestCase):
+    def test_missing_instance_is_unavailable_not_mismatch(self):
+        self.assertTrue(hasattr(s,'ProjectIdentityMismatch'),'specific identity exception missing')
+        session=Mock();session.resource.return_value={'success':True,'transport':'http','instance_count':0,'instances':[]};session.close.return_value=True
+        with patch.object(s,'MCPSession',return_value=session):self.assertFalse(s.probe_project('F:/VRchat/Yuzuki'))
+    def test_observed_different_or_multiple_projects_is_mismatch(self):
+        self.assertTrue(hasattr(s,'ProjectIdentityMismatch'),'specific identity exception missing')
+        cases=[ [{'transport':'http','instance_count':2,'instances':[{'id':'a'},{'id':'b'}]}], [{'transport':'http','instance_count':1,'instances':[{'id':'a'}]},{'data':{'projectRoot':'F:/Other'}}] ]
+        for replies in cases:
+            session=Mock();session.resource.side_effect=replies;session.close.return_value=True
+            with patch.object(s,'MCPSession',return_value=session):
+                with self.assertRaises(s.ProjectIdentityMismatch):s.probe_project('F:/VRchat/Yuzuki')
+            session.close.assert_called_once()
+    def test_timeout_unavailable_and_cleanup_debt_still_blocks(self):
+        session=Mock();session.resource.side_effect=TimeoutError();session.close.return_value=True
+        with patch.object(s,'MCPSession',return_value=session):self.assertFalse(s.probe_project('F:/VRchat/Yuzuki'))
+        session.close.return_value=False
+        with patch.object(s,'MCPSession',return_value=session):
+            with self.assertRaises(s.CleanupUnresolved):s.probe_project('F:/VRchat/Yuzuki')
+    def test_import_stopfile_after_inflight_probe_wins(self):
+        with tempfile.TemporaryDirectory() as td:
+            t=Path(td);c=config(status_file=str(t/'status'),stop_file=str(t/'stop'))
+            child=Mock();child.poll.return_value=None
+            owner=Mock();owner.alive.return_value=True;owner.close.return_value=True
+            def spawn(args,env,stderr_line_callback=None):
+                stderr_line_callback('debug1: remote forward success for: listen 127.0.0.1:28082, connect 127.0.0.1:18082');return child
+            owner.spawn.side_effect=spawn;relay=Mock();relay.cleanup.return_value=True
+            count=[0]
+            def probe(expected):
+                count[0]+=1
+                if count[0]==2:(t/'stop').touch();return False
+                return True
+            with patch.object(s,'port_open',side_effect=lambda p:p==18081),patch.object(s,'probe_sidecar',return_value=True),patch.object(s,'probe_project',side_effect=probe),patch.object(s,'Relay',return_value=relay):
+                self.assertEqual(s.supervise(c,owner),0)
+            state=json.loads((t/'status').read_text());self.assertEqual(state['code'],'STOPPED');self.assertTrue(state['cleanup_complete'])
 
 if __name__ == '__main__':
     unittest.main()

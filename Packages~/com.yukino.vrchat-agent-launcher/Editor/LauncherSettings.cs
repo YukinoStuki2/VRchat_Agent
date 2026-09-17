@@ -14,6 +14,7 @@ namespace Yukino.VRChatAgentLauncher
     {
         public string python = "", uvx = "", ssh = "", host = "", user = "";
         public int sshPort = 22, remotePort = 28082;
+        public bool autoRecoverAfterImport = false;
         private static string PreferenceKey => "Yukino.AgentLauncher.Settings." + Application.dataPath;
         internal static LauncherSettings Load()
         {

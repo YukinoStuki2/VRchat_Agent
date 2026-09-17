@@ -11,13 +11,13 @@ assert spec is not None and spec.loader is not None
 base=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 ID='com.yukino.vrchat-agent-launcher'
-VERSION='0.1.0-preview.1'
-TAG='launcher-v0.1.0-preview.1'
+VERSION='0.1.0-preview.2'
+TAG='launcher-v0.1.0-preview.2'
 PREFIX='Packages~/'+ID
 
 def build(root):
     root=Path(root).resolve()
-    proof=json.loads(base.read_regular(root,'LAUNCHER_VERIFICATION.json'))
+    proof=json.loads(base.read_regular(root,'RECOVERY_VERIFICATION.json'))
     if proof.get('local_checks_passed') is not True or proof.get('independent_source_reviews_passed') is not True or proof.get('unity_verified') is not False:
         raise ValueError('Launcher preview verification gates missing')
     files={}

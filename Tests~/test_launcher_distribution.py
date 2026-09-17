@@ -27,14 +27,16 @@ class Distribution(unittest.TestCase):
             self.proof['source_sha256'][n]=hashlib.sha256(data).hexdigest()
         self.old=json.loads((ROOT/'index.json').read_text())
         # A fixture baseline always excludes this new package even after local emit.
-        self.old['packages'].pop(self.m.ID,None)
+        if self.m.ID in self.old['packages']:
+            self.old['packages'][self.m.ID]['versions'].pop(self.m.VERSION,None)
         (self.root/'index.json').write_text(json.dumps(self.old))
         self.proof_write()
     def proof_write(self):
-        (self.root/'LAUNCHER_VERIFICATION.json').write_text(json.dumps(self.proof))
+        (self.root/'RECOVERY_VERIFICATION.json').write_text(json.dumps(self.proof))
     def test_package_and_index_preserve_history(self):
         artifacts,index=self.m.build(self.root)
-        for pid,record in self.old['packages'].items():self.assertEqual(record,index['packages'][pid])
+        for pid,record in self.old['packages'].items():
+            for version,entry in record['versions'].items():self.assertEqual(entry,index['packages'][pid]['versions'][version])
         self.assertEqual(artifacts,self.m.build(self.root)[0])
         data=next(iter(artifacts.values()))
         with zipfile.ZipFile(io.BytesIO(data)) as z:

@@ -15,7 +15,7 @@ class LauncherWiring(unittest.TestCase):
     def test_preview_editor_only_package(self):
         self.assertTrue((PKG / 'package.json').is_file(), 'launcher package missing')
         p = json.loads((PKG / 'package.json').read_text())
-        self.assertEqual(p['version'], '0.1.0-preview.1')
+        self.assertEqual(p['version'], '0.1.0-preview.2')
         self.assertEqual(p['dependencies']['com.coplaydev.unity-mcp'], '10.2.0')
         self.assertNotIn('com.coplaydev.unity-mcp',p['vpmDependencies'])
         for field in ('dependencies', 'vpmDependencies'):
@@ -61,5 +61,16 @@ class LauncherWiring(unittest.TestCase):
             self.assertIn(token, s)
         self.assertNotIn('Password', s)
         self.assertNotIn('private_key', s)
+
+    def test_recovery_optin_and_cancel_boundaries(self):
+        settings=self.source('LauncherSettings.cs')
+        self.assertIn('autoRecoverAfterImport = false',settings)
+        session=self.source('LauncherSession.cs')
+        for token in ('compilationStarted', 'BeforeReload', 'OnQuit', 'RecoveryState', 'preserveRecovery', 'recovery.Consume()', 'cleanup_complete', 'ConnectionCleanupComplete', 'WindowOpen', 'RecoveryPending', 'PROJECT_UNAVAILABLE'):
+            self.assertIn(token,session)
+        window=self.source('LauncherWindow.cs')
+        for token in ('导入／重编译后恢复连接', 'OnDestroy', 'WindowClosed', 'autoRecoverAfterImport'):
+            self.assertIn(token,window)
+        self.assertNotIn('GrantLocally',session)
 
 if __name__ == '__main__': unittest.main()

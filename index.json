@@ -118,6 +118,29 @@
           },
           "url": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/launcher-v0.1.0-preview.2/VPM~/packages/com.yukino.vrchat-agent-launcher-0.1.0-preview.2.zip",
           "zipSHA256": "119eb72bba8b268b4059bc9c658bf011b5dcb5d1faebbe6a1a0190e73592c799"
+        },
+        "0.1.0-preview.3": {
+          "name": "com.yukino.vrchat-agent-launcher",
+          "version": "0.1.0-preview.3",
+          "displayName": "Yukino Agent Connection Manager (Preview)",
+          "description": "Manual local-only Windows launcher for pinned Coplay, restrictive bridge and an owned SSH reverse tunnel. Does not grant editing permission.",
+          "unity": "2022.3",
+          "author": {
+            "name": "Yukino"
+          },
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.yukino.vrchat-readonly-mcp": "0.1.2",
+            "com.yukino.vrchat-managed-editing": "0.1.0-preview.2",
+            "com.unity.nuget.newtonsoft-json": "3.0.2"
+          },
+          "vpmDependencies": {
+            "com.yukino.vrchat-readonly-mcp": "0.1.2",
+            "com.yukino.vrchat-managed-editing": "0.1.0-preview.2"
+          },
+          "url": "https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/launcher-v0.1.0-preview.3/VPM~/packages/com.yukino.vrchat-agent-launcher-0.1.0-preview.3.zip",
+          "zipSHA256": "63573c918aafe55ec7f15c34ca638806fa212ab6bcc9f1d2d5ec73347d6bddb2"
         }
       }
     }

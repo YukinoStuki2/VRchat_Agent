@@ -167,7 +167,7 @@ class LifecycleTests(unittest.TestCase):
             relay=Mock();relay.cleanup.return_value=True
             def pause(_): (t/'stop').touch()
             try:
-                with patch.object(s,'port_open',side_effect=lambda p:p==18081),patch.object(s,'probe_sidecar',return_value=True),patch.object(s,'probe_project',return_value=True),patch.object(s,'Relay',return_value=relay),patch.object(s.time,'sleep',side_effect=pause):
+                with patch.object(s,'port_open',side_effect=lambda p:p==18081),patch.object(s,'probe_sidecar',return_value=True),patch.object(s,'probe_project',return_value=True),patch.object(s,'ProjectMonitor',return_value=Mock(close=Mock(return_value=True))),patch.object(s,'Relay',return_value=relay),patch.object(s.time,'sleep',side_effect=pause):
                     self.assertEqual(s.supervise(c,Owner()),0)
                 status=json.loads((t/'status.json').read_text());self.assertTrue(status['cleanup_complete']);self.assertEqual(status['phase'],'stopped');self.assertIsNotNone(child.poll())
             finally:

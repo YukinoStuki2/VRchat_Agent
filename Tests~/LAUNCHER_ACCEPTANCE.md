@@ -27,4 +27,6 @@ Use a backed-up disposable copy. Preserve the current project and existing worki
 9. While connected change/open another Unity project: periodic identity check should close tunnel. This is bounded polling, not an atomic per-request instance binding; do not deliberately grant editing scope in this negative test.
 10. Update through ALCOM only after disconnect/Unity close. Old ZIPs/tags remain immutable, no automatic start on reopen.
 
+11. In preview.3, inject a temporary unavailable/slow response only in a disposable fixture or supervised copy. Expect suspended, no new tools/read requests forwarded, same SSH process/tunnel retained, local managed scope revoked, then same-project/locked verification before resuming. Test missing revoke acknowledgement, active grant, persistent failure and true project mismatch: no resume. Never replay an uncertain Apply. Ordinary import/domain reload still uses the separate opt-in teardown/recovery path.
+
 Record actual version, statuses, Console errors, owned process start/end evidence, remote bind addresses and remaining listeners for each case. Do not include SSH passwords, private key contents or session tokens in logs/screenshots. Runtime model preview/apply/rollback acceptance is separate and not authorized by this checklist.

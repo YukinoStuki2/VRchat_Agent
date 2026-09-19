@@ -10,7 +10,9 @@ using Yukino.VRChatAgentLauncher;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services.Transport.Transports;
-class Program {
+public class Program {
+ public static bool FailRevoke;
+ public static void RevokeHook(){if(FailRevoke)throw new InvalidOperationException("injected revoke failure");}
  static int checks;
  static void Check(bool ok,string message){if(!ok)throw new Exception(message);checks++;}
  sealed class QueueContext:SynchronizationContext {
@@ -21,7 +23,7 @@ class Program {
  static void ManagedStub(){
   var a=AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Yukino.VRChatManagedEditing.Editor"),AssemblyBuilderAccess.Run);
   var t=a.DefineDynamicModule("m").DefineType("Yukino.VRChatManagedEditing.ManagedSession");
-  t.DefineMethod("Revoke",MethodAttributes.Static|MethodAttributes.Assembly,typeof(void),Type.EmptyTypes).GetILGenerator().Emit(OpCodes.Ret);t.CreateType();
+  var il=t.DefineMethod("Revoke",MethodAttributes.Static|MethodAttributes.Assembly,typeof(void),Type.EmptyTypes).GetILGenerator();il.Emit(OpCodes.Call,typeof(Program).GetMethod("RevokeHook"));il.Emit(OpCodes.Ret);t.CreateType();
  }
  static void Set(string field,object value)=>typeof(LauncherSession).GetField(field,BindingFlags.Static|BindingFlags.NonPublic).SetValue(null,value);
  static string PrepareRun(){
@@ -107,7 +109,23 @@ class Program {
   EditorApplication.isUpdating=true;Poll();
   File.WriteAllText(Path.Combine(changedProject,"status.json"),"{\"phase\":\"error\",\"code\":\"PROJECT_CHANGED\",\"cleanup_complete\":true}");Poll();
   Check(!LauncherSession.RecoveryPending,"real project change retained ticket");EditorApplication.isUpdating=false;
-  foreach(string dir in new[]{network,changedProject,importing,reloading})Directory.Delete(dir,true);
+  recovery.Cancel();
+  string suspended=PrepareRun();Poll();var suspendClient=WebSocketTransportClient.Last;int stopCount=suspendClient.Stops;
+  string nonce=new string('a',64);
+  File.WriteAllText(Path.Combine(suspended,"status.json"),"{\"phase\":\"suspended\",\"resume_nonce\":\""+nonce+"\"}");Poll();
+  string ack=Path.Combine(suspended,"resume-ack.json");
+  Check(File.Exists(ack) && File.ReadAllText(ack).Contains(nonce),"suspension did not locally revoke/ack exact episode");
+  Check(suspendClient.Stops==stopCount && LauncherSession.Busy,"transient suspension destroyed private connection");
+  nonce=new string('b',64);File.WriteAllText(Path.Combine(suspended,"status.json"),"{\"phase\":\"suspended\",\"resume_nonce\":\""+nonce+"\"}");Poll();
+  Check(File.ReadAllText(ack).Contains(nonce),"new pause reused old acknowledgement");
+  LauncherSession.RequestStop();File.Delete(ack);Poll();Check(!File.Exists(ack),"stop produced a new resume acknowledgement");WriteStatus(suspended,"stopped",true);Poll();
+  string revokeFail=PrepareRun();Poll();FailRevoke=true;
+  File.WriteAllText(Path.Combine(revokeFail,"status.json"),"{\"phase\":\"suspended\",\"resume_nonce\":\""+new string('c',64)+"\"}");Poll();
+  Check(!File.Exists(Path.Combine(revokeFail,"resume-ack.json")) && File.Exists(Path.Combine(revokeFail,"stop")),"revoke failure acknowledged resume");
+  FailRevoke=false;WriteStatus(revokeFail,"stopped",true);Poll();
+  string invalidNonce=PrepareRun();Poll();File.WriteAllText(Path.Combine(invalidNonce,"status.json"),"{\"phase\":\"suspended\",\"resume_nonce\":\"../wrong\"}");Poll();
+  Check(File.Exists(Path.Combine(invalidNonce,"stop")) && !File.Exists(Path.Combine(invalidNonce,"resume-ack.json")),"invalid nonce allowed");WriteStatus(invalidNonce,"stopped",true);Poll();
+  foreach(string dir in new[]{revokeFail,invalidNonce,suspended,network,changedProject,importing,reloading})Directory.Delete(dir,true);
   foreach(string dir in new[]{denied,changed,run,failed,abortFail,delayedStop,noPython,reload})Directory.Delete(dir,true);
   Console.WriteLine("PASS "+checks+" assertions: owned transport, endpoint preflight, delayed continuations, stop/abort failures, dual acknowledgements, lifecycle isolation. C#9 TEST DOUBLES ONLY; not Unity/Windows runtime verification.");return 0;
  }

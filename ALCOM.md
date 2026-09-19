@@ -20,7 +20,7 @@ https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm/index.json
 |---|---|---|
 | VRChat Read-Only MCP Diagnostics | `0.1.2` | 只读诊断；不依赖编辑包 |
 | VRChat Agent — Managed BlendShape Editing (Preview) | `0.1.0-preview.2` | 可选受控编辑；会依赖并安装只读包 `0.1.2` |
-| Yukino Agent Connection Manager (Preview) | `0.1.0-preview.2` | Windows Unity 菜单连接管理；依赖前两包代码，但不授权编辑 |
+| Yukino Agent Connection Manager (Preview) | `0.1.0-preview.3` | Windows Unity 菜单连接管理；依赖前两包代码，但不授权编辑 |
 
 **看不到编辑包时**：开启ALCOM的“显示预发行软件包 / Show Prerelease Packages”，再刷新仓库。只想使用只读诊断就不要开启或安装编辑包。预览版不会冒充稳定版。
 
@@ -86,6 +86,10 @@ https://github.com/YukinoStuki2/VRchat_Agent/archive/refs/tags/vpm-0.1.0.zip
 - Git `main`、`v0.1.1`、`managed-v0.1.0-preview.1` 保持原样；不是把候选版宣布为正式模型编辑能力。
 
 ## 版本记录
+
+### 连接管理预览 `0.1.0-preview.3`
+
+单次无响应先暂停新工具/资源读取并保留进程和 SSH，不再立刻结束整套服务。监测会话复用、有限复查和本地撤权确认；同工程、权限关闭及在途请求排空后恢复转发。60秒恢复期限，真正换工程/多实例/清理债务仍停止。增加原因、步骤和耗时诊断。旧 `preview.1/2` 记录及 ZIP 不变。
 
 ### 连接管理预览 `0.1.0-preview.2`
 

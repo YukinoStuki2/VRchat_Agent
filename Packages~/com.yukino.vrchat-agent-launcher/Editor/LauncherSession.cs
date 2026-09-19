@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using MCPForUnity.Editor.Services.Transport.Transports;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -17,13 +18,15 @@ namespace Yukino.VRChatAgentLauncher
             public int parent_pid, ssh_port, remote_port;
             public string stop_file, status_file, uvx_path, expected_project, ssh_path, ssh_host, ssh_user;
         }
-        [Serializable] private sealed class Status { public string phase = "", message = "", code = ""; public bool cleanup_complete = false; }
+        [Serializable] private sealed class Status { public string phase = "", message = "", code = "", resume_nonce = "", reason = "", step = ""; public int elapsed_ms, retry_count; public bool cleanup_complete = false; }
+        [Serializable] private sealed class ResumeAck { public string resume_nonce; }
         private sealed class RunGeneration
         {
             internal readonly string Run;
             internal WebSocketTransportClient Client;
             internal Task ConnectOperation = Task.CompletedTask, StopOperation;
             internal bool ConnectRequested, StopRequested, Aborted;
+            internal string AcknowledgedPause = "";
             internal RunGeneration(string run) { Run = run; }
             internal bool ConnectionCleanupComplete => ConnectOperation.IsCompleted &&
                 (Client == null || Aborted || (StopOperation != null && StopOperation.Status == TaskStatus.RanToCompletion && !Client.IsConnected));
@@ -193,6 +196,26 @@ namespace Yukino.VRChatAgentLauncher
                 if (Run == g.Run) RequestStop("Unity Connect 异常，正在清理。");
             }
         }
+        private static void AcknowledgePause(RunGeneration g, string nonce)
+        {
+            // Local only: never expose revoke/ack to the remote MCP catalog.
+            if (g == null || g.Run != Run || g.StopRequested || SessionState.GetBool(StoppingKey, false)) return;
+            if (nonce == g.AcknowledgedPause) return;
+            if (nonce == null || !Regex.IsMatch(nonce, @"\A[a-f0-9]{64}\z"))
+            { RequestStop("暂停标识无效，已停止连接。"); return; }
+            string staged = Path.Combine(g.Run, "resume-ack.tmp");
+            try
+            {
+                CoplayAdapter.RevokeManaged(); // MUST succeed before acknowledgement
+                string destination = Path.Combine(g.Run, "resume-ack.json");
+                File.WriteAllText(staged, JsonUtility.ToJson(new ResumeAck { resume_nonce = nonce }));
+                if (File.Exists(destination)) File.Delete(destination);
+                File.Move(staged, destination);
+                g.AcknowledgedPause = nonce;
+            }
+            catch { RequestStop("撤销编辑权限或暂停确认失败，已停止连接。"); }
+            finally { try { if (File.Exists(staged)) File.Delete(staged); } catch { } }
+        }
         private static void ClearRun()
         {
             LastRun = Run.Length == 0 ? LastRun : Run;
@@ -214,8 +237,14 @@ namespace Yukino.VRChatAgentLauncher
                 if (state != null)
                 {
                     Phase = state.phase ?? "unknown";
+                    if (state.phase == "suspended") AcknowledgePause(g, state.resume_nonce);
                     if (state.phase == "connected" && !SessionState.GetBool(StoppingKey, false)) { recovery.Connected(); SaveRecovery(); }
-                    if (!SessionState.GetBool(StoppingKey, false)) Message = state.message ?? Phase;
+                    if (!SessionState.GetBool(StoppingKey, false))
+                    {
+                        Message = state.message ?? Phase;
+                        if (!string.IsNullOrEmpty(state.step)) Message += "\n步骤：" + state.step + "，最近耗时 " + state.elapsed_ms + "ms，复查 " + state.retry_count + " 次";
+                        if (!string.IsNullOrEmpty(state.reason) && state.reason != "none") Message += "\n原因：" + state.reason;
+                    }
                     if (state.phase == "sidecar_ready" && g != null && !g.ConnectRequested && !SessionState.GetBool(StoppingKey, false)) g.ConnectOperation = ConnectUnity(g);
                     if (state.phase == "error")
                     {

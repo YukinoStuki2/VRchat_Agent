@@ -104,8 +104,13 @@ class MCPSession:
         self.started = False
         self.close_result = None
         self.sequence = 0
+        self.last_step = "initialize"
+        self.elapsed_ms = 0
+        self.deadline_expired = False
 
     def exchange(self, method, params=None, *, verb='POST', status_only=False):
+        started_at = time.monotonic()
+        self.deadline_expired = False
         self.sequence += 1
         msg = {'jsonrpc': '2.0', 'method': method, 'params': params or {}}
         if method != 'notifications/initialized':
@@ -114,12 +119,16 @@ class MCPSession:
                    'Connection': 'close', 'MCP-Protocol-Version': self.version}
         if self.token:
             headers['Mcp-Session-Id'] = self.token
-        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=2)
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
         response = timer = None
         try:
             connection.connect()
+            connection.sock.settimeout(8)
             # A total deadline also bounds drip-fed SSE/HTTP bodies.
-            timer = threading.Timer(2, _audit.abort_socket, args=(connection.sock,))
+            def deadline():
+                self.deadline_expired = True
+                _audit.abort_socket(connection.sock)
+            timer = threading.Timer(8, deadline)
             timer.daemon = True
             timer.start()
             connection.request(verb, '/mcp', body=b'' if verb == 'DELETE' else json.dumps(msg).encode(), headers=headers)
@@ -155,6 +164,7 @@ class MCPSession:
             if response is not None:
                 response.close()
             connection.close()
+            self.elapsed_ms = int((time.monotonic() - started_at) * 1000)
 
     def initialize(self):
         if self.ready:
@@ -170,6 +180,7 @@ class MCPSession:
         self.ready = True
 
     def resource(self, uri):
+        self.last_step = 'instances' if uri == 'mcpforunity://instances' else 'project_info'
         result = self.exchange('resources/read', {'uri': uri})
         rows = result['contents']
         require(type(rows) is list and len(rows) == 1 and rows[0]['uri'] == uri and type(rows[0]['text']) is str)
@@ -211,6 +222,10 @@ def probe_sidecar():
     return good
 
 
+class ProjectUnavailable(ValueError):
+    def __init__(self, reason):self.reason=reason
+
+
 class ProjectIdentityMismatch(ValueError):
     """Only observed different path or multiple valid instances, not timeouts."""
 
@@ -223,6 +238,7 @@ def project_matches(session, expected):
     require(all(type(row) is dict and type(row.get('id')) is str and bool(row['id']) for row in rows))
     require(len({row['id'] for row in rows}) == len(rows))
     if len(rows) > 1:raise ProjectIdentityMismatch()
+    if not rows:raise ProjectUnavailable("no_instance")
     require(len(rows) == 1)
     project = session.resource('mcpforunity://project/info')
     actual = absolute_path(project['data']['projectRoot'])
@@ -230,7 +246,7 @@ def project_matches(session, expected):
         raise ProjectIdentityMismatch()
     # Reject concurrent changes while reading project information.
     after = session.resource('mcpforunity://instances')
-    require(after == instances)
+    if after != instances:raise ProjectUnavailable("instance_snapshot_changed")
     return True
 
 
@@ -248,6 +264,57 @@ def probe_project(expected):
     if not session.close():raise CleanupUnresolved()
     if mismatch:raise ProjectIdentityMismatch()
     return good
+
+
+class ProjectMonitor:
+    def __init__(self, expected):
+        self.expected=expected
+        self.session=MCPSession(18081,'mcp-for-unity-server')
+        self.reason='none';self.step='initialize';self.elapsed_ms=0
+    def open(self):
+        self.session.initialize()  # no repeated allocations on an uncertain handshake
+    def check(self):
+        started=time.monotonic()
+        try:
+            self.session.initialize()
+            good=project_matches(self.session,self.expected)
+            self.reason='none'
+            return good
+        except ProjectIdentityMismatch:
+            self.reason='identity_changed'
+            raise
+        except ProjectUnavailable as exc:
+            self.reason=exc.reason
+            return False
+        except PROBE_ERRORS as exc:
+            self.reason='response_timeout' if isinstance(exc,TimeoutError) or self.session.deadline_expired is True else 'transport_or_invalid_response'
+            return False
+        finally:
+            self.step=self.session.last_step
+            self.elapsed_ms=int((time.monotonic()-started)*1000)
+    def locked_catalog(self):
+        try:
+            catalog=self.session.exchange('tools/list')
+            _audit.filter_tools(catalog)
+            result=self.session.exchange('tools/call',{'name':'vrchat_me_status','arguments':{}})
+            require(result.get('isError',False) is False)
+            value=_audit.validate_tool_result(result)
+            blocks=value['content'];require(len(blocks)==1 and blocks[0]['type']=='text')
+            status=_audit.decode_json(blocks[0]['text']);data=status.get('data',{})
+            require(status.get('success') is True)
+            return data.get('active') is False and data.get('capabilities')=='None' and data.get('permission_changed') is False
+        except PROBE_ERRORS:
+            return False
+    def close(self):return self.session.close()
+
+
+def resume_acknowledged(config, nonce):
+    try:
+        path=Path(config['status_file']).parent/'resume-ack.json'
+        if path.is_symlink() or path.stat().st_size>256:return False
+        data=_audit.decode_json(path.read_bytes())
+        return type(data) is dict and set(data)=={'resume_nonce'} and data['resume_nonce']==nonce
+    except (OSError,ValueError,TypeError,_audit.Rejected):return False
 
 
 def probe_bridge(session=None):
@@ -275,6 +342,7 @@ def probe_bridge(session=None):
 # session cleanup runs even when Unity launched Python without a console.
 import time
 import tempfile
+import secrets
 
 
 class Cancelled(Exception):
@@ -291,6 +359,11 @@ MESSAGES = {
     'BRIDGE_READY': '受限入口 17 工具及权限锁定状态验证通过。',
     'SSH_CONNECTING': '连接 SSH，核验受限反向转发。',
     'CONNECTED': '受限连接已建立；连接不代表编辑授权。',
+    'MONITOR_PAUSED': '工程回应暂时不可用：已暂停工具转发，保留隧道并有限复查。编辑权限会撤销。',
+    'PERMISSION_WAIT': '工程已回应，等待本地撤销授权确认后恢复；不恢复原编辑权限。',
+    'CONNECTION_UNRESPONSIVE': '等待同工程恢复超过60秒，已停止自有连接；请检查诊断，不自动重启。',
+    'SIDECAR_STARTING': '正在启动固定版基础 MCP；等待本机18081监听。',
+    'SIDECAR_PROBING': '基础端口已可用，正在验证 MCP 握手。',
     'STOPPED': '自有连接已停止，进程与端口已清理。',
     'CLEANUP': '关闭隧道并清理受限会话；最坏可能需要数分钟。',
     'BRIDGE_PORT_BUSY': '18082 已被占用；请先关闭手动 Bridge，不会自动杀进程。',
@@ -311,10 +384,12 @@ MESSAGES = {
 }
 
 
-def write_status(config, phase, code, cleanup_complete=False):
+def write_status(config, phase, code, cleanup_complete=False, **diagnostic):
     target=Path(config['status_file'])
     payload={'phase':phase,'message':MESSAGES.get(code,MESSAGES['INTERNAL_ERROR']),
              'code':code,'cleanup_complete':bool(cleanup_complete)}
+    for key in ('resume_nonce','reason','step','elapsed_ms','retry_count'):
+        if key in diagnostic:payload[key]=diagnostic[key]
     with tempfile.NamedTemporaryFile(dir=target.parent,prefix='.status-',delete=False,mode='w',encoding='utf-8') as f:
         temporary=Path(f.name)
         json.dump(payload,f,ensure_ascii=False)
@@ -348,11 +423,16 @@ class Relay:
         self.thread=None
     def start(self):
         # All limits and routes are the immutable audited bridge defaults.
-        self.server=_audit._Server(('127.0.0.1',18082))
+        spec=importlib.util.spec_from_file_location('_launcher_admission',BRIDGE.with_name('admission_gate.py'))
+        gate=importlib.util.module_from_spec(spec);spec.loader.exec_module(gate)
+        self.server=gate.make_server_class(_audit)(('127.0.0.1',18082))
         self.thread=threading.Thread(target=self.server.serve_forever,kwargs={'poll_interval':0.1},name='restricted-bridge')
         self.thread.start()
     def verify(self):
         return probe_bridge()
+    def pause(self):self.server.pause()
+    def drain(self):return self.server.drain()
+    def resume(self):self.server.resume()
     def cleanup(self):
         if self.server is None:return True
         if self.thread is not None and self.thread.is_alive():self.server.shutdown()
@@ -364,7 +444,7 @@ class Relay:
 
 def supervise(raw, owner):
     c=validate_config(raw)
-    relay=None;ssh=None;sidecar=None;error=None;readiness_clean=True
+    relay=None;ssh=None;sidecar=None;monitor=None;error=None;readiness_clean=True
     def cancelled():return Path(c['stop_file']).exists() or not owner.alive()
     def check():
         if cancelled():raise Cancelled()
@@ -389,8 +469,10 @@ def supervise(raw, owner):
         if port_open(18081):
             if not probe_sidecar():raise LaunchError('SIDECAR_INVALID')
         else:
+            write_status(c,'starting_sidecar','SIDECAR_STARTING',step='spawn_sidecar')
             sidecar=owner.spawn(sidecar_command(c),child_environment())
             wait(lambda:port_open(18081),120,'START_TIMEOUT')
+            write_status(c,'probing_sidecar','SIDECAR_PROBING',step='initialize')
             if not probe_sidecar():raise LaunchError('SIDECAR_INVALID')
         write_status(c,'sidecar_ready','SIDECAR_READY')
         wait(checked_project,40,'PROJECT_TIMEOUT')
@@ -406,14 +488,38 @@ def supervise(raw, owner):
         wait(forwarded,30,'SSH_TIMEOUT')
         check()
         if not checked_project():raise LaunchError('PROJECT_UNAVAILABLE')
+        monitor=ProjectMonitor(c['expected_project']);monitor.open()
         write_status(c,'connected','CONNECTED')
-        next_identity=time.monotonic()+5
+        next_identity=time.monotonic()+10
+        suspended=False;episode_deadline=0;nonce='';successes=0;attempts=0
         while True:
             check()
             if progress.error:raise LaunchError(progress.error)
-            if time.monotonic()>=next_identity:
-                if not checked_project():raise LaunchError('PROJECT_UNAVAILABLE')
-                next_identity=time.monotonic()+5
+            now=time.monotonic()
+            if suspended and now>=episode_deadline:raise LaunchError('CONNECTION_UNRESPONSIVE')
+            if now>=next_identity:
+                healthy=monitor.check()
+                check()
+                if not healthy and not suspended:
+                    relay.pause()  # deny NEW calls immediately; never replay admitted writes
+                    suspended=True;episode_deadline=time.monotonic()+60
+                    nonce=secrets.token_hex(32);successes=0;attempts=0
+                if suspended:
+                    attempts+=1;successes=successes+1 if healthy else 0
+                    code='PERMISSION_WAIT' if healthy else 'MONITOR_PAUSED'
+                    write_status(c,'suspended',code,resume_nonce=nonce,reason=monitor.reason,
+                                 step=monitor.step,elapsed_ms=monitor.elapsed_ms,retry_count=attempts)
+                    if successes>=2 and resume_acknowledged(c,nonce):
+                        if not relay.drain():raise LaunchError('CONNECTION_UNRESPONSIVE')
+                        # Gate stays CLOSED through drain, local revocation proof, and final identity.
+                        locked=monitor.locked_catalog()
+                        final_identity=monitor.check() if locked else False
+                        check()
+                        if locked and final_identity and time.monotonic()<episode_deadline:
+                            relay.resume();suspended=False
+                            write_status(c,'connected','CONNECTED',reason='recovered_locked',step='identity_and_permissions',elapsed_ms=monitor.elapsed_ms,retry_count=attempts)
+                        elif not final_identity:successes=0
+                next_identity=time.monotonic()+(3 if suspended else 10)
             time.sleep(0.25)
     except (Cancelled,KeyboardInterrupt):pass
     except CleanupUnresolved:
@@ -423,6 +529,9 @@ def supervise(raw, owner):
     except Exception:error='INTERNAL_ERROR'
     finally:
         clean=readiness_clean
+        try:
+            if relay is not None:relay.pause()
+        except Exception:clean=False
         try:write_status(c,'error' if error else 'stopping',error or 'CLEANUP')
         except OSError:clean=False
         # Cut remote access first, then drain exact bridge sessions while sidecar is alive.
@@ -431,6 +540,9 @@ def supervise(raw, owner):
         except Exception:clean=False
         try:
             if relay is not None:clean=relay.cleanup() and clean
+        except Exception:clean=False
+        try:
+            if monitor is not None:clean=monitor.close() and clean
         except Exception:clean=False
         try:clean=bool(owner.close()) and clean
         except Exception:clean=False

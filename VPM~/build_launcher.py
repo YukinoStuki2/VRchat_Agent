@@ -11,13 +11,13 @@ assert spec is not None and spec.loader is not None
 base=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 ID='com.yukino.vrchat-agent-launcher'
-VERSION='0.1.0-preview.2'
-TAG='launcher-v0.1.0-preview.2'
+VERSION='0.1.0-preview.3'
+TAG='launcher-v0.1.0-preview.3'
 PREFIX='Packages~/'+ID
 
 def build(root):
     root=Path(root).resolve()
-    proof=json.loads(base.read_regular(root,'RECOVERY_VERIFICATION.json'))
+    proof=json.loads(base.read_regular(root,'RESILIENCE_VERIFICATION.json'))
     if proof.get('local_checks_passed') is not True or proof.get('independent_source_reviews_passed') is not True or proof.get('unity_verified') is not False:
         raise ValueError('Launcher preview verification gates missing')
     files={}
@@ -32,7 +32,7 @@ def build(root):
         data=base.read_regular(root,PREFIX+'/'+name)
         if hashlib.sha256(data).hexdigest()!=digest:raise ValueError('Reviewed source drift: '+name)
         files[name]=data
-    required={'package.json','README.md','LICENSE','THIRD_PARTY_NOTICES.md','Editor/Runtime~/bridge.py','Editor/Runtime~/launcher_supervisor.py','Editor/Runtime~/windows_processes.py'}
+    required={'package.json','README.md','LICENSE','THIRD_PARTY_NOTICES.md','Editor/Runtime~/bridge.py','Editor/Runtime~/launcher_supervisor.py','Editor/Runtime~/windows_processes.py','Editor/Runtime~/admission_gate.py'}
     if not required<=files.keys() or not any(n.endswith('.cs') for n in files):raise ValueError('Incomplete launcher')
     manifest=json.loads(files['package.json'])
     if manifest.get('name')!=ID or manifest.get('version')!=VERSION:raise ValueError('Wrong package identity')

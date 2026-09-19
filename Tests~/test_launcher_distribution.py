@@ -20,7 +20,7 @@ class Distribution(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.m=load();self.p=self.root/self.m.PREFIX
-        self.files={'package.json':json.dumps({'name':self.m.ID,'version':self.m.VERSION,'vpmDependencies':{'com.yukino.vrchat-readonly-mcp':'0.1.2','com.yukino.vrchat-managed-editing':'0.1.0-preview.2'}}).encode(),'README.md':b'preview','LICENSE':b'MIT','THIRD_PARTY_NOTICES.md':b'notices','Editor/Test.cs':b'// fixture','Editor/Runtime~/launcher_supervisor.py':b'# fixture','Editor/Runtime~/bridge.py':b'# fixture','Editor/Runtime~/windows_processes.py':b'# fixture'}
+        self.files={'package.json':json.dumps({'name':self.m.ID,'version':self.m.VERSION,'vpmDependencies':{'com.yukino.vrchat-readonly-mcp':'0.1.2','com.yukino.vrchat-managed-editing':'0.1.0-preview.2'}}).encode(),'README.md':b'preview','LICENSE':b'MIT','THIRD_PARTY_NOTICES.md':b'notices','Editor/Test.cs':b'// fixture','Editor/Runtime~/launcher_supervisor.py':b'# fixture','Editor/Runtime~/bridge.py':b'# fixture','Editor/Runtime~/windows_processes.py':b'# fixture','Editor/Runtime~/admission_gate.py':b'# fixture'}
         self.proof={'local_checks_passed':True,'independent_source_reviews_passed':True,'unity_verified':False,'source_sha256':{}}
         for n,data in self.files.items():
             f=self.p/n;f.parent.mkdir(parents=True,exist_ok=True);f.write_bytes(data)
@@ -32,7 +32,7 @@ class Distribution(unittest.TestCase):
         (self.root/'index.json').write_text(json.dumps(self.old))
         self.proof_write()
     def proof_write(self):
-        (self.root/'RECOVERY_VERIFICATION.json').write_text(json.dumps(self.proof))
+        (self.root/'RESILIENCE_VERIFICATION.json').write_text(json.dumps(self.proof))
     def test_package_and_index_preserve_history(self):
         artifacts,index=self.m.build(self.root)
         for pid,record in self.old['packages'].items():

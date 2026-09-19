@@ -43,11 +43,11 @@ with tempfile.TemporaryDirectory(prefix='launcher-vpm-smoke-') as td:
             p=subprocess.run([BIN,*args],cwd=project,env=env,capture_output=True,text=True,timeout=50)
             print(args,p.returncode,p.stdout,p.stderr,flush=True);assert p.returncode==0
         run('repo','add','--no-update',url)
-        run('install',ID,'0.1.0-preview.1','--prerelease','--no-update','-y')
-        assert json.loads((project/'Packages'/ID/'package.json').read_text())['version']=='0.1.0-preview.1'
-        run('upgrade',ID,'0.1.0-preview.2','--prerelease','--no-update','-y')
+        run('install',ID,'0.1.0-preview.2','--prerelease','--no-update','-y')
+        assert json.loads((project/'Packages'/ID/'package.json').read_text())['version']=='0.1.0-preview.2'
+        run('upgrade',ID,'0.1.0-preview.3','--prerelease','--no-update','-y')
         lock=json.loads((project/'Packages/vpm-manifest.json').read_text())['locked']
-        assert lock[ID]['version']=='0.1.0-preview.2'
+        assert lock[ID]['version']=='0.1.0-preview.3'
         assert lock['com.yukino.vrchat-readonly-mcp']['version']=='0.1.2'
         assert lock['com.yukino.vrchat-managed-editing']['version']=='0.1.0-preview.2'
         for pid in [ID,'com.yukino.vrchat-readonly-mcp','com.yukino.vrchat-managed-editing']:

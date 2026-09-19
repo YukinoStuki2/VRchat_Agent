@@ -15,7 +15,7 @@ class LauncherWiring(unittest.TestCase):
     def test_preview_editor_only_package(self):
         self.assertTrue((PKG / 'package.json').is_file(), 'launcher package missing')
         p = json.loads((PKG / 'package.json').read_text())
-        self.assertEqual(p['version'], '0.1.0-preview.2')
+        self.assertEqual(p['version'], '0.1.0-preview.3')
         self.assertEqual(p['dependencies']['com.coplaydev.unity-mcp'], '10.2.0')
         self.assertNotIn('com.coplaydev.unity-mcp',p['vpmDependencies'])
         for field in ('dependencies', 'vpmDependencies'):

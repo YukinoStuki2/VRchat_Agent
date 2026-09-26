@@ -109,7 +109,11 @@ class NativeProcess:
         try:
             while True:
                 data=os.read(self.readfd,4096)
-                if not data:break
+                if not data:
+                    if pending and not discard:
+                        try:self.callback(pending.decode('utf-8','replace').rstrip('\r\n'))
+                        except Exception:pass
+                    break
                 for part in data.splitlines(keepends=True):
                     end=part.endswith(b'\n')
                     if not discard:

@@ -11,8 +11,8 @@ assert spec is not None and spec.loader is not None
 base=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 ID='com.yukino.vrchat-agent-launcher'
-VERSION='0.1.0-preview.3'
-TAG='launcher-v0.1.0-preview.3'
+VERSION='0.1.0-preview.4'
+TAG='launcher-v0.1.0-preview.4'
 PREFIX='Packages~/'+ID
 
 def build(root):

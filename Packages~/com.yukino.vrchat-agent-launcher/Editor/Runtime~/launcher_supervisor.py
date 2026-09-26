@@ -388,8 +388,10 @@ def write_status(config, phase, code, cleanup_complete=False, **diagnostic):
     target=Path(config['status_file'])
     payload={'phase':phase,'message':MESSAGES.get(code,MESSAGES['INTERNAL_ERROR']),
              'code':code,'cleanup_complete':bool(cleanup_complete)}
-    for key in ('resume_nonce','reason','step','elapsed_ms','retry_count'):
+    for key in ('resume_nonce','reason','step','elapsed_ms','retry_count','stage','component','exit_code','failure_code','sidecar_error'):
         if key in diagnostic:payload[key]=diagnostic[key]
+    details=[f'{key}={payload[key]}' for key in ('stage','component','exit_code','failure_code','sidecar_error') if key in payload]
+    if details:payload['message']+=' 诊断：'+', '.join(details)
     with tempfile.NamedTemporaryFile(dir=target.parent,prefix='.status-',delete=False,mode='w',encoding='utf-8') as f:
         temporary=Path(f.name)
         json.dump(payload,f,ensure_ascii=False)
@@ -415,6 +417,22 @@ class SSHProgress:
                             ('remote port forwarding failed','SSH_FORWARD_FAILED'),('Connection refused','SSH_REFUSED'),
                             ('Connection timed out','SSH_TIMEOUT'),('Could not resolve hostname','SSH_REFUSED')]:
             if marker in text:self.error=code
+
+
+class SidecarProgress:
+    """Discard bounded stderr lines after classification; never retain raw text."""
+    def __init__(self):self.error='unknown'
+    def line(self,text):
+        text=text.lower()
+        for category,markers in (
+            ('certificate',('invalid peer certificate','certificate verify failed','unknownissuer')),
+            ('dns',('dns error','failed to lookup address','name or service not known')),
+            ('dependency',('no solution found','modulenotfounderror','no module named')),
+            ('arguments',('unexpected argument','unrecognized arguments','no such option')),
+            ('download',('failed to download','failed to fetch'))):
+            if any(marker in text for marker in markers):
+                self.error=category
+                return
 
 
 class Relay:
@@ -445,10 +463,21 @@ class Relay:
 def supervise(raw, owner):
     c=validate_config(raw)
     relay=None;ssh=None;sidecar=None;monitor=None;error=None;readiness_clean=True
+    stage='preflight';component='supervisor';diagnostic={};progress=None
+    sidecar_progress=SidecarProgress()
     def cancelled():return Path(c['stop_file']).exists() or not owner.alive()
     def check():
         if cancelled():raise Cancelled()
-        if any(child is not None and child.poll() is not None for child in (ssh,sidecar)):raise LaunchError('PROCESS_EXITED')
+        for name,child in (('ssh',ssh),('sidecar',sidecar)):
+            exit_code=child.poll() if child is not None else None
+            if name=='ssh' and progress is not None and progress.error:
+                diagnostic['component']='ssh'
+                if exit_code is not None:diagnostic['exit_code']=exit_code
+                raise LaunchError(progress.error)
+            if exit_code is not None:
+                diagnostic.update(component=name,exit_code=exit_code)
+                if name=='sidecar':diagnostic['sidecar_error']=sidecar_progress.error
+                raise LaunchError('PROCESS_EXITED')
     def checked_project():
         try:ready=probe_project(c['expected_project'])
         except ProjectIdentityMismatch:
@@ -467,19 +496,25 @@ def supervise(raw, owner):
         write_status(c,'starting','STARTING');check()
         if port_open(18082):raise LaunchError('BRIDGE_PORT_BUSY')
         if port_open(18081):
+            stage='probing_sidecar';component='sidecar'
             if not probe_sidecar():raise LaunchError('SIDECAR_INVALID')
         else:
+            stage='starting_sidecar';component='sidecar'
             write_status(c,'starting_sidecar','SIDECAR_STARTING',step='spawn_sidecar')
-            sidecar=owner.spawn(sidecar_command(c),child_environment())
+            sidecar=owner.spawn(sidecar_command(c),child_environment(),stderr_line_callback=sidecar_progress.line)
             wait(lambda:port_open(18081),120,'START_TIMEOUT')
+            stage='probing_sidecar'
             write_status(c,'probing_sidecar','SIDECAR_PROBING',step='initialize')
             if not probe_sidecar():raise LaunchError('SIDECAR_INVALID')
         write_status(c,'sidecar_ready','SIDECAR_READY')
+        stage='project_check';component='project'
         wait(checked_project,40,'PROJECT_TIMEOUT')
+        stage='bridge_starting';component='bridge'
         check();relay=Relay();relay.start()
         if not relay.verify():raise LaunchError('BRIDGE_INVALID')
         write_status(c,'bridge_ready','BRIDGE_READY');check()
         progress=SSHProgress(c['remote_port'])
+        stage='ssh_connecting';component='ssh'
         write_status(c,'ssh_connecting','SSH_CONNECTING')
         ssh=owner.spawn(build_commands(c)[1],child_environment(),stderr_line_callback=progress.line)
         def forwarded():
@@ -487,9 +522,11 @@ def supervise(raw, owner):
             return progress.ready
         wait(forwarded,30,'SSH_TIMEOUT')
         check()
+        stage='project_check';component='project'
         if not checked_project():raise LaunchError('PROJECT_UNAVAILABLE')
         monitor=ProjectMonitor(c['expected_project']);monitor.open()
         write_status(c,'connected','CONNECTED')
+        stage='connected';component='project'
         next_identity=time.monotonic()+10
         suspended=False;episode_deadline=0;nonce='';successes=0;attempts=0
         while True:
@@ -528,11 +565,17 @@ def supervise(raw, owner):
     except LaunchError as e:error=str(e)
     except Exception:error='INTERNAL_ERROR'
     finally:
+        diagnostic.setdefault('component',component)
+        diagnostic['stage']=stage
+        if error:
+            diagnostic['failure_code']=error
+            if sidecar is not None and diagnostic['component']=='sidecar':
+                diagnostic.setdefault('sidecar_error',sidecar_progress.error)
         clean=readiness_clean
         try:
             if relay is not None:relay.pause()
         except Exception:clean=False
-        try:write_status(c,'error' if error else 'stopping',error or 'CLEANUP')
+        try:write_status(c,'error' if error else 'stopping',error or 'CLEANUP',**diagnostic)
         except OSError:clean=False
         # Cut remote access first, then drain exact bridge sessions while sidecar is alive.
         try:
@@ -546,8 +589,15 @@ def supervise(raw, owner):
         except Exception:clean=False
         try:clean=bool(owner.close()) and clean
         except Exception:clean=False
+        # Readers may deliver the cause during close. Refine only an observed
+        # pre-cleanup exit; never poll closed handles or invent a cleanup failure.
+        if diagnostic.get('failure_code')=='PROCESS_EXITED':
+            if diagnostic['component']=='ssh' and progress is not None and progress.error:
+                error=progress.error;diagnostic['failure_code']=error
+            elif diagnostic['component']=='sidecar':
+                diagnostic['sidecar_error']=sidecar_progress.error
         if not clean:error='CLEANUP_FAILED'
-        write_status(c,'error' if error else 'stopped',error or 'STOPPED',cleanup_complete=clean)
+        write_status(c,'error' if error else 'stopped',error or 'STOPPED',cleanup_complete=clean,**diagnostic)
     return 1 if error else 0
 
 

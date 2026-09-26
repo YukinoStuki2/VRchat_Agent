@@ -302,5 +302,95 @@ class ImportDiagnosticTests(unittest.TestCase):
                 self.assertEqual(s.supervise(c,owner),0)
             state=json.loads((t/'status').read_text());self.assertEqual(state['code'],'STOPPED');self.assertTrue(state['cleanup_complete'])
 
+class StartupDiagnosticTests(unittest.TestCase):
+    def run_exit(self, component, line=None, clean=True, exit_code=23, late_line=None):
+        with tempfile.TemporaryDirectory() as td:
+            t=Path(td);c=config(status_file=str(t/'status'),stop_file=str(t/'stop'))
+            child=Mock();child.poll.return_value=exit_code
+            owner=Mock();owner.alive.return_value=True;owner.close.return_value=clean
+            def spawn(args, env, stderr_line_callback=None):
+                if line is not None and stderr_line_callback is not None:stderr_line_callback(line)
+                def close():
+                    child.poll.return_value=1  # cleanup termination must not replace evidence
+                    if late_line is not None and stderr_line_callback is not None:stderr_line_callback(late_line)
+                    return clean
+                owner.close.side_effect=close
+                return child
+            owner.spawn.side_effect=spawn
+            relay=Mock();relay.cleanup.return_value=True
+            states=[];real=s.write_status
+            def status(*args, **kw):
+                real(*args, **kw);states.append(json.loads((t/'status').read_text()))
+            with patch.object(s,'port_open',side_effect=lambda p:component=='ssh' and p==18081),patch.object(s,'probe_sidecar',return_value=True),patch.object(s,'probe_project',return_value=True),patch.object(s,'Relay',return_value=relay),patch.object(s,'write_status',side_effect=status):
+                self.assertEqual(s.supervise(c,owner),1)
+            owner.close.assert_called_once()
+            return states
+
+    def test_late_stderr_enriches_after_reader_cleanup_not_exit_code(self):
+        for component,line,code,category in [
+            ('ssh','Permission denied (publickey).','SSH_AUTH_FAILED',None),
+            ('sidecar','Failed to download package','PROCESS_EXITED','download')]:
+            for clean in (True,False):
+                with self.subTest(component=component,clean=clean):
+                    states=self.run_exit(component,clean=clean,exit_code=255,late_line=line)
+                    self.assertEqual(states[-2]['code'],'PROCESS_EXITED')
+                    final=states[-1]
+                    self.assertEqual(final['failure_code'],code)
+                    self.assertEqual(final['code'],code if clean else 'CLEANUP_FAILED')
+                    self.assertEqual(final['exit_code'],255)
+                    self.assertEqual(final.get('sidecar_error'),category)
+
+    def test_sidecar_timeout_keeps_category_without_invented_exit(self):
+        with patch.object(s.time,'monotonic',side_effect=[0,121]):
+            states=self.run_exit('sidecar','Failed to download SYNTHETIC_TOKEN',exit_code=None)
+        for state in states[-2:]:
+            self.assertEqual(state.get('sidecar_error'),'download')
+            self.assertEqual(state.get('failure_code'),'START_TIMEOUT')
+            self.assertNotIn('exit_code',state)
+
+    def test_sidecar_classification_keeps_only_fixed_enum(self):
+        cases=[('Failed to download package','download'),
+               ('invalid peer certificate: UnknownIssuer','certificate'),
+               ('dns error: failed to lookup address','dns'),
+               ('No solution found when resolving dependencies','dependency'),
+               ('error: unexpected argument --private found','arguments'),
+               ('unrecognized opaque error','unknown')]
+        for line,category in cases:
+            with self.subTest(category=category):
+                states=self.run_exit('sidecar',line+' SYNTHETIC_TOKEN C:/private/cache',clean=False)
+                for state in states[-2:]:
+                    self.assertEqual(state.get('sidecar_error'),category)
+                    self.assertEqual(state.get('failure_code'),'PROCESS_EXITED')
+                serialized=json.dumps(states)
+                self.assertNotIn('SYNTHETIC_TOKEN',serialized)
+                self.assertNotIn('C:/private',serialized)
+                self.assertNotIn(line,serialized)
+
+    def test_known_ssh_error_wins_over_process_exit(self):
+        for line,code in [('Permission denied (publickey).','SSH_AUTH_FAILED'),
+                          ('Host key verification failed.','SSH_HOSTKEY_FAILED'),
+                          ('remote port forwarding failed','SSH_FORWARD_FAILED')]:
+            with self.subTest(code=code):
+                states=self.run_exit('ssh',line+' SYNTHETIC_SECRET C:/private/key',clean=False,exit_code=255)
+                self.assertEqual(states[-2]['code'],code)
+                self.assertEqual(states[-1].get('failure_code'),code)
+                self.assertEqual(states[-1].get('exit_code'),255)
+                self.assertNotIn('SYNTHETIC_SECRET',json.dumps(states))
+
+    def test_exit_evidence_survives_cleanup_without_stderr(self):
+        for component,stage in [('ssh','ssh_connecting'),('sidecar','starting_sidecar')]:
+            for clean in (True,False):
+                with self.subTest(component=component,clean=clean):
+                    states=self.run_exit(component,clean=clean)
+                    for state in states[-2:]:
+                        self.assertEqual(state.get('stage'),stage)
+                        self.assertEqual(state.get('component'),component)
+                        self.assertEqual(state.get('exit_code'),23)
+                        self.assertEqual(state.get('failure_code'),'PROCESS_EXITED')
+                    self.assertEqual(states[-1]['cleanup_complete'],clean)
+                    self.assertEqual(states[-1]['code'],'PROCESS_EXITED' if clean else 'CLEANUP_FAILED')
+                    self.assertIn('23',states[-1]['message'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -20,7 +20,7 @@ https://raw.githubusercontent.com/YukinoStuki2/VRchat_Agent/vpm/index.json
 |---|---|---|
 | VRChat Read-Only MCP Diagnostics | `0.1.2` | 只读诊断；不依赖编辑包 |
 | VRChat Agent — Managed BlendShape Editing (Preview) | `0.1.0-preview.2` | 可选受控编辑；会依赖并安装只读包 `0.1.2` |
-| Yukino Agent Connection Manager (Preview) | `0.1.0-preview.3` | Windows Unity 菜单连接管理；依赖前两包代码，但不授权编辑 |
+| Yukino Agent Connection Manager (Preview) | `0.1.0-preview.4` | Windows Unity 菜单连接管理；依赖前两包代码，但不授权编辑 |
 
 **看不到编辑包时**：开启ALCOM的“显示预发行软件包 / Show Prerelease Packages”，再刷新仓库。只想使用只读诊断就不要开启或安装编辑包。预览版不会冒充稳定版。
 
@@ -65,6 +65,7 @@ https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.2.0
 - 点击一键连接后依次启动固定版基础 MCP、Unity Connect、受限 Bridge 和 SSH；有明确停止、失败清理和端口冲突检查。
 - 连接窗口关闭或退出会取消恢复；默认重编译后手动连接。新版可勾选默认关闭的同工程恢复选项，等待清理和空闲后仅恢复连接，权限不恢复。更新前先断开并关闭 Unity。
 - **ALCOM 安装/更新本身仍不启动任何服务或隧道，不修改 Hermes，也不开放模型修改权限。** 本包将桥接脚本一起更新，只有 Unity 本地按钮能启动。
+- 编辑授权入口为 **Window → VRChat Agent → Managed Editing**：选择源 Renderer 和精确 BlendShape，单独允许 Preview/Apply，设置期限与写入额度；点击“立即锁定”可撤销。只查看时保持锁定。这里不是整个 Unity 工程的通用编辑开关。
 - 完整首次配置、安全边界和验收限制：[启动器 README](Packages~/com.yukino.vrchat-agent-launcher/README.md)。Windows / Unity 实机结果与管理机测试严格分开，尚未验收的能力不得当作稳定版。
 
 ## 保留手工启动方式（不安装连接管理包）
@@ -86,6 +87,10 @@ https://github.com/YukinoStuki2/VRchat_Agent/archive/refs/tags/vpm-0.1.0.zip
 - Git `main`、`v0.1.1`、`managed-v0.1.0-preview.1` 保持原样；不是把候选版宣布为正式模型编辑能力。
 
 ## 版本记录
+
+### 连接管理预览 `0.1.0-preview.4`
+
+修复已识别 SSH 错误被 `PROCESS_EXITED` 覆盖的问题；失败状态保留阶段、组件、清理前退出码和原始错误类别。补收清理期间迟到的诊断及有界的无换行 stderr 尾段；sidecar 仅保存固定错误分类，不保存原始输出或认证内容。此版修复诊断信息丢失，不代表已确认用户工程的实际连接失败原因。默认锁定、严格 SSH 校验和所有旧版 ZIP/索引记录不变。
 
 ### 连接管理预览 `0.1.0-preview.3`
 

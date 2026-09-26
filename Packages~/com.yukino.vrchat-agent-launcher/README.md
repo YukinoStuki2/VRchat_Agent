@@ -1,6 +1,6 @@
 # Yukino Agent Connection Manager — Windows 预览版
 
-`com.yukino.vrchat-agent-launcher@0.1.0-preview.3`
+`com.yukino.vrchat-agent-launcher@0.1.0-preview.4`
 
 Unity 菜单：**Tools → Yukino → Agent Connection Manager**。
 ALCOM 管理窗口、监督程序及内置受限 Bridge 的安装和更新。**连接不等于编辑授权。**
@@ -67,6 +67,14 @@ ALCOM 管理窗口、监督程序及内置受限 Bridge 的安装和更新。**�
 - 异常或监督进程过早退出而未返回清理证明时，窗口保守拒绝重试。请检查诊断文件与本地进程，必要时正常退出 Unity 后重开；不要通过反复强杀/重启绕过错误。
 - 更新前断开并关闭 Unity，再在 ALCOM 更新本包。**安装、更新、冷启动或单独打开窗口不会自动连接或解锁**；只有本次手动连接前已启用的恢复开关可在上述条件下恢复。
 - 配置位于本机 EditorPrefs；每次运行的配置和脱敏状态在本工程 `Library/YukinoAgentLauncher/<随机ID>/`，不写 Assets/Packages。该目录含连接主机/用户名但无密码，不应公开上传。诊断不记录原始 SSH 输出或 MCP token。
+
+## 启动失败诊断
+
+最终状态及清理前状态保留 `stage`（preflight / starting_sidecar / probing_sidecar / project_check / bridge_starting / ssh_connecting / connected）、`component`（supervisor / sidecar / project / bridge / ssh）。观察到子进程退出时记录原始整数 `exit_code`；清理不会用主动终止的退出码覆盖它。`failure_code` 保留原故障，即使最终 `code` 必须变为 `CLEANUP_FAILED`。窗口现有 message 同时展示这些安全字段；`cleanup_complete` 仍只代表原有清理检查是否全部通过，不代表连接成功。
+
+已收到的 SSH 认证、指纹或转发错误优先于笼统的 `PROCESS_EXITED`。读线程在原有清理过程中才收到对应行时，只对清理前已观察到的进程退出补全原因，保留原退出码；最终仍未识别则保留通用错误，不据此猜测原因。自有 sidecar 使用既有有界 stderr 回调，仅保存 `sidecar_error` 固定类别：`download` / `certificate` / `dns` / `dependency` / `arguments` / `unknown`。这是固定文本特征分类，不是根因证明，也不会因为出现某类输出而新增重试或提前终止流程。
+
+不保存原始 stderr、stdout、命令、环境、路径、token 或诊断历史。stdout 仍直接丢弃；stderr 行沿用 4096 字节上限，超长行丢弃；无换行的 EOF 尾段仅在未超限、未处于丢弃状态时交给分类回调。未识别、丢弃或来不及读取的输出会保留 unknown/通用退出诊断；不增加读线程等待期限或自动恢复。既有配置文件用途不变，不应公开上传整个运行目录。
 
 ## 验证边界
 

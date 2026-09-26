@@ -45,6 +45,22 @@ class NativeTests(unittest.TestCase):
   finally:
    if writefd is not None:os.close(writefd)
    p.reader.join(3)
+ def test_eof_stderr_flushes_only_bounded_pending_with_real_pipe(self):
+  m=self.load();import os
+  for data,expected in [(b'Permission denied (publickey).',['Permission denied (publickey).']),
+                        (b'x'*4096,['x'*4096]),(b'x'*4097,[]),
+                        (b'x'*5000+b'\nshort-tail',['short-tail']), (b'',[])]:
+   with self.subTest(size=len(data)):
+    readfd,writefd=os.pipe();lines=[]
+    p=m.NativeProcess(Mock(),11,12,readfd,lines.append);p.start_reader()
+    try:
+     if data:os.write(writefd,data)
+     os.close(writefd);writefd=None
+     p.reader.join(3);self.assertFalse(p.reader.is_alive())
+     self.assertEqual(lines,expected);p.close();self.assertIsNone(p.readfd)
+    finally:
+     if writefd is not None:os.close(writefd)
+     p.reader.join(3)
  def test_no_nonexistent_subprocess_flag(self):
   m=self.load();self.assertNotIn('subprocess.CREATE_UNICODE_ENVIRONMENT',P.read_text())
  def test_unconfirmed_cleanup_is_false(self):

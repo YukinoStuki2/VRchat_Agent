@@ -32,15 +32,34 @@ class WindowsKernelTests(unittest.TestCase):
         self.file.write_text('token=synthetic-secret\nfixture error 中文\n', encoding='utf-8')
         self.addCleanup(self.verify_removed)
         self.handles = set()
+        self.path_checks = []
+        paths = {}
         opened, closed = windows.Win32.open, windows.Win32.close
+        final_path = windows.Win32.final_path
         def track_open(api, *args, **kwargs):
             handle = opened(api, *args, **kwargs)
             self.handles.add(handle)
+            paths[handle] = (args[0], kwargs['directory'])
             return handle
         def track_close(api, handle):
             closed(api, handle)
             self.handles.remove(handle)
-        for method, replacement in (('open', track_open), ('close', track_close)):
+            paths.pop(handle, None)
+        def track_final(api, handle):
+            actual = final_path(api, handle)
+            requested, directory = paths[handle]
+            expected = '\\\\?\\' + requested
+            if actual.casefold() != expected.casefold():
+                info = api.info(handle)
+                # Synthetic CI-only observations: never disclose source paths/content.
+                self.path_checks.append({'is_drive_root': len(requested) == 3,
+                    'directory': directory, 'reparse': bool(info[0] & 0x400),
+                    'directory_attribute': bool(info[0] & 0x10), 'disk': api.disk(handle),
+                    'requested_has_tilde': '~' in requested, 'actual_has_tilde': '~' in actual,
+                    'equal_without_trailing_separator': actual.rstrip('\\').casefold() == expected.rstrip('\\').casefold(),
+                    'actual_length': len(actual), 'expected_length': len(expected)})
+            return actual
+        for method, replacement in (('open', track_open), ('close', track_close), ('final_path', track_final)):
             instrument = patch.object(windows.Win32, method, replacement)
             instrument.start()
             self.addCleanup(instrument.stop)
@@ -50,7 +69,7 @@ class WindowsKernelTests(unittest.TestCase):
         self.assertFalse(self.home.exists())
         self.assertEqual(self.handles, set(), 'owned Windows HANDLEs remain open')
         CLEANUP.append({'id': self.id(), 'fixture_removed': not self.home.exists(),
-                        'outstanding_handles': len(self.handles)})
+                        'outstanding_handles': len(self.handles), 'path_checks': self.path_checks})
 
     def test_WK001_real_handle_utf8_redaction_frozen_snapshot_and_cleanup(self):
         with snapshot.capture(str(self.source), ['nested/Editor.log'], task_id='kernel-fixture', temp_parent=self.home) as snap:

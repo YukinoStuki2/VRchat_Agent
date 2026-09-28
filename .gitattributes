@@ -1,0 +1,3 @@
+# Preserve reviewed Candidate Windows source bytes on every CI checkout.
+/Candidate~/launcher/windows_processes.py text eol=lf
+/Candidate~/tests/test_launcher_candidate_windows.py text eol=lf

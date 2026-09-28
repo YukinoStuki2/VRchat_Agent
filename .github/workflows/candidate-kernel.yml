@@ -2,7 +2,7 @@ name: Candidate Windows kernel checks
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/launcher/**', 'Candidate~/diagnostics/**', 'Candidate~/tests/test_launcher_candidate_windows.py', 'Candidate~/tests/test_diagnostics_windows_kernel.py', '.github/workflows/candidate-kernel.yml']
+    paths: ['Candidate~/launcher/**', 'Candidate~/diagnostics/**', 'Candidate~/tests/test_launcher_candidate_windows.py', 'Candidate~/tests/test_diagnostics_windows_kernel.py', '.github/workflows/candidate-kernel.yml', '.gitattributes']
   workflow_dispatch:
 permissions:
   contents: read

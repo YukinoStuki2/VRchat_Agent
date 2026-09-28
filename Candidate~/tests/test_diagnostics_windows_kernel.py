@@ -63,6 +63,10 @@ class WindowsKernelTests(unittest.TestCase):
             instrument = patch.object(windows.Win32, method, replacement)
             instrument.start()
             self.addCleanup(instrument.stop)
+        # Every negative case must first reach the safe leaf; rejecting an
+        # unrelated ancestor alias is not evidence for hardlink/junction rules.
+        self.assertEqual(snapshot.read_selected(str(self.source), 'nested/Editor.log'),
+                         self.file.read_bytes(), 'fixture must pass a real HANDLE read')
 
     def verify_removed(self):
         self.temp.cleanup()

@@ -64,7 +64,10 @@ def main(argv=None):
     before = hashes()
     output = io.StringIO()
     old_tempdir = tempfile.tempdir
-    with tempfile.TemporaryDirectory(prefix='diagnostics-windows-run-') as home:
+    # Only the runner's own fresh fixture is canonicalized. CI's TEMP can use
+    # an 8.3 alias; production read_selected must continue rejecting aliases.
+    with tempfile.TemporaryDirectory(prefix='diagnostics-windows-run-') as owned_home:
+        home = str(Path(owned_home).resolve(strict=True))
         env = {key: value for key in ('SYSTEMROOT', 'WINDIR', 'COMSPEC')
                if (value := os.environ.get(key))}
         env.update({key: home for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'TMPDIR')})

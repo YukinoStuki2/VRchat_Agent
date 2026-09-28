@@ -1,0 +1,53 @@
+name: Candidate Windows kernel checks
+on:
+  push:
+    branches: [candidate-alcom-20260928]
+    paths: ['Candidate~/launcher/**', 'Candidate~/diagnostics/**', 'Candidate~/tests/test_launcher_candidate_windows.py', 'Candidate~/tests/test_diagnostics_windows_kernel.py', '.github/workflows/candidate-kernel.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: candidate-kernel-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  windows-process-ownership:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Record exact source identity (not product approval)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path kernel-evidence -Force | Out-Null
+          git rev-parse HEAD | Set-Content kernel-evidence/commit.txt
+          python -B -c "import sys,platform,json; print(json.dumps({'python':sys.version,'platform':platform.platform(),'machine':platform.machine()}))" | Set-Content kernel-evidence/environment.json
+          Get-FileHash 'Candidate~/launcher/windows_processes.py','Candidate~/tests/test_launcher_candidate_windows.py' -Algorithm SHA256 | ConvertTo-Json | Set-Content kernel-evidence/source-hashes-before.json
+      - name: Execute real Job Object and HANDLE checks
+        shell: pwsh
+        run: |
+          python -B -W error::ResourceWarning 'Candidate~/tests/test_launcher_candidate_windows.py' 2>&1 | Tee-Object -FilePath kernel-evidence/windows-process.txt
+          $result = $LASTEXITCODE
+          if ($result -ne 0) { exit $result }
+          $raw = Get-Content kernel-evidence/windows-process.txt -Raw
+          if ($raw -notmatch 'Ran 4 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Missing tests, skip, failure, or resource warning: not a passing run' }
+      - name: Record source stability
+        if: always()
+        shell: pwsh
+        run: |
+          Get-FileHash 'Candidate~/launcher/windows_processes.py','Candidate~/tests/test_launcher_candidate_windows.py' -Algorithm SHA256 | ConvertTo-Json | Set-Content kernel-evidence/source-hashes-after.json
+          if ((Get-Content kernel-evidence/source-hashes-before.json -Raw) -ne (Get-Content kernel-evidence/source-hashes-after.json -Raw)) { throw 'Source changed during tests' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-windows-process-${{ github.sha }}
+          path: kernel-evidence/
+          if-no-files-found: error
+          retention-days: 14

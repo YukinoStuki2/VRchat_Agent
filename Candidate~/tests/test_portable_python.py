@@ -19,6 +19,13 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP006_every_platform_notice_matches_publisher_hash(self):
+        pins=json.loads((ROOT/'distribution/python-standalone.lock.json').read_text())
+        for key,pin in pins['platforms'].items():
+            for name,digest in {pin['metadata']:pin['metadata_sha256'],**pin['licenses']}.items():
+                with self.subTest(platform=key,path=name):
+                    self.assertEqual(hashlib.sha256((ROOT/'distribution'/name).read_bytes()).hexdigest(),digest)
+
     def test_PP001_archive_hash_checked_before_any_extraction(self):
         m = module()
         with tempfile.TemporaryDirectory() as td:

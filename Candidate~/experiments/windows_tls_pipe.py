@@ -77,8 +77,7 @@ def child():
             count = win32file.GetOverlappedResult(handle, ov, False)
             if count != len(content):
                 raise RuntimeError('short_pipe_write')
-            # Bounded by the outer child timeout, NOT product cancellation.
-            win32file.FlushFileBuffers(handle)
+            # CloseHandle only: no DisconnectNamedPipe (which discards unread data).
             outcomes.append('served-own-process')
         except Exception as error:
             outcomes.append(type(error).__name__)
@@ -97,13 +96,29 @@ def child():
         worker = threading.Thread(target=serve, args=(handle, data), daemon=True)
         workers.append(worker)
         worker.start()
+    # The TLS data itself is sufficient for the real parser check below;
+    # this extra synthetic peer deliberately delays every read until server close.
+    delayed_name = '\\\\.\\pipe\\vrchat-drain-probe-' + secrets.token_hex(24)
+    delayed_handle = win32pipe.CreateNamedPipe(delayed_name,
+        win32pipe.PIPE_ACCESS_OUTBOUND | 0x00080000 | win32file.FILE_FLAG_OVERLAPPED,
+        win32pipe.PIPE_TYPE_BYTE | 0x8, 1, 16384, 0, 0, sa)
+    delayed_thread = threading.Thread(target=serve, args=(delayed_handle, b'synthetic-drain'), daemon=True)
+    delayed_thread.start()
+    delayed_client = win32file.CreateFile(delayed_name, win32file.GENERIC_READ, 0, None,
+        win32file.OPEN_EXISTING, 0, None)
+    try:
+        delayed_thread.join(3)
+        assert not delayed_thread.is_alive(), 'server close did not complete before read'
+        assert win32file.ReadFile(delayed_client, 100)[1] == b'synthetic-drain', 'close discarded unread bytes'
+    finally:
+        delayed_client.Close()
     server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server.minimum_version = ssl.TLSVersion.TLSv1_2
     server.load_cert_chain(names[0], names[1])
     for worker in workers:
         worker.join(6)
     assert all(not worker.is_alive() for worker in workers), 'worker_remains'
-    assert outcomes == ['served-own-process', 'served-own-process'], outcomes
+    assert outcomes == ['served-own-process'] * 3, outcomes
     for name in names:
         try:
             unexpected = win32file.CreateFile(name, win32file.GENERIC_READ, 0, None,
@@ -132,7 +147,7 @@ def child():
         if data: sin.write(data)
         if all(done): break
     assert all(done), 'TLS_handshake_not_complete'
-    print(json.dumps({'pipe_pem_load': True, 'TLS_handshake': True,
+    print(json.dumps({'pipe_pem_load': True, 'TLS_handshake': True, 'close_without_flush_retains_bytes': True,
                       'own_pid_checked': True, 'pipes_absent': True,
                       'worker_threads_absent': True, 'openssl': ssl.OPENSSL_VERSION}))
 

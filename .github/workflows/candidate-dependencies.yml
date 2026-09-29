@@ -58,6 +58,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ((Get-Content dependency-evidence/tls-pipe-probe.txt -Raw) -match 'ResourceWarning') { throw 'TLS probe ResourceWarning' }
       - name: Real Windows memory TLS loader
+        if: always()
         shell: pwsh
         run: |
           & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/tests/test_tls_windows.py' 2>&1 | Tee-Object dependency-evidence/tls-windows-tests.txt

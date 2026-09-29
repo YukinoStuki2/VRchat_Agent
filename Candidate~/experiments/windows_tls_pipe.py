@@ -59,7 +59,9 @@ def child():
             ov = pywintypes.OVERLAPPED()
             ov.hEvent = event
             try:
-                win32pipe.ConnectNamedPipe(handle, ov)
+                connected = win32pipe.ConnectNamedPipe(handle, ov)
+                if connected == 535:
+                    win32event.SetEvent(event)
             except pywintypes.error as error:
                 if error.winerror != 535:  # ERROR_PIPE_CONNECTED
                     raise

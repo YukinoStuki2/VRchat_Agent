@@ -47,11 +47,26 @@ def issue_tls_material(*, lifetime=600):
 
 def load_tls_context(material):
     """No plaintext file fallback. Unsupported kernels fail before listening."""
+    if (type(material) is not TlsMaterial or type(material.certificate) is not bytes
+            or type(material.private_key) is not bytes or type(material.pin) is not str
+            or not 1 <= len(material.certificate) <= 16384
+            or not 1 <= len(material.private_key) <= 16384):
+        raise ValueError('invalid_tls_material')
+    try:
+        der = x509.load_pem_x509_certificate(material.certificate).public_bytes(serialization.Encoding.DER)
+    except ValueError:
+        raise ValueError('invalid_tls_material') from None
+    if hashlib.sha256(der).hexdigest() != material.pin:
+        raise ValueError('invalid_tls_material')
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    if sys.platform == 'win32':
+        from tls_windows import load_windows_pem
+        load_windows_pem(context, material.certificate, material.private_key)
+        return context
     if sys.platform != 'linux':
         raise OSError('memory_tls_loader_unavailable')
     import fcntl
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.minimum_version = ssl.TLSVersion.TLSv1_2
     fd = os.memfd_create('vrchat-agent-tls', os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
     try:
         content = memoryview(material.certificate + b'\n' + material.private_key)

@@ -30,7 +30,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dependency-evidence -Force | Out-Null
           git rev-parse HEAD | Set-Content dependency-evidence/commit.txt
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/runtime/tls_windows.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-before.json
           python -m venv "$env:RUNNER_TEMP/candidate-locked-env"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -69,7 +69,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/runtime/tls_windows.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-after.json
           if (Test-Path "$env:RUNNER_TEMP/candidate-locked-env") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/candidate-locked-env" }
           @{venv_absent= -not (Test-Path "$env:RUNNER_TEMP/candidate-locked-env")} | ConvertTo-Json | Set-Content dependency-evidence/cleanup.json

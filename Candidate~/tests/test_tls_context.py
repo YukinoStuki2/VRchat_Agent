@@ -72,6 +72,72 @@ class TlsContextTests(unittest.TestCase):
         with self.assertRaises(ssl.SSLCertVerificationError):
             handshake(context, module.issue_tls_material(lifetime=60).certificate)
 
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux allocation guard check')
+    def test_TC004_invalid_material_rejected_before_allocating_handles(self):
+        module = self.implementation()
+        good = module.issue_tls_material(lifetime=60)
+        bad = (None, module.TlsMaterial(b'', good.private_key, good.pin),
+            module.TlsMaterial(good.certificate, b'x' * 16385, good.pin),
+            module.TlsMaterial(good.certificate, good.private_key, '0' * 64))
+        with patch.object(os, 'memfd_create', side_effect=AssertionError('allocation reached')) as allocate:
+            for material in bad:
+                with self.subTest(kind=type(material).__name__), self.assertRaisesRegex(ValueError, 'invalid_tls_material'):
+                    module.load_tls_context(material)
+            allocate.assert_not_called()
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux failed-load cleanup')
+    def test_TC005_failed_ssl_load_closes_exact_owned_handle(self):
+        module = self.implementation()
+        material = module.issue_tls_material(lifetime=60)
+        fds = []
+        def fail(context, certfile, keyfile=None, password=None):
+            fds.append(int(certfile.rsplit('/', 1)[1]))
+            raise RuntimeError('synthetic_load_failure')
+        with patch.object(ssl.SSLContext, 'load_cert_chain', fail), self.assertRaisesRegex(RuntimeError, 'synthetic_load_failure'):
+            module.load_tls_context(material)
+        self.assertEqual(len(fds), 1)
+        with self.assertRaises(OSError): os.fstat(fds[0])
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Actual Linux SIGKILL test')
+    def test_TC006_sigkill_drops_unlinked_TLS_memory_handle(self):
+        import json
+        import selectors
+        import subprocess
+        import tempfile
+        code = """import json,os,ssl,sys
+sys.path.insert(0,sys.argv[1])
+import tls_context
+material=tls_context.issue_tls_material(lifetime=60)
+def blocked(self,certfile,keyfile=None,password=None):
+ print(json.dumps({'fd':int(certfile.rsplit('/',1)[1])}),flush=True)
+ sys.stdin.read()
+ raise RuntimeError('parent must kill child')
+ssl.SSLContext.load_cert_chain=blocked
+tls_context.load_tls_context(material)
+"""
+        with tempfile.TemporaryDirectory(prefix='tls-kill-fixture-') as temp:
+            with subprocess.Popen([sys.executable, '-I', '-B', '-c', code, str(ROOT / 'runtime')],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    cwd=temp, text=True) as process:
+                try:
+                    with selectors.DefaultSelector() as selector:
+                        selector.register(process.stdout, selectors.EVENT_READ)
+                        self.assertTrue(selector.select(10), 'child readiness timeout')
+                    line = process.stdout.readline()
+                    self.assertTrue(line, 'child did not reach TLS load')
+                    fd = json.loads(line)['fd']
+                    fdpath = Path('/proc') / str(process.pid) / 'fd' / str(fd)
+                    self.assertIn('memfd:vrchat-agent-tls', os.readlink(fdpath))
+                    self.assertEqual(os.stat(fdpath).st_nlink, 0)
+                    process.kill()
+                    _, errors = process.communicate(timeout=5)
+                    self.assertNotIn('ResourceWarning', errors)
+                    self.assertFalse((Path('/proc') / str(process.pid)).exists())
+                    self.assertEqual(list(Path(temp).iterdir()), [])
+                finally:
+                    if process.poll() is None: process.kill()
+                    process.communicate(timeout=5)
+
     def test_TC002_bad_lifetime_refused_before_making_a_key(self):
         module = self.implementation()
         with patch.object(module.rsa, 'generate_private_key', side_effect=AssertionError('key generation reached')) as generate:

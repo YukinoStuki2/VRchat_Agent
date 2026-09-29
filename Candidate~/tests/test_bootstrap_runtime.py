@@ -14,7 +14,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 def child_environment(home):
-    keep = {k: v for k, v in os.environ.items() if k in ('SystemRoot','WINDIR','COMSPEC','PATHEXT')}
+    keep = {k: os.environ[k] for k in ('SystemRoot','WINDIR','COMSPEC','PATHEXT') if k in os.environ}
     return {**keep,'PATH':os.environ.get('PATH',''),'HOME':str(home),'USERPROFILE':str(home),
         'LANG':'C.UTF-8','PYTHONUTF8':'1','PYTHONDONTWRITEBYTECODE':'1','DISABLE_TELEMETRY':'true'}
 sys.path[:0] = [str(ROOT/'runtime'), str(ROOT/'dependencies/mcp-1.29.1')]

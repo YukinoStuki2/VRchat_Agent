@@ -1,5 +1,6 @@
 """Actual candidate source layout, not an approved package or Unity test."""
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from unittest.mock import patch
 import importlib.util
 import json
 import hashlib
@@ -22,6 +23,11 @@ def assembler():
 
 
 class SourcePayloadTests(unittest.TestCase):
+    def test_SP006_package_member_names_stay_posix_on_windows(self):
+        module = assembler(); files = module.collect(ROOT)
+        with patch.object(module.packer, 'Path', PureWindowsPath):
+            self.assertEqual(module.packer.validate_sources(files)['name'], 'com.yukino.vrchat-agent')
+
     def test_SP001_actual_editor_and_fixed_runtime_are_in_one_source_payload(self):
         files = assembler().collect(ROOT)
         manifest = json.loads(files['package.json'])

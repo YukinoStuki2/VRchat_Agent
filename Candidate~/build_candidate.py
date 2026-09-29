@@ -3,7 +3,7 @@
 Reuse the project's deterministic ZIP implementation. A review proof is an
 operator-produced build input, not authentication or an agent approval API.
 """
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import hashlib
 import importlib.util
 import json
@@ -36,7 +36,7 @@ def validate_sources(files):
             guids.add(guid)
             continue
         required_meta = {name + '.meta'}
-        required_meta.update(str(parent) + '.meta' for parent in Path(name).parents if str(parent) != '.')
+        required_meta.update(str(parent) + '.meta' for parent in PurePosixPath(name).parents if str(parent) != '.')
         if not required_meta <= files.keys():
             raise ValueError('missing reviewed meta')
     manifest = json.loads(files['package.json'])

@@ -1,5 +1,7 @@
 # Preserve reviewed Candidate Windows source bytes on every CI checkout.
 /.gitattributes text eol=lf
+/.github/workflows/candidate-portable.yml text eol=lf
+/VPM~/build_repository.py text eol=lf
 # PBS notice bodies are upstream bytes; never normalize their pinned hashes.
 /Candidate~/distribution/python-licenses/** -text
 # Candidate source snapshots include text fixtures/docs; binary detection stays automatic.

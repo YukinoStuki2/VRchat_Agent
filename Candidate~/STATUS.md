@@ -2,7 +2,17 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
-## 编辑器所有者增量（2026-09-30，当前，优先于以下历史）
+## 源码载荷与许可证增量（2026-09-30，优先于下方历史）
+
+- `package/package.json`、候选Editor程序集定义、README/LICENSE/第三方说明已创建；此前“manifest尚不存在”的描述是旧阶段。`distribution/assemble_source.py`按309份固定输入哈希在内存组装658份源码/meta文件：真实Editor、`Runtime~/launcher`、runtime、diagnostics、固定native和修订SDK；原有GUID不改，新GUID确定性生成。不包含测试/日志/凭据，不联网安装、不生成ZIP、不签发批准。
+- 5项源码布局检查通过：实际入口路径/许可证存在、重复GUID拒绝、大小写别名拒绝、确定性meta及独立批准门槛、源码漂移/软链接拒绝。沿用打包器4项回归通过。源码布局不等于完整运行时发行或Unity importer验收。
+- 跨语言验证已把指向工作树的Runtime~软链接换成实际复制的组装载荷：真实C#进程私有管道→Python→TLS/SDK→门控及显式窗口控制器链通过；658份载荷前后不变，外层跟踪9个后代/3个监听均消失。Unity API和人审仍是fixture，不冒实机验收。
+- `distribution/license_inventory.py`只读取当前平台锁定版本，逐份核对已安装wheel的RECORD，保留所有识别到的LICENSE/NOTICE和声明文件；漏声明文件、正文漂移、补充许可版本/hash/路径错误拒绝。5项检查通过。Linux74个有效依赖已收集85份正文记录；这不是Windows清单或CPython许可验收。
+- `fastmcp-slim 3.4.7`的官方wheel与sdist未带许可证正文。补充的Apache-2.0 LICENSE固定于上游提交`758397efa66e2cedac95ada540001bc44a95a646`，上游slim pyproject与官方sdist逐字节一致；来源/正文hash随`distribution/license-supplements.json`记录。不是凭包名/表达式猜许可证。
+- 本轮实现提交`6cc16d5030d4f36f39dee63c024f031029acff07`，授权候选分支。Windows Actions `36624382991`通过：许可证5项、编辑器入口8项、实际C#2项及原身份/TLS/监督器回归均通过；292份源文件前后/提交hash一致。74个Windows依赖的99份许可证/NOTICE正文已回读核对，pip原生报告的74个实际wheel版本/hash均属于锁中对应条目。接受记录`evidence/licenses-parent-acceptance.json`；这层补充验证不修改收集器本身的边界标志。无新独立批准。
+- **仍未完成**：便携CPython及目标平台完整依赖发行/二进制来源整合、真实Hermes/Codex分别接入及停止闭环、任务暂停/续接和完整约定功能、独立复核、真实Candidate VPM/Unity/ALCOM验收。源码组装器不提供降低`build_candidate.py`门槛的入口。
+
+## 编辑器所有者增量（2026-09-30，历史）
 
 - `evidence/editor-owner-final-parent-acceptance.json` 核对父级runtime **96/96**、新编译C# **67个唯一ID**、实际C#→私有管道→Python→TLS/SDK→门控链。各组不相加；源码前后稳定。Unity API、原生业务handler与人审仍为声明的替身，不是Unity/Mono或完整产品批准。
 - Windows固定提交 `2782d9291bf4236d0434468f1d3ee6be5cf91d47`，Actions `36620572994`：编辑器入口8项、实际C# owner 2项全部通过，288份文件的前后/提交字节hash一致，临时venv与C#构建目录均已删除。CPython 3.11 Windows venv redirector先只读解析，再直接调用实际解释器并使用CPython本身的venv hint；严格子PID/父PID检查未放宽。不是跨版本Python保证。

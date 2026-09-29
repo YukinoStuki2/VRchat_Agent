@@ -1,6 +1,13 @@
 # 分发验证状态（非可安装 Candidate）
 
-## Windows实装与启动测试（2026-09-30）
+## 实际源码载荷与许可收集（2026-09-30，当前）
+
+- `assemble_source.py`在内存中校验并组装源码载荷，不创建ZIP、不批准或安装；`source-inputs.json`是明确的309输入清单。658份输出含稳定meta、Editor程序集/manifest、Runtime~固定入口与源码许可。真实复制后的载荷已运行跨语言私有管道/门控联调，不依赖指回开发树的软链接。
+- `license_inventory.py`收集当前平台锁定安装中的LICENSE/NOTICE原文，验证RECORD哈希、缺失声明及补充来源。Linux74依赖、85份记录已实际核验。Windows Actions `36624382991`已在全新hash-lock安装后独立收集：74依赖、99份正文全部核对，实际74个wheel的pip报告hash与各自锁条目匹配。没有直接复用Linux清单。
+- `fastmcp-slim 3.4.7`的缺正文采用固定上游LICENSE补充；源码pyproject与sdist字节一致，具体来源、版本和hash在`license-supplements.json`。`selected_wheel_hashes_verified=false`与`cpython_redistribution_verified=false`明确保留：当前收集器不把RECORD校验冒称便携Python/完整wheel供应链验收。Windows pip额外保存原生install-report供精确wheel来源核对。
+- 仍然没有完整Candidate ZIP或真实Candidate VPM安装/ALCOM验收。下面缺项列表是旧阶段记录：Windows依赖实装、私有引导等已完成有限验证；真实客户端/完整发行/最终独立批准尚缺。
+
+## Windows实装与启动测试（2026-09-30，历史）
 
 固定哈希锁已在Windows2022 CPython3.11全新venv实际安装74个适用包并读回；身份4、内存TLS5、真实CLI6、受限监督器4测试有Actions产物。venv删除和源hash前后/本地比对见最新接受记录。此处取代下文“Windows尚仅解析”历史状态；不证明便携Python发行/完整许可或真实Unity产品安装。
 

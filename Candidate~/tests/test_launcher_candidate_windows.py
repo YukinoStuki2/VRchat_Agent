@@ -72,6 +72,38 @@ class RealWindowsTests(unittest.TestCase):
    self.assertIsNone(p.poll());p.stop();self.assertIsNotNone(p.poll());self.assertTrue(owner.close())
   finally:owner.close()
 
+ def test_W005_crash_after_create_before_python_returns_has_no_orphan(self):
+  # A safety job owned by this test bounds even the OLD implementation's leak.
+  # The inner supervisor crashes before assign() can execute. Pin a wait HANDLE
+  # before terminating it, so cleanup never guesses by process name or reused PID.
+  code="""import importlib.util,sys,os,time
+sp=importlib.util.spec_from_file_location('w',sys.argv[1]); w=importlib.util.module_from_spec(sp); sp.loader.exec_module(w)
+o=w.OwnedProcesses(int(sys.argv[2])); original=o.api.create_suspended
+k=o.api.k; k.GetProcessId.argtypes=[w.HANDLE]; k.GetProcessId.restype=w.DWORD
+def intercept(*a,**kw):
+ p=original(*a,**kw)
+ print(k.GetProcessId(p.handle),file=sys.stderr,flush=True)
+ time.sleep(60)  # killed by the observer while still before Python return
+ return p
+o.api.create_suspended=intercept
+o.spawn([sys.executable,'-B','-I','-c','import time;time.sleep(60)'],dict(os.environ))
+"""
+  safety=m.OwnedProcesses(os.getpid());ready=threading.Event();rows=[];handle=None
+  def line(text):
+   if text.isdecimal():rows.append(text);ready.set()
+  try:
+   supervisor=safety.spawn([sys.executable,'-B','-I','-c',code,str(P),str(os.getpid())],dict(os.environ),line)
+   self.assertTrue(ready.wait(15),'supervisor did not reach create-return seam')
+   handle=safety.api.w.OpenProcess(0x00100000,False,int(rows[0]))
+   self.assertEqual(safety.api.w.WaitForSingleObject(handle,0),258)
+   supervisor.stop()
+   self.assertEqual(safety.api.w.WaitForSingleObject(handle,5000),0,'create/assign crash window leaked suspended child')
+  finally:
+   self.assertTrue(safety.close(),'safety job failed to clean old implementation leak')
+   if handle:
+    try:self.assertEqual(safety.api.w.WaitForSingleObject(handle,5000),0,'test fixture cleanup failed')
+    finally:safety.api.close_handle(handle)
+
 if __name__=='__main__':
  if os.name!='nt':raise SystemExit('Real Windows test requires Windows; do not count a skip as a pass')
  unittest.main(verbosity=2)

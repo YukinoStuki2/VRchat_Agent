@@ -37,7 +37,7 @@ jobs:
           $result = $LASTEXITCODE
           if ($result -ne 0) { exit $result }
           $raw = Get-Content kernel-evidence/windows-process.txt -Raw
-          if ($raw -notmatch 'Ran 4 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Missing tests, skip, failure, or resource warning: not a passing run' }
+          if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Missing tests, skip, failure, or resource warning: not a passing run' }
       - name: Record source stability
         if: always()
         shell: pwsh

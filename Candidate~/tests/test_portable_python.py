@@ -19,6 +19,12 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP007_json_reports_are_utf8_not_windows_locale(self):
+        m=module();self.assertTrue(hasattr(m,'read_json'),'locale-independent JSON loading missing')
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/'pip.json';path.write_bytes('{"notice":"中文与smart \u201d quote"}'.encode('utf-8'))
+            self.assertEqual(m.read_json(path),{'notice':'中文与smart \u201d quote'})
+
     def test_PP006_every_platform_notice_matches_publisher_hash(self):
         pins=json.loads((ROOT/'distribution/python-standalone.lock.json').read_text())
         for key,pin in pins['platforms'].items():

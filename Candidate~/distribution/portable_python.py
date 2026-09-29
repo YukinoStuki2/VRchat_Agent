@@ -18,6 +18,10 @@ from urllib.parse import urlparse, unquote
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def read_json(path):
+    return json.loads(Path(path).read_bytes())
+
+
 def clean_environment(home):
     result = {'PATH': os.defpath, 'HOME': str(home), 'USERPROFILE': str(home),
               'TMP': str(home), 'TEMP': str(home), 'LANG': 'C.UTF-8',
@@ -74,7 +78,7 @@ def build(archive, destination):
     system = platform.system().lower()
     if platform.machine().lower() not in ('x86_64', 'amd64') or system not in ('linux', 'windows'):
         raise ValueError('unsupported_platform')
-    pins = json.loads((ROOT/'distribution/python-standalone.lock.json').read_text())
+    pins = read_json(ROOT/'distribution/python-standalone.lock.json')
     key = system+'-x86_64'; pin = pins['platforms'][key]
     assemble = load('portable_sources', ROOT/'distribution/assemble_source.py')
     payload = assemble.collect(ROOT)
@@ -115,7 +119,7 @@ def build(archive, destination):
         run('pip-check', ['-m', 'pip', '--isolated', 'check'])
         run('installed', [str(ROOT/'distribution/verify_dependency_install.py'), str(evidence/'installed.json')])
         run('licenses', [str(ROOT/'distribution/license_inventory.py'), str(evidence/'wheel-notices')])
-        selected = check_wheels(json.loads((evidence/'pip-report.json').read_text()), (ROOT/'distribution/requirements.lock').read_text(), json.loads((evidence/'installed.json').read_text())['installed'])
+        selected = check_wheels(read_json(evidence/'pip-report.json'), (ROOT/'distribution/requirements.lock').read_text(encoding='utf-8'), read_json(evidence/'installed.json')['installed'])
         for name, data in licenses.items():
             target = package/'Runtime~/python-notices'/name
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)

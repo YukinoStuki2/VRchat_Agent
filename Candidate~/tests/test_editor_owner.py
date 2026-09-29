@@ -12,19 +12,21 @@ import time
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
 ENTRY=ROOT/'launcher/editor_owner.py'
-sys.path[:0]=[str(ROOT/'runtime'),str(ROOT/'dependencies/mcp-1.29.1')]
+sys.path[:0]=[str(ROOT),str(ROOT/'runtime'),str(ROOT/'dependencies/mcp-1.29.1')]
+from launcher.direct_python import current, environment_hint
+EXECUTABLE=current()['executable']
 
 
 def environment():
     names=('SystemRoot','WINDIR','PATH','COMSPEC','PATHEXT','TEMP','TMP','HOME','USERPROFILE')
     return {**{k:os.environ[k] for k in names if k in os.environ},
-        'PYTHONUTF8':'1','PYTHONDONTWRITEBYTECODE':'1','DISABLE_TELEMETRY':'true'}
+        'PYTHONUTF8':'1','PYTHONDONTWRITEBYTECODE':'1','DISABLE_TELEMETRY':'true',**environment_hint()}
 
 
 class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
     async def spawn(self,parent=None):
         self.assertTrue(ENTRY.exists(),'editor owner entry missing')
-        return await asyncio.create_subprocess_exec(sys.executable,'-B',str(ENTRY),
+        return await asyncio.create_subprocess_exec(EXECUTABLE,'-B',str(ENTRY),
             '--project','fixture-project','--parent-pid',str(os.getpid() if parent is None else parent),
             env=environment(),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
 
@@ -118,14 +120,17 @@ class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
         from launcher.candidate_launch import make_owner
         code = """import json,os,subprocess,sys
 from urllib.parse import urlparse
-p=subprocess.Popen([sys.executable,'-I','-B',sys.argv[1],'--project','fixture-project','--parent-pid',str(os.getpid())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+from pathlib import Path
+sys.path.insert(0,str(Path(sys.argv[1]).resolve().parents[1]))
+from launcher.direct_python import current,environment_hint
+p=subprocess.Popen([current()['executable'],'-I','-B',sys.argv[1],'--project','fixture-project','--parent-pid',str(os.getpid())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env={**os.environ,**environment_hint()})
 p.stdin.write(b'start\\n');p.stdin.flush()
 b=json.loads(p.stdout.readline())
 print(json.dumps({'port':urlparse(b['endpoint']).port,'owner_pid':p.pid}),flush=True)
 sys.stdin.readline()
 os._exit(0)
 """
-        parent=await asyncio.create_subprocess_exec(sys.executable,'-I','-B','-c',code,str(ENTRY),env=environment(),
+        parent=await asyncio.create_subprocess_exec(EXECUTABLE,'-I','-B','-c',code,str(ENTRY),env=environment(),
             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
         pin=None
         try:
@@ -146,22 +151,22 @@ os._exit(0)
         code = """import os,sys,json
 sys.path.insert(0,sys.argv[1])
 from launcher.editor_owner import private_pipes
-row={'pid':os.getpid(),'ppid':os.getppid()}
+row={'pid':os.getpid(),'ppid':os.getppid(),'prefix':sys.prefix,'selected':sys.executable}
 try:row['private_pipes']=private_pipes()
 except Exception as exc:row['error_type']=type(exc).__name__
 print(json.dumps(row),flush=True)
 """
-        p=await asyncio.create_subprocess_exec(sys.executable,'-B','-c',code,str(ROOT),
+        p=await asyncio.create_subprocess_exec(EXECUTABLE,'-B','-c',code,str(ROOT),
             env=environment(),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
         out,err=await asyncio.wait_for(p.communicate(),5)
         self.assertEqual(p.returncode,0)
         row=json.loads(out)
-        self.assertEqual(row,{'pid':p.pid,'ppid':os.getpid(),'private_pipes':True})
+        self.assertEqual(row,{'pid':p.pid,'ppid':os.getpid(),'private_pipes':True,'prefix':sys.prefix,'selected':sys.executable})
 
     async def test_EB004_nonpipe_output_refused(self):
         self.assertTrue(ENTRY.exists())
         with tempfile.TemporaryFile() as output:
-            p=await asyncio.create_subprocess_exec(sys.executable,'-B',str(ENTRY),
+            p=await asyncio.create_subprocess_exec(EXECUTABLE,'-B',str(ENTRY),
                 '--project','fixture-project','--parent-pid',str(os.getpid()),env=environment(),
                 stdin=asyncio.subprocess.PIPE,stdout=output,stderr=asyncio.subprocess.PIPE)
             _,err=await asyncio.wait_for(p.communicate(b'start\n'),5)

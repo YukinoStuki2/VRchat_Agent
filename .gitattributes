@@ -21,3 +21,7 @@
 /Candidate~/dependencies/mcp-1.29.1/** text eol=lf
 /Candidate~/tests/test_bootstrap_runtime.py text eol=lf
 /Candidate~/tests/test_owned_launcher.py text eol=lf
+/Candidate~/tests/test_editor_owner.py text eol=lf
+/Candidate~/package/Editor/EditorOwnerProcess.cs text eol=lf
+/Candidate~/tests/unity-core/EditorBootstrapCases.cs text eol=lf
+/Candidate~/tests/unity-core/EditorBootstrapCases.csproj text eol=lf

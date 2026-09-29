@@ -69,6 +69,7 @@ def load_tls_context(material):
     import fcntl
     fd = os.memfd_create('vrchat-agent-tls', os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
     try:
+        os.fchmod(fd, 0o600)
         content = memoryview(material.certificate + b'\n' + material.private_key)
         while content:
             written = os.write(fd, content)

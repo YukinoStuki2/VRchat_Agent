@@ -64,7 +64,7 @@ jobs:
           & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/tests/test_tls_windows.py' 2>&1 | Tee-Object dependency-evidence/tls-windows-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $raw = Get-Content dependency-evidence/tls-windows-tests.txt -Raw
-          if ($raw -notmatch 'Ran 1 test' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'TLS tests incomplete or warning' }
+          if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'TLS tests incomplete or warning' }
       - name: Verify unchanged bytes and remove owned environment
         if: always()
         shell: pwsh

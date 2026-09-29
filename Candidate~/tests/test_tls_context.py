@@ -57,6 +57,7 @@ class TlsContextTests(unittest.TestCase):
             self.assertRegex(certfile, r'^/proc/self/fd/[0-9]+$')
             fd = int(certfile.rsplit('/', 1)[1]); fds.append(fd)
             self.assertEqual(os.fstat(fd).st_nlink, 0)
+            self.assertEqual(os.fstat(fd).st_mode & 0o777, 0o600)
             self.assertFalse(os.get_inheritable(fd))
             # Independent readback uses the stable Linux UAPI constants.
             self.assertEqual(fcntl.fcntl(fd, 1034), 0x000F)

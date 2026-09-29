@@ -13,3 +13,5 @@
 /Candidate~/tests/test_run_identity.py text eol=lf
 /.github/workflows/candidate-dependencies.yml text eol=lf
 /Candidate~/experiments/windows_tls_pipe.py text eol=lf
+/Candidate~/runtime/tls*.py text eol=lf
+/Candidate~/tests/test_tls*.py text eol=lf

@@ -2,7 +2,7 @@ name: Candidate locked dependencies and run identities
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/experiments/windows_tls_pipe.py', '.github/workflows/candidate-dependencies.yml']
+    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/experiments/windows_tls_pipe.py', 'Candidate~/runtime/tls*.py', 'Candidate~/tests/test_tls*.py', '.github/workflows/candidate-dependencies.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dependency-evidence -Force | Out-Null
           git rev-parse HEAD | Set-Content dependency-evidence/commit.txt
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','.github/workflows/candidate-dependencies.yml')
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-before.json
           python -m venv "$env:RUNNER_TEMP/candidate-locked-env"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -57,11 +57,18 @@ jobs:
           & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/experiments/windows_tls_pipe.py' dependency-evidence/tls-pipe-probe.json 2>&1 | Tee-Object dependency-evidence/tls-pipe-probe.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ((Get-Content dependency-evidence/tls-pipe-probe.txt -Raw) -match 'ResourceWarning') { throw 'TLS probe ResourceWarning' }
+      - name: Real Windows memory TLS loader
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/tests/test_tls_windows.py' 2>&1 | Tee-Object dependency-evidence/tls-windows-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $raw = Get-Content dependency-evidence/tls-windows-tests.txt -Raw
+          if ($raw -notmatch 'Ran 1 test' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'TLS tests incomplete or warning' }
       - name: Verify unchanged bytes and remove owned environment
         if: always()
         shell: pwsh
         run: |
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','.github/workflows/candidate-dependencies.yml')
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/runtime/candidate_auth.py','Candidate~/runtime/run_identity.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/runtime/tls_context.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','.github/workflows/candidate-dependencies.yml')
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-after.json
           if (Test-Path "$env:RUNNER_TEMP/candidate-locked-env") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/candidate-locked-env" }
           @{venv_absent= -not (Test-Path "$env:RUNNER_TEMP/candidate-locked-env")} | ConvertTo-Json | Set-Content dependency-evidence/cleanup.json

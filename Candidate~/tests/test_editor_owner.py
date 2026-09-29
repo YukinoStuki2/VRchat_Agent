@@ -15,6 +15,7 @@ ENTRY=ROOT/'launcher/editor_owner.py'
 sys.path[:0]=[str(ROOT),str(ROOT/'runtime'),str(ROOT/'dependencies/mcp-1.29.1')]
 from launcher.direct_python import current, environment_hint
 EXECUTABLE=current()['executable']
+PROJECT='fixture-project-'+str(os.getpid())
 
 
 def environment():
@@ -27,7 +28,7 @@ class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
     async def spawn(self,parent=None):
         self.assertTrue(ENTRY.exists(),'editor owner entry missing')
         return await asyncio.create_subprocess_exec(EXECUTABLE,'-B',str(ENTRY),
-            '--project','fixture-project','--parent-pid',str(os.getpid() if parent is None else parent),
+            '--project',PROJECT,'--parent-pid',str(os.getpid() if parent is None else parent),
             env=environment(),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
 
     async def stop(self,p):
@@ -48,7 +49,7 @@ class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(set(bundle),{'kind','version','owner_pid','project','endpoint','pin','unity_bearer','expires_at'})
             self.assertEqual(bundle['kind'],'unity_binding')
             self.assertEqual(bundle['owner_pid'],p.pid)
-            self.assertEqual(bundle['project'],'fixture-project')
+            self.assertEqual(bundle['project'],PROJECT)
             self.assertNotIn(b'PRIVATE KEY',line)
             # SSL pin checked manually by this synthetic peer before sending bearer.
             context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT);context.check_hostname=False;context.verify_mode=ssl.CERT_NONE
@@ -60,7 +61,7 @@ class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
             async with websockets.connect(bundle['endpoint'],ssl=context,proxy=None,
                     additional_headers={'Authorization':'Bearer '+bundle['unity_bearer']}) as ws:
                 self.assertEqual(json.loads(await ws.recv())['type'],'welcome')
-                await ws.send(json.dumps({'type':'register','project_hash':'fixture-project','project_name':'TEST','unity_version':'FIXTURE'}))
+                await ws.send(json.dumps({'type':'register','project_hash':PROJECT,'project_name':'TEST','unity_version':'FIXTURE'}))
                 self.assertEqual(json.loads(await ws.recv())['type'],'registered')
                 command=json.loads(await ws.recv())
                 self.assertEqual(command['params']['kind'],'status')
@@ -105,6 +106,7 @@ class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
         try:
             p.stdin.write(b'start\n');await p.stdin.drain()
             bundle=json.loads(await asyncio.wait_for(p.stdout.readline(),10))
+            self.assertEqual(bundle.get('kind'),'unity_binding', {k:bundle.get(k) for k in ('kind','code','phase')})
             port=urlparse(bundle['endpoint']).port
             p.stdin.close();out,err=await self.stop(p)
             final=json.loads(out.decode().splitlines()[-1])
@@ -123,14 +125,14 @@ from urllib.parse import urlparse
 from pathlib import Path
 sys.path.insert(0,str(Path(sys.argv[1]).resolve().parents[1]))
 from launcher.direct_python import current,environment_hint
-p=subprocess.Popen([current()['executable'],'-I','-B',sys.argv[1],'--project','fixture-project','--parent-pid',str(os.getpid())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env={**os.environ,**environment_hint()})
+p=subprocess.Popen([current()['executable'],'-I','-B',sys.argv[1],'--project',sys.argv[2],'--parent-pid',str(os.getpid())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env={**os.environ,**environment_hint()})
 p.stdin.write(b'start\\n');p.stdin.flush()
 b=json.loads(p.stdout.readline())
 print(json.dumps({'port':urlparse(b['endpoint']).port,'owner_pid':p.pid}),flush=True)
 sys.stdin.readline()
 os._exit(0)
 """
-        parent=await asyncio.create_subprocess_exec(EXECUTABLE,'-I','-B','-c',code,str(ENTRY),env=environment(),
+        parent=await asyncio.create_subprocess_exec(EXECUTABLE,'-I','-B','-c',code,str(ENTRY),PROJECT,env=environment(),
             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
         pin=None
         try:
@@ -167,7 +169,7 @@ print(json.dumps(row),flush=True)
         self.assertTrue(ENTRY.exists())
         with tempfile.TemporaryFile() as output:
             p=await asyncio.create_subprocess_exec(EXECUTABLE,'-B',str(ENTRY),
-                '--project','fixture-project','--parent-pid',str(os.getpid()),env=environment(),
+                '--project',PROJECT,'--parent-pid',str(os.getpid()),env=environment(),
                 stdin=asyncio.subprocess.PIPE,stdout=output,stderr=asyncio.subprocess.PIPE)
             _,err=await asyncio.wait_for(p.communicate(b'start\n'),5)
             output.seek(0);out=output.read()

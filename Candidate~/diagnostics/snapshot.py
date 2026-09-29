@@ -66,6 +66,67 @@ def owned_fd(stack, name, flags, *, parent=None):
     return fd
 
 
+@contextmanager
+def linux_read_lease(fd):
+    """Kernel-enforced stable read; no advisory-lock/stat-only fallback.
+
+    SIGIO handling belongs to this synchronous main-thread capture only. A
+    busy file, incompatible host signal policy or unsupported kernel rejects.
+    This does not freeze directories or a whole multi-file project.
+    """
+    import fcntl
+    import platform
+    import signal
+    import struct
+    if (threading.current_thread() is not threading.main_thread()
+            or platform.machine() not in ('x86_64', 'aarch64')
+            or signal.getsignal(signal.SIGIO) != signal.SIG_DFL
+            or signal.SIGIO in signal.pthread_sigmask(signal.SIG_BLOCK, [])):
+        raise OSError('exclusive local read-lease signal context required')
+    broken = False
+    def break_lease(signum, frame):
+        nonlocal broken
+        broken = True
+        # Release promptly so an ordinary editor is not blocked for the kernel
+        # lease-break timeout. No captured bytes may escape after this signal.
+        try:
+            fcntl.fcntl(fd, fcntl.F_SETLEASE, fcntl.F_UNLCK)
+        except OSError:
+            pass  # Outer descriptor cleanup remains authoritative.
+    previous = signal.signal(signal.SIGIO, break_lease)
+    try:
+        # Linux asm-generic f_owner_ex ABI: F_OWNER_TID=0, SET/GETOWN_EX=15/16.
+        # Set before leasing; lease_setup's non-forced owner assignment keeps it.
+        owner = struct.pack('ii', 0, threading.get_native_id())
+        fcntl.fcntl(fd, 15, owner)
+        fcntl.fcntl(fd, fcntl.F_SETLEASE, fcntl.F_RDLCK)
+        if fcntl.fcntl(fd, 16, bytes(8)) != owner:
+            raise OSError('read-lease signal ownership mismatch')
+        if broken or fcntl.fcntl(fd, fcntl.F_GETLEASE) != fcntl.F_RDLCK:
+            raise ValueError('source write lease interrupted')
+        yield
+        if broken or fcntl.fcntl(fd, fcntl.F_GETLEASE) != fcntl.F_RDLCK:
+            raise ValueError('source write lease interrupted')
+    finally:
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGIO})
+        try:
+            # Pending break returns F_UNLCK even while still holding a lease;
+            # unconditionally request release before restoring the signal policy.
+            try:
+                fcntl.fcntl(fd, fcntl.F_SETLEASE, fcntl.F_UNLCK)
+            except OSError as exc:
+                import errno
+                if exc.errno != errno.EAGAIN:
+                    raise
+            if signal.sigtimedwait({signal.SIGIO}, 0) is not None:
+                broken = True
+        finally:
+            signal.signal(signal.SIGIO, previous)
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+    if broken:
+        raise ValueError('source write lease interrupted')
+
+
 def read_selected(root, name):
     if sys.platform == 'win32':
         from windows_handles import read_selected as windows_read
@@ -91,6 +152,7 @@ def read_selected(root, name):
             raise ValueError('selected file must be regular and singly linked')
         if before.st_size > MAX_FILE_BYTES:
             raise ValueError('file byte limit')
+        stack.enter_context(linux_read_lease(fd))
         # Read the very descriptor that was validated, never reopen a pathname.
         with os.fdopen(os.dup(fd), 'rb') as stream:
             data = stream.read(MAX_FILE_BYTES + 1)

@@ -53,6 +53,39 @@ namespace Yukino.VRChatAgent
                 info.EnvironmentVariables["PYTHONUTF8"] = "1";
                 info.EnvironmentVariables["PYTHONDONTWRITEBYTECODE"] = "1";
                 info.EnvironmentVariables["DISABLE_TELEMETRY"] = "true";
+                // Inspect only interpreter metadata before issuing any credential.
+                // The selected Windows venv is a redirector; CPython's own launch
+                // hint preserves that venv while the real interpreter is our child.
+                string arguments = info.Arguments;
+                info.Arguments = "-I -B " + Quote(Path.Combine(Path.GetDirectoryName(entry), "direct_python.py"));
+                using (var probe = new Process {StartInfo = info})
+                {
+                    if (stopping || !probe.Start()) throw new InvalidOperationException("python_probe_refused");
+                    var drain = DrainAsync(probe.StandardError);
+                    try
+                    {
+                        probe.StandardInput.Close();
+                        var metadata = Parse(await ReadLineAsync(probe.StandardOutput, 5));
+                        if (!probe.WaitForExit(3000) || probe.ExitCode != 0 || metadata.Count != 3 ||
+                            metadata["executable"]?.Type != JTokenType.String || metadata["selected"]?.Type != JTokenType.String ||
+                            metadata["windows"]?.Type != JTokenType.Boolean)
+                            throw new InvalidOperationException("python_probe_invalid");
+                        bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
+                        var comparison = windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                        string direct = (string)metadata["executable"], selected = (string)metadata["selected"];
+                        if ((bool)metadata["windows"] != windows || !Path.IsPathRooted(direct) || !File.Exists(direct) ||
+                            !string.Equals(Path.GetFullPath(selected), Path.GetFullPath(python), comparison))
+                            throw new InvalidOperationException("python_probe_mismatch");
+                        info.FileName = direct;
+                        if (windows) info.EnvironmentVariables["__PYVENV_LAUNCHER__"] = selected;
+                    }
+                    finally
+                    {
+                        if (!probe.HasExited) { probe.Kill(); probe.WaitForExit(3000); }
+                        await drain;
+                    }
+                }
+                info.Arguments = arguments;
                 process = new Process {StartInfo = info};
                 if (stopping || !process.Start()) throw new InvalidOperationException("owner_start_refused");
                 OwnerPid = process.Id;

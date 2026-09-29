@@ -91,6 +91,7 @@ jobs:
         run: |
           dotnet build 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj' --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:BaseIntermediateOutputPath="$env:RUNNER_TEMP/editor-csharp/obj/" -p:BaseOutputPath="$env:RUNNER_TEMP/editor-csharp/bin/" 2>&1 | Tee-Object dependency-evidence/editor-csharp-build.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Output "CSharp fixture begin" | Set-Content dependency-evidence/editor-csharp-tests.txt
           dotnet "$env:RUNNER_TEMP/editor-csharp/bin/Release/net8.0/EditorBootstrapCases.dll" "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" "$pwd/Candidate~/launcher/editor_owner.py" 2>&1 | Tee-Object dependency-evidence/editor-csharp-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $raw = Get-Content dependency-evidence/editor-csharp-tests.txt -Raw

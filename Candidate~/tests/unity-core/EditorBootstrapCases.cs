@@ -44,7 +44,7 @@ internal static class EditorBootstrapCases
     async Task Close(){if(ws!=null){ws.Abort();if(peer!=null)await peer;ws.Dispose();}}
     try
     {
-     if(!await owner.StartAsync(args[0],args[1],"fixture-project",Connect,Close))return 3;
+     if(!await owner.StartAsync(args[0],args[1],"fixture-project",Connect,Close)){Console.WriteLine("FAIL ECP001 owner_start_refused");return 3;}
      if(!owner.Ready)return 4;
      int pid=owner.OwnerPid;
      if(dispose){owner.Dispose();await Close();}else await owner.StopAsync();

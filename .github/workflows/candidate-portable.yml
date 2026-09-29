@@ -1,0 +1,73 @@
+name: Candidate portable Python (not product approval)
+on:
+  push:
+    branches: [candidate-alcom-20260928]
+    paths:
+      - 'Candidate~/distribution/**'
+      - 'Candidate~/runtime/**'
+      - 'Candidate~/launcher/**'
+      - 'Candidate~/package/**'
+      - 'Candidate~/tests/**'
+      - '.github/workflows/candidate-portable.yml'
+      - '.gitattributes'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-portable:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Freeze source bytes and unit checks
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts | Out-Null
+          git rev-parse HEAD | Set-Content artifacts/commit.txt
+          $files = @(git ls-files 'Candidate~/*' 'VPM~/build_repository.py' '.gitattributes' '.github/workflows/candidate-portable.yml')
+          $hashes = @{}
+          foreach ($file in $files) { $hashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower() }
+          $hashes | ConvertTo-Json | Set-Content artifacts/source-before.json
+          python -I -B -W always::ResourceWarning Candidate~/tests/test_portable_python.py 2>&1 | Tee-Object artifacts/unit-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify exact PBS download and actual relocated runtime
+        shell: pwsh
+        run: |
+          $pins = Get-Content Candidate~/distribution/python-standalone.lock.json -Raw | ConvertFrom-Json
+          $pin = $pins.platforms.'windows-x86_64'
+          $archive = Join-Path $env:RUNNER_TEMP candidate-portable-download.tar.gz
+          if (Test-Path $archive) { throw 'archive_already_exists' }
+          Invoke-WebRequest -Uri $pin.url -OutFile $archive
+          if ((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower() -ne $pin.sha256) { throw 'archive_hash' }
+          $dotnet = (Get-Command dotnet).Source
+          python -I -B -W always::ResourceWarning Candidate~/tests/verify_portable.py --archive $archive --dotnet $dotnet --output artifacts/portable.json 2>&1 | Tee-Object artifacts/portable-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Read back cleanup and freeze
+        if: always()
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP candidate-portable-download.tar.gz
+          if (Test-Path $archive) { Remove-Item -LiteralPath $archive }
+          $before = Get-Content artifacts/source-before.json -Raw | ConvertFrom-Json -AsHashtable
+          $after = @{}
+          foreach ($file in $before.Keys) { $after[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower() }
+          $after | ConvertTo-Json | Set-Content artifacts/source-after.json
+          $different = @($before.Keys | Where-Object { $before[$_] -ne $after[$_] })
+          $result = if (Test-Path artifacts/portable.json) { Get-Content artifacts/portable.json -Raw | ConvertFrom-Json } else { $null }
+          $absent = ($null -ne $result) -and $result.temporary_root_absent -and -not (Test-Path -LiteralPath $result.temporary_root)
+          @{ archive_absent = -not (Test-Path $archive); temporary_root_absent = $absent; source_unchanged = ($different.Count -eq 0) } | ConvertTo-Json | Set-Content artifacts/cleanup.json
+          if ($different.Count -ne 0 -or -not $absent -or -not $result.passed) { throw 'portable_acceptance_not_complete' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: candidate-windows-portable-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14

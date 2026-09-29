@@ -21,6 +21,7 @@ class OwnedRun:
     config: dict = field(repr=False)
     owner: Any = field(repr=False)
     binding: RuntimeBinding = field(repr=False)
+    transport_ready: Any = field(default_factory=threading.Event,init=False,repr=False)
     _used: bool = field(default=False,init=False,repr=False)
     _lock: Any = field(default_factory=threading.Lock,init=False,repr=False)
 
@@ -49,12 +50,13 @@ def supervise_owned(raw, *, owned, stop=None, report=None):
     receipt = {}
     def observer():
         try:
-            asyncio.run(observe_runtime(owned.owner,binding,stop=stop,receipt=receipt))
+            asyncio.run(observe_runtime(owned.owner,binding,stop=stop,receipt=receipt,transport_ready=owned.transport_ready))
         except BaseException:
             # Never print exceptions that may include headers or material.
             binding.failed.set()
         finally:
             binding.ready.clear()
+            owned.transport_ready.clear()
             if stop.is_set() and not binding.failed.is_set():halt.set()
             elif not binding.cancelled.is_set():binding.failed.set()
     thread=threading.Thread(target=observer,name='vrchat-owned-probe-'+str(owned.owner.port),daemon=False)

@@ -10,7 +10,7 @@ import ssl
 import time
 
 
-async def observe_runtime(owner, binding, *, stop=None, receipt=None, startup_timeout=12):
+async def observe_runtime(owner, binding, *, stop=None, receipt=None, transport_ready=None, startup_timeout=12):
     import httpx
     from fastmcp import Client
     from fastmcp.client.transports import StreamableHttpTransport
@@ -43,6 +43,7 @@ async def observe_runtime(owner, binding, *, stop=None, receipt=None, startup_ti
         except ConnectionRefusedError:
             await asyncio.sleep(.05)
     if cancelled():return
+    if transport_ready is not None:transport_ready.set()
     session_id = None
     async def record_response(response):
         nonlocal session_id

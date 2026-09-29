@@ -5,3 +5,10 @@
 /Candidate~/diagnostics/snapshot.py text eol=lf
 /Candidate~/diagnostics/verify_windows.py text eol=lf
 /Candidate~/tests/test_diagnostics_windows_kernel.py text eol=lf
+/Candidate~/distribution/requirements.in text eol=lf
+/Candidate~/distribution/requirements.lock text eol=lf
+/Candidate~/distribution/verify_dependency_install.py text eol=lf
+/Candidate~/runtime/candidate_auth.py text eol=lf
+/Candidate~/runtime/run_identity.py text eol=lf
+/Candidate~/tests/test_run_identity.py text eol=lf
+/.github/workflows/candidate-dependencies.yml text eol=lf

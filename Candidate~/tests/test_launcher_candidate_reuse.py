@@ -1,0 +1,114 @@
+"""Characterizations of byte-identical legacy ownership; NOT Windows passes."""
+import os
+import sys
+import time
+import unittest
+from unittest.mock import Mock
+from test_launcher_candidate import ROOT, module
+
+
+class ReusedOwnership(unittest.TestCase):
+    def test_L020_windows_assign_before_resume_characterization(self):
+        from launcher import windows_processes as m
+        api = Mock()
+        child = Mock(handle=404, thread=303)
+        calls = []
+        api.create_suspended.side_effect = lambda *a: calls.append('suspended') or child
+        api.assign.side_effect = lambda *a: calls.append('assign')
+        api.resume.side_effect = lambda *a: calls.append('resume')
+        api.job_empty.return_value = True
+        owner = m.OwnedProcesses(77, api=api)
+        try:
+            self.assertIs(owner.spawn(['approved.exe'], {}), child)
+            self.assertEqual(calls, ['suspended', 'assign', 'resume'])
+            self.assertTrue(owner.close())
+            api.open_parent.assert_called_once_with(77)
+        finally:
+            owner.close()
+
+    def test_L021_windows_failed_assignment_never_resumes_characterization(self):
+        from launcher import windows_processes as m
+        api = Mock()
+        child = Mock(handle=404, thread=303)
+        api.create_suspended.return_value = child
+        api.assign.side_effect = OSError('fixture assignment denied')
+        api.job_empty.return_value = True
+        owner = m.OwnedProcesses(77, api=api)
+        try:
+            with self.assertRaises(OSError):
+                owner.spawn(['approved.exe'], {})
+            api.resume.assert_not_called()
+            child.stop.assert_called_once()
+            child.close.assert_called_once()
+        finally:
+            self.assertTrue(owner.close())
+
+    def test_L022_reader_byte_bound_and_eof_characterization(self):
+        from launcher import windows_processes as m
+        for data, expected in ((b'x'*4096, ['x'*4096]), (b'x'*4097, []),
+                               (b'x'*6000+b'\nshort-tail', ['short-tail']),
+                               (b'Permission denied (publickey).', ['Permission denied (publickey).'])):
+            with self.subTest(size=len(data)):
+                readfd, writefd = os.pipe()
+                lines = []
+                child = m.NativeProcess(Mock(), None, None, readfd, lines.append)
+                child.start_reader()
+                try:
+                    os.write(writefd, data)
+                finally:
+                    os.close(writefd)
+                child.close()
+                self.assertEqual(lines, expected)
+                self.assertFalse(child.reader.is_alive())
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux fixture only')
+    def test_L023_owned_descendant_is_reaped_and_unrelated_child_survives(self):
+        import subprocess
+        import threading
+        m = module(self)
+        unrelated = subprocess.Popen([sys.executable, '-B', '-c', 'import time;time.sleep(30)'])
+        owner = m.make_owner(os.getpid())
+        ready = threading.Event()
+        rows = []
+        code = ('import subprocess,sys,time,signal;'
+                'p=subprocess.Popen([sys.executable,"-B","-c","import time;time.sleep(30)"]);'
+                '\ndef stop(*args):\n p.terminate();p.wait(timeout=3);raise SystemExit(0)'
+                '\nsignal.signal(signal.SIGTERM,stop);print(p.pid,file=sys.stderr,flush=True);time.sleep(30)')
+        def line(text):
+            rows.append(text)
+            ready.set()
+        try:
+            child = owner.spawn([sys.executable, '-B', '-c', code], dict(os.environ), line)
+            self.assertTrue(ready.wait(3))
+            descendant = int(rows[0])
+            self.assertTrue(owner.close())
+            self.assertIsNone(unrelated.poll())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(descendant, 0)
+            with self.assertRaises(ProcessLookupError):
+                os.killpg(child.pid, 0)
+        finally:
+            owner.close()
+            unrelated.terminate()
+            unrelated.wait(timeout=3)
+
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux WNOWAIT ownership test')
+    def test_L024_exit_poll_keeps_pid_pinned_until_group_cleanup(self):
+        m = module(self)
+        owner = m.make_owner(os.getpid())
+        try:
+            child = owner.spawn([sys.executable, '-B', '-c', 'raise SystemExit(23)'], dict(os.environ))
+            deadline = time.monotonic() + 3
+            while child.poll() is None and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertEqual(child.poll(), 23)
+            self.assertIsNone(child.proc.returncode, 'poll must not reap/release the group leader PID')
+            info = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            self.assertEqual(info.si_status, 23)
+        finally:
+            self.assertTrue(owner.close())
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,0 +1,3212 @@
+{
+  "schema_version": 1,
+  "product_ready": false,
+  "permission_grant": false,
+  "count": 48,
+  "tools": [
+    {
+      "name": "apply_text_edits",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "uri",
+          "annotation": "Annotated[str, 'URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/...']"
+        },
+        {
+          "name": "edits",
+          "annotation": "Annotated[list[dict[str, Any]], 'List of edits to apply to the script, i.e. a list of {startLine,startCol,endLine,endCol,newText} (1-indexed!)']"
+        },
+        {
+          "name": "precondition_sha256",
+          "annotation": "Annotated[str, 'Optional SHA256 of the script to edit, used to prevent concurrent edits'] | None"
+        },
+        {
+          "name": "strict",
+          "annotation": "Annotated[bool, 'Optional strict flag, used to enforce strict mode'] | None"
+        },
+        {
+          "name": "options",
+          "annotation": "Annotated[dict[str, Any], 'Optional options, used to pass additional options to the script editor'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 71,
+        "end_line": 381,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "文本定点修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "batch_execute",
+      "unity_target": "batch_execute",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "commands",
+          "annotation": "Annotated[list[dict[str, Any]], \"List of commands with 'tool' and 'params' keys.\"]"
+        },
+        {
+          "name": "parallel",
+          "annotation": "Annotated[bool | None, 'Attempt to run read-only commands in parallel']"
+        },
+        {
+          "name": "fail_fast",
+          "annotation": "Annotated[bool | None, 'Stop processing after the first failure']"
+        },
+        {
+          "name": "max_parallelism",
+          "annotation": "Annotated[int | None, 'Hint for the maximum number of parallel workers']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/batch_execute.py",
+        "start_line": 62,
+        "end_line": 147,
+        "sha256": "c2253e3f0d96d27dc717880c2f010a2206d17ebe7d14d268eaf598a6d9ed923f"
+      },
+      "name_zh": "批量执行",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "create_script",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "path",
+          "annotation": "Annotated[str, \"Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'\"]"
+        },
+        {
+          "name": "contents",
+          "annotation": "Annotated[str, 'Contents of the script to create (plain text C# code). The server handles Base64 encoding.']"
+        },
+        {
+          "name": "script_type",
+          "annotation": "Annotated[str, \"Script type (e.g., 'C#')\"] | None"
+        },
+        {
+          "name": "namespace",
+          "annotation": "Annotated[str, 'Namespace for the script'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 384,
+        "end_line": 439,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "创建脚本",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "debug_request_context",
+      "unity_target": null,
+      "group": null,
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [],
+      "source": {
+        "path": "Server/src/services/tools/debug_request_context.py",
+        "start_line": 15,
+        "end_line": 86,
+        "sha256": "a1ae0f7f4da4e19e7d335fee6c5575e3b56ff126318961431e12419780cd5025"
+      },
+      "name_zh": "请求上下文调试",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "delete_script",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "uri",
+          "annotation": "Annotated[str, 'URI of the script to delete under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/...']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 442,
+        "end_line": 474,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "删除脚本",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "execute_code",
+      "unity_target": "execute_code",
+      "group": "scripting_ext",
+      "declared_actions": [
+        "execute",
+        "get_history",
+        "replay",
+        "clear_history"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['execute', 'get_history', 'replay', 'clear_history'], 'Action to perform.']"
+        },
+        {
+          "name": "code",
+          "annotation": "Annotated[str, \"C# code to execute (for 'execute' action). Must be a valid method body. Access UnityEngine and UnityEditor namespaces. Use 'return' to send data back.\"] | None"
+        },
+        {
+          "name": "safety_checks",
+          "annotation": "Annotated[bool, 'Enable basic blocked-pattern checks (File.Delete, Process.Start, infinite loops, etc). Not a full sandbox — advanced bypass is possible. Default: true.']"
+        },
+        {
+          "name": "index",
+          "annotation": "Annotated[int, \"History entry index to replay (for 'replay' action).\"] | None"
+        },
+        {
+          "name": "limit",
+          "annotation": "Annotated[int, \"Number of history entries to return (for 'get_history' action, 1-50). Default: 10.\"]"
+        },
+        {
+          "name": "compiler",
+          "annotation": "Annotated[Literal['auto', 'roslyn', 'codedom'], \"Compiler backend for 'execute' action. 'auto' uses Roslyn if Microsoft.CodeAnalysis is installed, else falls back to CodeDom. 'roslyn' forces Roslyn (C# 12+). 'codedom' forces legacy CSharpCodeProvider (C# 6). Default: auto.\"]"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/execute_code.py",
+        "start_line": 21,
+        "end_line": 101,
+        "sha256": "47469b1802336fad12cd2c0fa707ed251ef1be782b4939139c7976ee87a9afce"
+      },
+      "name_zh": "任意代码执行",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "execute_custom_tool",
+      "unity_target": null,
+      "group": null,
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "tool_name",
+          "annotation": "str"
+        },
+        {
+          "name": "parameters",
+          "annotation": "dict[str, Any] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/execute_custom_tool.py",
+        "start_line": 16,
+        "end_line": 59,
+        "sha256": "e9b66f7e71c358ce6724bd687eb257863582a743696f750ce6e268acb7f58a43"
+      },
+      "name_zh": "自定义工具执行",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "execute_menu_item",
+      "unity_target": "execute_menu_item",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "menu_path",
+          "annotation": "Annotated[str, \"Menu path for 'execute' or 'exists' (e.g., 'File/Save Project')\"] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/execute_menu_item.py",
+        "start_line": 16,
+        "end_line": 32,
+        "sha256": "c3f2ab816d4070ae20d6fa5600cc18ef3df6990563f711643f227692e0cee1c1"
+      },
+      "name_zh": "编辑器菜单执行",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "find_gameobjects",
+      "unity_target": "find_gameobjects",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "search_term",
+          "annotation": "Annotated[str, Field(description='The value to search for (name, tag, layer name, component type, or path)')]"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_name', 'by_tag', 'by_layer', 'by_component', 'by_path', 'by_id'], Field(default='by_name', description='How to search for GameObjects')]"
+        },
+        {
+          "name": "include_inactive",
+          "annotation": "Annotated[bool | str | None, Field(default=None, description='Include inactive GameObjects in search')]"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[int | str | None, Field(default=None, description='Number of results per page (default: 50, max: 500)')]"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[int | str | None, Field(default=None, description='Pagination cursor (offset for next page)')]"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/find_gameobjects.py",
+        "start_line": 18,
+        "end_line": 126,
+        "sha256": "350c71a67302f4bce6645d19e68199666ff1f59799a727f33bf5b7befe3eb1ec"
+      },
+      "name_zh": "查找场景对象",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "find_in_file",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "uri",
+          "annotation": "Annotated[str, 'The resource URI to search under Assets/ or file path form supported by read_resource']"
+        },
+        {
+          "name": "pattern",
+          "annotation": "Annotated[str, 'The regex pattern to search for']"
+        },
+        {
+          "name": "project_root",
+          "annotation": "Annotated[str | None, 'Optional project root path']"
+        },
+        {
+          "name": "max_results",
+          "annotation": "Annotated[int, 'Cap results to avoid huge payloads']"
+        },
+        {
+          "name": "ignore_case",
+          "annotation": "Annotated[bool | str | None, 'Case insensitive search']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/find_in_file.py",
+        "start_line": 68,
+        "end_line": 185,
+        "sha256": "c0d602b3dc7107b77a17d2fc1d98a74db58dfc11e6e9d6af14d380ad559edac7"
+      },
+      "name_zh": "文件内容查找",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "generate_audio",
+      "unity_target": "generate_audio",
+      "group": "asset_gen",
+      "declared_actions": [
+        "generate",
+        "status",
+        "cancel",
+        "list_providers"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['generate', 'status', 'cancel', 'list_providers'], 'Action to perform.']"
+        },
+        {
+          "name": "provider",
+          "annotation": "Annotated[str, 'Provider id (fal).'] | None"
+        },
+        {
+          "name": "prompt",
+          "annotation": "Annotated[str, 'Text prompt describing the sound or music.'] | None"
+        },
+        {
+          "name": "model",
+          "annotation": "Annotated[str, 'fal model id (e.g. fal-ai/stable-audio-25/text-to-audio). Omit to use the GUI-selected default.'] | None"
+        },
+        {
+          "name": "duration",
+          "annotation": "Annotated[float, 'Requested length in seconds (soft-clamped per model).'] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Base name for the imported asset.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, 'Destination folder under Assets/ for the import.'] | None"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[str, 'Job id for status/cancel.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/generate_audio.py",
+        "start_line": 19,
+        "end_line": 79,
+        "sha256": "a0af1a95694640d669f0ec83663e813e87921bccc56ecd55963a3916e168716b"
+      },
+      "name_zh": "外部音频生成",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "generate_image",
+      "unity_target": "generate_image",
+      "group": "asset_gen",
+      "declared_actions": [
+        "generate",
+        "remove_background",
+        "status",
+        "cancel",
+        "list_providers"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['generate', 'remove_background', 'status', 'cancel', 'list_providers'], 'Action to perform.']"
+        },
+        {
+          "name": "provider",
+          "annotation": "Annotated[str, 'Provider id (fal, openrouter).'] | None"
+        },
+        {
+          "name": "mode",
+          "annotation": "Annotated[str, 'Generation mode: text or image.'] | None"
+        },
+        {
+          "name": "prompt",
+          "annotation": "Annotated[str, 'Text prompt for text->image.'] | None"
+        },
+        {
+          "name": "image_path",
+          "annotation": "Annotated[str, 'Path to a source image for image->image mode.'] | None"
+        },
+        {
+          "name": "image_url",
+          "annotation": "Annotated[str, 'URL of a source image for image->image.'] | None"
+        },
+        {
+          "name": "model",
+          "annotation": "Annotated[str, 'Provider model id/slug (e.g. FLUX, gemini-2.5-flash-image).'] | None"
+        },
+        {
+          "name": "transparent",
+          "annotation": "Annotated[bool, 'Mark the imported texture as alpha-is-transparency. NOTE: fal/FLUX and OpenRouter have no generation-time transparency, so this only sets the Unity import flag — it does not make the model render a transparent background.'] | None"
+        },
+        {
+          "name": "width",
+          "annotation": "Annotated[int, 'Output width in pixels.'] | None"
+        },
+        {
+          "name": "height",
+          "annotation": "Annotated[int, 'Output height in pixels.'] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Base name for the imported asset.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, 'Destination folder under Assets/ for the import.'] | None"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[str, 'Job id for status/cancel.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/generate_image.py",
+        "start_line": 19,
+        "end_line": 88,
+        "sha256": "87c54363b180c66e9c34baa16e964c6fe5d3348c0fc96843f29cd9610191ec5a"
+      },
+      "name_zh": "外部图像生成",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "generate_model",
+      "unity_target": "generate_model",
+      "group": "asset_gen",
+      "declared_actions": [
+        "generate",
+        "status",
+        "cancel",
+        "list_providers"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['generate', 'status', 'cancel', 'list_providers'], 'Action to perform.']"
+        },
+        {
+          "name": "provider",
+          "annotation": "Annotated[str, 'Provider id (tripo, meshy).'] | None"
+        },
+        {
+          "name": "mode",
+          "annotation": "Annotated[str, 'Generation mode: text or image.'] | None"
+        },
+        {
+          "name": "prompt",
+          "annotation": "Annotated[str, 'Text prompt for text->3D.'] | None"
+        },
+        {
+          "name": "image_path",
+          "annotation": "Annotated[str, 'Path to a source image for image->3D.'] | None"
+        },
+        {
+          "name": "image_url",
+          "annotation": "Annotated[str, 'URL of a source image for image->3D.'] | None"
+        },
+        {
+          "name": "format",
+          "annotation": "Annotated[str, 'Output model format: glb, fbx, obj, or usdz.'] | None"
+        },
+        {
+          "name": "target_size",
+          "annotation": "Annotated[float, 'Normalize the largest dimension to this size (meters).'] | None"
+        },
+        {
+          "name": "texture",
+          "annotation": "Annotated[bool, 'Whether to generate textures for the model.'] | None"
+        },
+        {
+          "name": "tier",
+          "annotation": "Annotated[str, 'Provider quality/cost tier.'] | None"
+        },
+        {
+          "name": "model",
+          "annotation": "Annotated[str, 'Provider model id/version (e.g. Tripo v3.1, Meshy meshy-6). Omit for the GUI-selected default.'] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Base name for the imported asset.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, 'Destination folder under Assets/ for the import.'] | None"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[str, 'Job id for status/cancel.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/generate_model.py",
+        "start_line": 19,
+        "end_line": 88,
+        "sha256": "6c81ad2176a0a625f8cf05baa40493b89b269df8ed2a634e893b053e00543d1c"
+      },
+      "name_zh": "外部模型生成",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "get_sha",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "uri",
+          "annotation": "Annotated[str, 'URI of the script to edit under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/...']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 661,
+        "end_line": 695,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "脚本内容哈希",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "get_test_job",
+      "unity_target": "get_test_job",
+      "group": "testing",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "job_id",
+          "annotation": "Annotated[str, 'Job id returned by run_tests']"
+        },
+        {
+          "name": "include_failed_tests",
+          "annotation": "Annotated[bool, 'Include details for failed/skipped tests only (default: false)']"
+        },
+        {
+          "name": "include_details",
+          "annotation": "Annotated[bool, 'Include details for all tests (default: false)']"
+        },
+        {
+          "name": "wait_timeout",
+          "annotation": "Annotated[int | None, 'If set, wait up to this many seconds for tests to complete before returning. Reduces polling frequency and avoids client-side loop detection. Recommended: 30-60 seconds. Returns immediately if tests complete sooner.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/run_tests.py",
+        "start_line": 240,
+        "end_line": 373,
+        "sha256": "84b5379b5f93fe32f03126f15dcc048ae511d0125b07055d0ac91fe998ec20a7"
+      },
+      "name_zh": "测试任务查询",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "import_model",
+      "unity_target": "import_model",
+      "group": "asset_gen",
+      "declared_actions": [
+        "search",
+        "preview",
+        "import",
+        "status",
+        "cancel",
+        "list_providers"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['search', 'preview', 'import', 'status', 'cancel', 'list_providers'], 'Action to perform.']"
+        },
+        {
+          "name": "query",
+          "annotation": "Annotated[str, 'Search query for the search action.'] | None"
+        },
+        {
+          "name": "categories",
+          "annotation": "Annotated[str, 'Filter search by category.'] | None"
+        },
+        {
+          "name": "downloadable",
+          "annotation": "Annotated[bool, 'Restrict search to downloadable models.'] | None"
+        },
+        {
+          "name": "count",
+          "annotation": "Annotated[int, 'Maximum number of search results.'] | None"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[str, 'Pagination cursor for search.'] | None"
+        },
+        {
+          "name": "uid",
+          "annotation": "Annotated[str, 'Sketchfab model uid for preview/import.'] | None"
+        },
+        {
+          "name": "target_size",
+          "annotation": "Annotated[float, 'Normalize the largest dimension to this size (meters).'] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Base name for the imported asset.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, 'Destination folder under Assets/ for the import.'] | None"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[str, 'Job id for status/cancel.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/import_model.py",
+        "start_line": 20,
+        "end_line": 84,
+        "sha256": "fae0d9b991895589564237a585e7f46303b3a5941905ab4dbece8c886423fade"
+      },
+      "name_zh": "外部模型检索与导入",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "import_model_file",
+      "unity_target": "import_model_file",
+      "group": "asset_gen",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "source_path",
+          "annotation": "Annotated[str, 'Path to the model file on disk (.fbx/.obj/.glb/.gltf/.zip).']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Base name for the imported asset.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, 'Destination folder under Assets/ for the import.'] | None"
+        },
+        {
+          "name": "target_size",
+          "annotation": "Annotated[float, 'Normalize the largest dimension to this size (meters).'] | None"
+        },
+        {
+          "name": "animation_type",
+          "annotation": "Annotated[Literal['none', 'generic', 'humanoid', 'legacy'], \"FBX/OBJ only: rig/animation import mode. 'generic' or 'humanoid' surface the model's AnimationClips; 'legacy' selects Unity's legacy Animation system (rarely needed); omitted or 'none' imports no rig. Ignored for glTF/GLB.\"] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/import_model_file.py",
+        "start_line": 19,
+        "end_line": 72,
+        "sha256": "98e77308bceb30deb46a301d7b80f271c2d157619c99b33c526d9fbef59fc5d3"
+      },
+      "name_zh": "模型文件导入",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_animation",
+      "unity_target": "manage_animation",
+      "group": "animation",
+      "declared_actions": [
+        "animator_get_info",
+        "animator_get_parameter",
+        "animator_play",
+        "animator_crossfade",
+        "animator_set_parameter",
+        "animator_set_speed",
+        "animator_set_enabled",
+        "controller_create",
+        "controller_add_state",
+        "controller_add_transition",
+        "controller_add_parameter",
+        "controller_get_info",
+        "controller_assign",
+        "controller_add_layer",
+        "controller_remove_layer",
+        "controller_set_layer_weight",
+        "controller_create_blend_tree_1d",
+        "controller_create_blend_tree_2d",
+        "controller_add_blend_tree_child",
+        "clip_create",
+        "clip_get_info",
+        "clip_add_curve",
+        "clip_set_curve",
+        "clip_set_vector_curve",
+        "clip_create_preset",
+        "clip_assign",
+        "clip_add_event",
+        "clip_remove_event"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'Action to perform (prefix: animator_, controller_, clip_).']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | None, 'Target GameObject (name/path/id).']"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer'] | None, 'How to find the target GameObject.']"
+        },
+        {
+          "name": "clip_path",
+          "annotation": "Annotated[str | None, \"Asset path for AnimationClip (e.g. 'Assets/Animations/Walk.anim').\"]"
+        },
+        {
+          "name": "controller_path",
+          "annotation": "Annotated[str | None, \"Asset path for AnimatorController (e.g. 'Assets/Animators/Player.controller').\"]"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str | None, 'Action-specific parameters (dict or JSON string).']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_animation.py",
+        "start_line": 34,
+        "end_line": 113,
+        "sha256": "928be1b9d0f3365cd71abd7f509addb74a2aae5eb90a268c577adc49208515a8"
+      },
+      "name_zh": "动画与控制器",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "controller_get_info"
+      ],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_asset",
+      "unity_target": "manage_asset",
+      "group": "core",
+      "declared_actions": [
+        "import",
+        "create",
+        "modify",
+        "delete",
+        "duplicate",
+        "move",
+        "rename",
+        "search",
+        "get_info",
+        "create_folder",
+        "get_components"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['import', 'create', 'modify', 'delete', 'duplicate', 'move', 'rename', 'search', 'get_info', 'create_folder', 'get_components'], 'Perform CRUD operations on assets.']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, \"Asset path (e.g., 'Materials/MyMaterial.mat') or search scope (e.g., 'Assets').\"]"
+        },
+        {
+          "name": "asset_type",
+          "annotation": "Annotated[str, \"Asset type (e.g., 'Material', 'Folder') - required for 'create'. Note: For ScriptableObjects, use manage_scriptable_object.\"] | None"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str, \"Dictionary of properties for 'create'/'modify'. Keys are property names, values are property values.\"] | None"
+        },
+        {
+          "name": "destination",
+          "annotation": "Annotated[str, \"Target path for 'duplicate'/'move'.\"] | None"
+        },
+        {
+          "name": "generate_preview",
+          "annotation": "Annotated[bool, 'Generate a preview/thumbnail for the asset when supported. Warning: previews may include large base64 payloads; keep false unless needed.']"
+        },
+        {
+          "name": "search_pattern",
+          "annotation": "Annotated[str, \"Search pattern (e.g., '*.prefab' or AssetDatabase filters like 't:MonoScript'). Recommended: put queries like 't:MonoScript' here and set path='Assets'.\"] | None"
+        },
+        {
+          "name": "filter_type",
+          "annotation": "Annotated[str, 'Filter type for search'] | None"
+        },
+        {
+          "name": "filter_date_after",
+          "annotation": "Annotated[str, 'Date after which to filter'] | None"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[int | float | str, 'Page size for pagination. Recommended: 25 (smaller for LLM-friendly responses).'] | None"
+        },
+        {
+          "name": "page_number",
+          "annotation": "Annotated[int | float | str, 'Page number for pagination (1-based).'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_asset.py",
+        "start_line": 19,
+        "end_line": 119,
+        "sha256": "22ac23d2cda3e10ee50657c2a6ed480f907597a872d047bf900d143670463f70"
+      },
+      "name_zh": "资产管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_build",
+      "unity_target": "manage_build",
+      "group": "core",
+      "declared_actions": [
+        "build",
+        "status",
+        "platform",
+        "settings",
+        "scenes",
+        "profiles",
+        "batch",
+        "cancel"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'Action: build, status, platform, settings, scenes, profiles, batch, cancel']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[Optional[str], 'Build target: windows64, osx, linux64, android, ios, webgl, uwp, tvos, visionos']"
+        },
+        {
+          "name": "output_path",
+          "annotation": "Annotated[Optional[str], 'Output path for the build']"
+        },
+        {
+          "name": "scenes",
+          "annotation": "Annotated[Optional[str], 'JSON array of scene paths, or comma-separated paths']"
+        },
+        {
+          "name": "development",
+          "annotation": "Annotated[Optional[str], 'Development build (true/false)']"
+        },
+        {
+          "name": "options",
+          "annotation": "Annotated[Optional[str], 'JSON array of BuildOptions: clean_build, auto_run, deep_profiling, compress_lz4, strict_mode, detailed_report']"
+        },
+        {
+          "name": "subtarget",
+          "annotation": "Annotated[Optional[str], 'Build subtarget: player or server']"
+        },
+        {
+          "name": "scripting_backend",
+          "annotation": "Annotated[Optional[str], 'Scripting backend: mono or il2cpp (persistent change)']"
+        },
+        {
+          "name": "profile",
+          "annotation": "Annotated[Optional[str], 'Build Profile asset path (Unity 6+ only)']"
+        },
+        {
+          "name": "property",
+          "annotation": "Annotated[Optional[str], 'Settings property: product_name, company_name, version, bundle_id, scripting_backend, defines, architecture']"
+        },
+        {
+          "name": "value",
+          "annotation": "Annotated[Optional[str], 'Value to set for the property (omit to read)']"
+        },
+        {
+          "name": "activate",
+          "annotation": "Annotated[Optional[str], 'Activate a build profile (true/false)']"
+        },
+        {
+          "name": "targets",
+          "annotation": "Annotated[Optional[str], 'JSON array of targets for batch build']"
+        },
+        {
+          "name": "profiles",
+          "annotation": "Annotated[Optional[str], 'JSON array of profile paths for batch build (Unity 6+)']"
+        },
+        {
+          "name": "output_dir",
+          "annotation": "Annotated[Optional[str], 'Base output directory for batch builds']"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[Optional[str], 'Job ID for status/cancel']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_build.py",
+        "start_line": 37,
+        "end_line": 110,
+        "sha256": "7e6c1768847ecad85d5e0322d67428d06b27707d809c42e20808272920bf6a99"
+      },
+      "name_zh": "构建管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_camera",
+      "unity_target": "manage_camera",
+      "group": "core",
+      "declared_actions": [
+        "ping",
+        "ensure_brain",
+        "get_brain_status",
+        "create_camera",
+        "set_target",
+        "set_priority",
+        "set_lens",
+        "set_body",
+        "set_aim",
+        "set_noise",
+        "add_extension",
+        "remove_extension",
+        "set_blend",
+        "force_camera",
+        "release_override",
+        "list_cameras",
+        "screenshot",
+        "screenshot_multiview"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The camera action to perform.']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | None, 'Target camera (name, path, or instance ID).']"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path'] | None, 'How to find target.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str | None, 'Action-specific parameters (dict or JSON string).']"
+        },
+        {
+          "name": "screenshot_file_name",
+          "annotation": "Annotated[str | None, 'Screenshot file name (optional). Defaults to timestamp.']"
+        },
+        {
+          "name": "screenshot_super_size",
+          "annotation": "Annotated[int | str | None, 'Screenshot supersize multiplier (integer >= 1).']"
+        },
+        {
+          "name": "camera",
+          "annotation": "Annotated[str | None, 'Camera to capture from (name, path, or instance ID). Omit to use ScreenCapture API (captures all layers including Screen Space Overlay UI). Specify only when you need a particular camera viewpoint; note that Screen Space - Overlay canvases will NOT appear in camera-rendered captures.']"
+        },
+        {
+          "name": "include_image",
+          "annotation": "Annotated[bool | str | None, 'If true, return screenshot as inline base64 PNG. Default false.']"
+        },
+        {
+          "name": "max_resolution",
+          "annotation": "Annotated[int | str | None, 'Max resolution (longest edge px) for inline image. Default 640.']"
+        },
+        {
+          "name": "capture_source",
+          "annotation": "Annotated[Literal['game_view', 'scene_view'] | None, \"Screenshot source. 'game_view' (default) captures the game/camera path; 'scene_view' captures the active Unity Scene View viewport.\"]"
+        },
+        {
+          "name": "batch",
+          "annotation": "Annotated[str | None, \"Batch capture mode: 'surround' (6 angles) or 'orbit' (configurable grid).\"]"
+        },
+        {
+          "name": "view_target",
+          "annotation": "Annotated[str | int | list[float] | None, 'Target to focus on. GameObject name/path/ID or [x,y,z]. For game_view: aims camera at target. For scene_view: frames the Scene View on the target.']"
+        },
+        {
+          "name": "view_position",
+          "annotation": "Annotated[list[float] | str | None, 'World position [x,y,z] to place camera for positioned capture.']"
+        },
+        {
+          "name": "view_rotation",
+          "annotation": "Annotated[list[float] | str | None, 'Euler rotation [x,y,z] for camera. Overrides view_target if both provided.']"
+        },
+        {
+          "name": "orbit_angles",
+          "annotation": "Annotated[int | str | None, \"Number of azimuth samples for batch='orbit' (default 8, max 36).\"]"
+        },
+        {
+          "name": "orbit_elevations",
+          "annotation": "Annotated[list[float] | str | None, \"Elevation angles in degrees for batch='orbit' (default [0, 30, -15]).\"]"
+        },
+        {
+          "name": "orbit_distance",
+          "annotation": "Annotated[float | str | None, \"Camera distance from target for batch='orbit' (default auto).\"]"
+        },
+        {
+          "name": "orbit_fov",
+          "annotation": "Annotated[float | str | None, \"Camera FOV in degrees for batch='orbit' (default 60).\"]"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str | None, \"Optional folder for screenshot output. Project-relative (e.g. 'Assets/Screenshots' or 'Captures') or absolute path inside the project. Overrides the user's Editor preference. If omitted, falls back to the Editor preference, then to the built-in default (Assets/Screenshots).\"]"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_camera.py",
+        "start_line": 34,
+        "end_line": 203,
+        "sha256": "a4c2f7123ee0df800ce142882ff6e8f36536dbc49fb847917b6b6086fb5bfd14"
+      },
+      "name_zh": "相机管理与截图",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_components",
+      "unity_target": "manage_components",
+      "group": "core",
+      "declared_actions": [
+        "add",
+        "remove",
+        "set_property"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['add', 'remove', 'set_property'], 'Action to perform: add (add component), remove (remove component), set_property (set component property)']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | int, 'Target GameObject - instance ID (preferred) or name/path']"
+        },
+        {
+          "name": "component_type",
+          "annotation": "Annotated[str, \"Component type name (e.g., 'Rigidbody', 'BoxCollider', 'MyScript')\"]"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Optional[Literal['by_id', 'by_name', 'by_path']], 'How to find the target GameObject']"
+        },
+        {
+          "name": "property",
+          "annotation": "Annotated[Optional[str], 'Property name to set (for set_property action)']"
+        },
+        {
+          "name": "value",
+          "annotation": "Annotated[Optional[str | int | float | bool | dict | list], 'Value to set (for set_property action). For object references: instance ID (int), asset path (string), or {\"guid\": \"...\"} / {\"path\": \"...\"}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"} or {\"guid\": \"...\", \"fileID\": <id>}. Single-sprite textures auto-resolve.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[Optional[dict[str, Any] | str], 'Dictionary of property names to values. Example: {\"mass\": 5.0, \"useGravity\": false}']"
+        },
+        {
+          "name": "component_index",
+          "annotation": "Annotated[Optional[int], 'Zero-based index to select which component when multiple of the same type exist. Use the components resource to discover indices. If omitted, targets the first instance.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_components.py",
+        "start_line": 17,
+        "end_line": 156,
+        "sha256": "2cbbcbf3784d21b14235a005c01a7bf8469fe1334afdb7790363460d087194cf"
+      },
+      "name_zh": "组件修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_editor",
+      "unity_target": "manage_editor",
+      "group": "core",
+      "declared_actions": [
+        "telemetry_status",
+        "telemetry_ping",
+        "play",
+        "pause",
+        "stop",
+        "set_active_tool",
+        "add_tag",
+        "remove_tag",
+        "add_layer",
+        "remove_layer",
+        "deploy_package",
+        "restore_package",
+        "undo",
+        "redo"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['telemetry_status', 'telemetry_ping', 'play', 'pause', 'stop', 'set_active_tool', 'add_tag', 'remove_tag', 'add_layer', 'remove_layer', 'deploy_package', 'restore_package', 'undo', 'redo'], \"Get and update the Unity Editor state. deploy_package copies the configured MCPForUnity source into the project's package location (triggers recompile). restore_package reverts the last deployment from backup. undo/redo perform editor undo/redo. For prefab editing (open/save/close prefab stage), use manage_prefabs.\"]"
+        },
+        {
+          "name": "tool_name",
+          "annotation": "Annotated[str, 'Tool name when setting active tool'] | None"
+        },
+        {
+          "name": "tag_name",
+          "annotation": "Annotated[str, 'Tag name when adding and removing tags'] | None"
+        },
+        {
+          "name": "layer_name",
+          "annotation": "Annotated[str, 'Layer name when adding and removing layers'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_editor.py",
+        "start_line": 12,
+        "end_line": 60,
+        "sha256": "591b15c39dea49e2889295818ca15b3696a3cfb9ceca30e6a6e581baec87ea83"
+      },
+      "name_zh": "编辑器状态与操作",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_gameobject",
+      "unity_target": "manage_gameobject",
+      "group": "core",
+      "declared_actions": [
+        "create",
+        "modify",
+        "delete",
+        "duplicate",
+        "move_relative",
+        "look_at"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'modify', 'delete', 'duplicate', 'move_relative', 'look_at'], 'Action to perform on GameObject.'] | None"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str, 'GameObject identifier by name, path, or instance ID for modify/delete/duplicate actions'] | None"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer', 'by_component'], \"How to resolve 'target'. If omitted, Unity infers: instance ID -> by_id, path (contains '/') -> by_path, otherwise by_name.\"] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, \"GameObject name for 'create' (initial name) and 'modify' (rename) actions.\"] | None"
+        },
+        {
+          "name": "tag",
+          "annotation": "Annotated[str, \"Tag name - used for both 'create' (initial tag) and 'modify' (change tag)\"] | None"
+        },
+        {
+          "name": "parent",
+          "annotation": "Annotated[str, \"Parent GameObject reference - used for both 'create' (initial parent) and 'modify' (change parent)\"] | None"
+        },
+        {
+          "name": "position",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'Position as [x, y, z] array, {x, y, z} object, or JSON string'] | None"
+        },
+        {
+          "name": "rotation",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'Rotation as [x, y, z] euler angles array, {x, y, z} object, or JSON string'] | None"
+        },
+        {
+          "name": "scale",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'Scale as [x, y, z] array, {x, y, z} object, or JSON string'] | None"
+        },
+        {
+          "name": "components_to_add",
+          "annotation": "Annotated[list[str | dict[str, Any]] | dict[str, Any] | str, 'List of components to add during \\'create\\' or \\'modify\\'. Each entry is either\\n                                 a plain type name string (e.g. \"BoxCollider\") or an object\\n                                 {\"typeName\": \"BoxCollider\", \"properties\": {\"size\": [2, 2, 2]}} that adds the\\n                                 component with initial properties applied in the same call. Mixing both forms\\n                                 in one list is fine.'] | None"
+        },
+        {
+          "name": "primitive_type",
+          "annotation": "Annotated[str, \"Primitive type for 'create' action\"] | None"
+        },
+        {
+          "name": "save_as_prefab",
+          "annotation": "Annotated[bool | str, \"If True, saves the created GameObject as a prefab (accepts true/false or 'true'/'false')\"] | None"
+        },
+        {
+          "name": "prefab_path",
+          "annotation": "Annotated[str, 'Path for prefab creation'] | None"
+        },
+        {
+          "name": "prefab_folder",
+          "annotation": "Annotated[str, 'Folder for prefab creation'] | None"
+        },
+        {
+          "name": "set_active",
+          "annotation": "Annotated[bool | str, \"If True, sets the GameObject active (accepts true/false or 'true'/'false')\"] | None"
+        },
+        {
+          "name": "layer",
+          "annotation": "Annotated[str, 'Layer name'] | None"
+        },
+        {
+          "name": "is_static",
+          "annotation": "Annotated[bool | str, \"Set the GameObject's static flag. true = all StaticEditorFlags, false = none (accepts true/false or 'true'/'false')\"] | None"
+        },
+        {
+          "name": "components_to_remove",
+          "annotation": "Annotated[list[str] | str, 'List of component names to remove'] | None"
+        },
+        {
+          "name": "component_properties",
+          "annotation": "Annotated[dict[str, dict[str, Any]] | str, 'Dictionary of component names to their properties to set. Works for both\\n                                    \\'create\\' (applied to components already present on the new GameObject - add\\n                                    them via components_to_add first) and \\'modify\\'. For example:\\n                                    `{\"MyScript\": {\"otherObject\": {\"find\": \"Player\", \"method\": \"by_name\"}}}` assigns GameObject\\n                                    `{\"MyScript\": {\"playerHealth\": {\"find\": \"Player\", \"component\": \"HealthComponent\"}}}` assigns Component\\n                                    Example set nested property:\\n                                    - Access shared material: `{\"MeshRenderer\": {\"sharedMaterial.color\": [1, 0, 0, 1]}}`'] | None"
+        },
+        {
+          "name": "new_name",
+          "annotation": "Annotated[str, 'New name for the duplicated object (default: SourceName_Copy)'] | None"
+        },
+        {
+          "name": "offset",
+          "annotation": "Annotated[list[float] | str, 'Offset from original/reference position as [x, y, z] array (list or JSON string)'] | None"
+        },
+        {
+          "name": "reference_object",
+          "annotation": "Annotated[str, 'Reference object for relative movement (required for move_relative)'] | None"
+        },
+        {
+          "name": "direction",
+          "annotation": "Annotated[Literal['left', 'right', 'up', 'down', 'forward', 'back', 'front', 'backward', 'behind'], \"Direction for relative movement (e.g., 'right', 'up', 'forward')\"] | None"
+        },
+        {
+          "name": "distance",
+          "annotation": "Annotated[float, 'Distance to move in the specified direction (default: 1.0)'] | None"
+        },
+        {
+          "name": "world_space",
+          "annotation": "Annotated[bool | str, \"If True (default), use world space directions; if False, use reference object's local directions\"] | None"
+        },
+        {
+          "name": "look_at_target",
+          "annotation": "Annotated[list[float] | str, 'World position [x,y,z] or GameObject name/path/ID to look at (for look_at action).'] | None"
+        },
+        {
+          "name": "look_at_up",
+          "annotation": "Annotated[list[float] | str, 'Optional up vector [x,y,z] for look_at. Defaults to [0,1,0].'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_gameobject.py",
+        "start_line": 123,
+        "end_line": 325,
+        "sha256": "5dbb89d27246db434acc4b85acd97c6a621945f09463d5508ba4c1bfdf960e0e"
+      },
+      "name_zh": "场景对象修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_graphics",
+      "unity_target": "manage_graphics",
+      "group": "core",
+      "declared_actions": [
+        "volume_create",
+        "volume_add_effect",
+        "volume_set_effect",
+        "volume_remove_effect",
+        "volume_get_info",
+        "volume_set_properties",
+        "volume_list_effects",
+        "volume_create_profile",
+        "bake_start",
+        "bake_cancel",
+        "bake_status",
+        "bake_clear",
+        "bake_reflection_probe",
+        "bake_get_settings",
+        "bake_set_settings",
+        "bake_create_light_probe_group",
+        "bake_create_reflection_probe",
+        "bake_set_probe_positions",
+        "stats_get",
+        "stats_list_counters",
+        "stats_set_scene_debug",
+        "stats_get_memory",
+        "pipeline_get_info",
+        "pipeline_set_quality",
+        "pipeline_get_settings",
+        "pipeline_set_settings",
+        "feature_list",
+        "feature_add",
+        "feature_remove",
+        "feature_configure",
+        "feature_toggle",
+        "feature_reorder",
+        "skybox_get",
+        "skybox_set_material",
+        "skybox_set_properties",
+        "skybox_set_ambient",
+        "skybox_set_fog",
+        "skybox_set_reflection",
+        "skybox_set_sun"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The graphics action to perform.']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[Optional[str], 'Target object name or instance ID.']"
+        },
+        {
+          "name": "effect",
+          "annotation": "Annotated[Optional[str], \"Effect type name (e.g., 'Bloom', 'Vignette').\"]"
+        },
+        {
+          "name": "parameters",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Dict of parameter values.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Dict of properties to set.']"
+        },
+        {
+          "name": "settings",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Dict of settings (bake/pipeline).']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[Optional[str], 'Name for created objects.']"
+        },
+        {
+          "name": "is_global",
+          "annotation": "Annotated[Optional[bool], 'Whether Volume is global (default true).']"
+        },
+        {
+          "name": "weight",
+          "annotation": "Annotated[Optional[float], 'Volume weight (0-1).']"
+        },
+        {
+          "name": "priority",
+          "annotation": "Annotated[Optional[float], 'Volume priority.']"
+        },
+        {
+          "name": "profile_path",
+          "annotation": "Annotated[Optional[str], 'Asset path for VolumeProfile.']"
+        },
+        {
+          "name": "effects",
+          "annotation": "Annotated[Optional[list[dict[str, Any]]], 'Effect definitions for volume_create.']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[Optional[str], 'Asset path for volume_create_profile.']"
+        },
+        {
+          "name": "level",
+          "annotation": "Annotated[Optional[str], 'Quality level name or index.']"
+        },
+        {
+          "name": "position",
+          "annotation": "Annotated[Optional[list[float]], 'Position [x,y,z].']"
+        },
+        {
+          "name": "grid_size",
+          "annotation": "Annotated[Optional[list[int]], 'Probe grid size [x,y,z].']"
+        },
+        {
+          "name": "spacing",
+          "annotation": "Annotated[Optional[float], 'Probe grid spacing.']"
+        },
+        {
+          "name": "size",
+          "annotation": "Annotated[Optional[list[float]], 'Probe/volume size [x,y,z].']"
+        },
+        {
+          "name": "resolution",
+          "annotation": "Annotated[Optional[int], 'Probe resolution.']"
+        },
+        {
+          "name": "mode",
+          "annotation": "Annotated[Optional[str], 'Probe mode or debug mode.']"
+        },
+        {
+          "name": "hdr",
+          "annotation": "Annotated[Optional[bool], 'HDR for reflection probes.']"
+        },
+        {
+          "name": "box_projection",
+          "annotation": "Annotated[Optional[bool], 'Box projection for reflection probes.']"
+        },
+        {
+          "name": "positions",
+          "annotation": "Annotated[Optional[list[list[float]]], 'Probe positions array.']"
+        },
+        {
+          "name": "index",
+          "annotation": "Annotated[Optional[int], 'Feature index.']"
+        },
+        {
+          "name": "active",
+          "annotation": "Annotated[Optional[bool], 'Feature active state.']"
+        },
+        {
+          "name": "order",
+          "annotation": "Annotated[Optional[list[int]], 'Feature reorder indices.']"
+        },
+        {
+          "name": "async_bake",
+          "annotation": "Annotated[Optional[bool], 'Async bake (default true).']"
+        },
+        {
+          "name": "feature_type",
+          "annotation": "Annotated[Optional[str], 'Renderer feature type name.']"
+        },
+        {
+          "name": "material",
+          "annotation": "Annotated[Optional[str], 'Material asset path for feature.']"
+        },
+        {
+          "name": "color",
+          "annotation": "Annotated[Optional[list[float]], 'Color [r,g,b,a] for ambient/fog.']"
+        },
+        {
+          "name": "intensity",
+          "annotation": "Annotated[Optional[float], 'Intensity value (ambient/reflection).']"
+        },
+        {
+          "name": "ambient_mode",
+          "annotation": "Annotated[Optional[str], 'Ambient mode: Skybox, Trilight, Flat, Custom.']"
+        },
+        {
+          "name": "equator_color",
+          "annotation": "Annotated[Optional[list[float]], 'Equator color [r,g,b,a] (Trilight mode).']"
+        },
+        {
+          "name": "ground_color",
+          "annotation": "Annotated[Optional[list[float]], 'Ground color [r,g,b,a] (Trilight mode).']"
+        },
+        {
+          "name": "fog_enabled",
+          "annotation": "Annotated[Optional[bool], 'Enable or disable fog.']"
+        },
+        {
+          "name": "fog_mode",
+          "annotation": "Annotated[Optional[str], 'Fog mode: Linear, Exponential, ExponentialSquared.']"
+        },
+        {
+          "name": "fog_color",
+          "annotation": "Annotated[Optional[list[float]], 'Fog color [r,g,b,a].']"
+        },
+        {
+          "name": "fog_density",
+          "annotation": "Annotated[Optional[float], 'Fog density (Exponential modes).']"
+        },
+        {
+          "name": "fog_start",
+          "annotation": "Annotated[Optional[float], 'Fog start distance (Linear mode).']"
+        },
+        {
+          "name": "fog_end",
+          "annotation": "Annotated[Optional[float], 'Fog end distance (Linear mode).']"
+        },
+        {
+          "name": "bounces",
+          "annotation": "Annotated[Optional[int], 'Reflection bounces.']"
+        },
+        {
+          "name": "reflection_mode",
+          "annotation": "Annotated[Optional[str], 'Default reflection mode: Skybox, Custom.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_graphics.py",
+        "start_line": 50,
+        "end_line": 166,
+        "sha256": "716b9214d59a3de3590b1f2bc2825b06e3732481dc300655db2e9fc6536387bc"
+      },
+      "name_zh": "图形渲染与烘焙",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_material",
+      "unity_target": "manage_material",
+      "group": "core",
+      "declared_actions": [
+        "ping",
+        "create",
+        "set_material_shader_property",
+        "set_material_color",
+        "assign_material_to_renderer",
+        "set_renderer_color",
+        "get_material_info"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['ping', 'create', 'set_material_shader_property', 'set_material_color', 'assign_material_to_renderer', 'set_renderer_color', 'get_material_info'], 'Action to perform.']"
+        },
+        {
+          "name": "material_path",
+          "annotation": "Annotated[str, 'Path to material asset (Assets/...)'] | None"
+        },
+        {
+          "name": "property",
+          "annotation": "Annotated[str, 'Shader property name (e.g., _BaseColor, _MainTex)'] | None"
+        },
+        {
+          "name": "shader",
+          "annotation": "Annotated[str, 'Shader name (default: Standard)'] | None"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str, 'Initial properties to set as {name: value} dict.'] | None"
+        },
+        {
+          "name": "value",
+          "annotation": "Annotated[list | float | int | str | bool | None, 'Value to set (color array, float, texture path/instruction)'] | None"
+        },
+        {
+          "name": "color",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'Color as [r, g, b] or [r, g, b, a] array, {r, g, b, a} object, or JSON string.'] | None"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str, 'Target GameObject (name, path, or find instruction)'] | None"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer', 'by_component'], 'Search method for target'] | None"
+        },
+        {
+          "name": "slot",
+          "annotation": "Annotated[int, 'Material slot index (0-based)'] | None"
+        },
+        {
+          "name": "mode",
+          "annotation": "Annotated[Literal['shared', 'instance', 'property_block', 'create_unique'], 'Assignment/modification mode; behavior when omitted is action-specific on the Unity side.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_material.py",
+        "start_line": 17,
+        "end_line": 111,
+        "sha256": "79490c8481f18290c35bfb0f514befe737f2946d0d5f158b9ac467798fba573d"
+      },
+      "name_zh": "材质读取与修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "get_material_info"
+      ],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_packages",
+      "unity_target": "manage_packages",
+      "group": "core",
+      "declared_actions": [
+        "list_packages",
+        "search_packages",
+        "get_package_info",
+        "ping",
+        "status",
+        "add_package",
+        "remove_package",
+        "embed_package",
+        "resolve_packages",
+        "add_registry",
+        "remove_registry",
+        "list_registries"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The package action to perform.']"
+        },
+        {
+          "name": "package",
+          "annotation": "Annotated[Optional[str], 'Package identifier (name, name@version, git URL, or file: path).']"
+        },
+        {
+          "name": "force",
+          "annotation": "Annotated[Optional[bool], 'Force removal even if other packages depend on it.']"
+        },
+        {
+          "name": "query",
+          "annotation": "Annotated[Optional[str], 'Search query for search_packages.']"
+        },
+        {
+          "name": "job_id",
+          "annotation": "Annotated[Optional[str], 'Job ID for polling status.']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[Optional[str], 'Registry name for add_registry/remove_registry.']"
+        },
+        {
+          "name": "url",
+          "annotation": "Annotated[Optional[str], 'Registry URL for add_registry.']"
+        },
+        {
+          "name": "scopes",
+          "annotation": "Annotated[Optional[list[str]], 'Registry scopes for add_registry.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_packages.py",
+        "start_line": 29,
+        "end_line": 88,
+        "sha256": "c194c5f7f0082c532118a0a01a8dc0916c66c1d0f5ad798b71d890da88e10ab4"
+      },
+      "name_zh": "包与注册表管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_physics",
+      "unity_target": "manage_physics",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[PhysicsAction, 'The physics action to perform.']"
+        },
+        {
+          "name": "dimension",
+          "annotation": "Annotated[Optional[str], \"Physics dimension: '3d' (default) or '2d'.\"]"
+        },
+        {
+          "name": "settings",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Key-value settings for set_settings.']"
+        },
+        {
+          "name": "layer_a",
+          "annotation": "Annotated[Optional[str], 'Layer name or index for collision matrix.']"
+        },
+        {
+          "name": "layer_b",
+          "annotation": "Annotated[Optional[str], 'Layer name or index for collision matrix.']"
+        },
+        {
+          "name": "collide",
+          "annotation": "Annotated[Optional[bool], 'Whether layers should collide (set_collision_matrix).']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[Optional[str], 'Name for new physics material.']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[Optional[str], 'Asset path for materials.']"
+        },
+        {
+          "name": "dynamic_friction",
+          "annotation": "Annotated[Optional[float], 'Dynamic friction (0-1).']"
+        },
+        {
+          "name": "static_friction",
+          "annotation": "Annotated[Optional[float], 'Static friction (0-1).']"
+        },
+        {
+          "name": "bounciness",
+          "annotation": "Annotated[Optional[float], 'Bounciness (0-1).']"
+        },
+        {
+          "name": "friction",
+          "annotation": "Annotated[Optional[float], 'Friction for 2D materials.']"
+        },
+        {
+          "name": "friction_combine",
+          "annotation": "Annotated[Optional[str], 'Friction combine mode: Average, Minimum, Multiply, Maximum.']"
+        },
+        {
+          "name": "bounce_combine",
+          "annotation": "Annotated[Optional[str], 'Bounce combine mode: Average, Minimum, Multiply, Maximum.']"
+        },
+        {
+          "name": "material_path",
+          "annotation": "Annotated[Optional[str], 'Path to physics material asset for assign.']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[Optional[str], 'Target GameObject name or instance ID.']"
+        },
+        {
+          "name": "collider_type",
+          "annotation": "Annotated[Optional[str], 'Specific collider type to target.']"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Optional[str], 'Search method for target resolution.']"
+        },
+        {
+          "name": "joint_type",
+          "annotation": "Annotated[Optional[str], 'Joint type: fixed, hinge, spring, character, configurable (3D); distance, fixed, friction, hinge, relative, slider, spring, target, wheel (2D).']"
+        },
+        {
+          "name": "connected_body",
+          "annotation": "Annotated[Optional[str], 'Connected body target for joints.']"
+        },
+        {
+          "name": "motor",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Motor config: {targetVelocity, force, freeSpin}.']"
+        },
+        {
+          "name": "limits",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Limits config: {min, max, bounciness}.']"
+        },
+        {
+          "name": "spring",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Spring config: {spring, damper, targetPosition}.']"
+        },
+        {
+          "name": "drive",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Drive config for ConfigurableJoint.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[Optional[dict[str, Any]], 'Direct property dict for joints or materials.']"
+        },
+        {
+          "name": "origin",
+          "annotation": "Annotated[Optional[list[float]], 'Ray origin [x,y,z] or [x,y].']"
+        },
+        {
+          "name": "direction",
+          "annotation": "Annotated[Optional[list[float]], 'Ray direction [x,y,z] or [x,y].']"
+        },
+        {
+          "name": "max_distance",
+          "annotation": "Annotated[Optional[float], 'Max raycast distance.']"
+        },
+        {
+          "name": "layer_mask",
+          "annotation": "Annotated[Optional[str], 'Layer mask for queries (name or int).']"
+        },
+        {
+          "name": "query_trigger_interaction",
+          "annotation": "Annotated[Optional[str], 'Trigger interaction: UseGlobal, Ignore, Collide.']"
+        },
+        {
+          "name": "shape",
+          "annotation": "Annotated[Optional[str], 'Overlap shape: sphere, box, capsule (3D); circle, box, capsule (2D).']"
+        },
+        {
+          "name": "position",
+          "annotation": "Annotated[Optional[list[float]], 'Overlap position [x,y,z] or [x,y].']"
+        },
+        {
+          "name": "size",
+          "annotation": "Annotated[Optional[Any], 'Overlap size: float (radius) or [x,y,z] (half-extents).']"
+        },
+        {
+          "name": "start",
+          "annotation": "Annotated[Optional[list[float]], 'Linecast start point [x,y,z] or [x,y].']"
+        },
+        {
+          "name": "end",
+          "annotation": "Annotated[Optional[list[float]], 'Linecast end point [x,y,z] or [x,y].']"
+        },
+        {
+          "name": "point1",
+          "annotation": "Annotated[Optional[list[float]], 'Capsule shapecast point1 [x,y,z].']"
+        },
+        {
+          "name": "point2",
+          "annotation": "Annotated[Optional[list[float]], 'Capsule shapecast point2 [x,y,z].']"
+        },
+        {
+          "name": "height",
+          "annotation": "Annotated[Optional[float], 'Capsule height for shapecast.']"
+        },
+        {
+          "name": "capsule_direction",
+          "annotation": "Annotated[Optional[int], 'Capsule direction: 0=X, 1=Y (default), 2=Z.']"
+        },
+        {
+          "name": "angle",
+          "annotation": "Annotated[Optional[float], 'Rotation angle for 2D shape casts.']"
+        },
+        {
+          "name": "force",
+          "annotation": "Annotated[Optional[list[float]], 'Force vector [x,y,z] or [x,y] for apply_force.']"
+        },
+        {
+          "name": "force_mode",
+          "annotation": "Annotated[Optional[str], 'Force mode: Force, Impulse, Acceleration, VelocityChange (3D); Force, Impulse (2D).']"
+        },
+        {
+          "name": "force_type",
+          "annotation": "Annotated[Optional[str], \"Force type: 'normal' (default) or 'explosion' (3D only).\"]"
+        },
+        {
+          "name": "torque",
+          "annotation": "Annotated[Optional[list[float]], 'Torque vector [x,y,z] (3D) or [z] (2D).']"
+        },
+        {
+          "name": "explosion_position",
+          "annotation": "Annotated[Optional[list[float]], 'Explosion center [x,y,z].']"
+        },
+        {
+          "name": "explosion_radius",
+          "annotation": "Annotated[Optional[float], 'Explosion radius.']"
+        },
+        {
+          "name": "explosion_force",
+          "annotation": "Annotated[Optional[float], 'Explosion force magnitude.']"
+        },
+        {
+          "name": "upwards_modifier",
+          "annotation": "Annotated[Optional[float], 'Explosion upwards modifier.']"
+        },
+        {
+          "name": "steps",
+          "annotation": "Annotated[Optional[int], 'Number of simulation steps (max 100).']"
+        },
+        {
+          "name": "step_size",
+          "annotation": "Annotated[Optional[float], 'Step size in seconds.']"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[Optional[int], 'Page size for validate results (default 50).']"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[Optional[int], 'Cursor offset for validate pagination.']"
+        },
+        {
+          "name": "component_index",
+          "annotation": "Annotated[Optional[int], 'Zero-based index to select which component when multiple of the same type exist (e.g., multiple HingeJoints or BoxColliders). If omitted, targets the first instance.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_physics.py",
+        "start_line": 38,
+        "end_line": 262,
+        "sha256": "b8dcf66c70f5ccd049afdf7112118a5b3a1191b52da0642de2efc68e45cd0f0f"
+      },
+      "name_zh": "物理系统",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_prefabs",
+      "unity_target": "manage_prefabs",
+      "group": "core",
+      "declared_actions": [
+        "create_from_gameobject",
+        "get_info",
+        "get_hierarchy",
+        "modify_contents",
+        "open_prefab_stage",
+        "save_prefab_stage",
+        "close_prefab_stage"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create_from_gameobject', 'get_info', 'get_hierarchy', 'modify_contents', 'open_prefab_stage', 'save_prefab_stage', 'close_prefab_stage'], 'Prefab operation to perform.']"
+        },
+        {
+          "name": "prefab_path",
+          "annotation": "Annotated[str, 'Prefab asset path (e.g., Assets/Prefabs/MyPrefab.prefab).'] | None"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str, \"Target GameObject: scene object for create_from_gameobject, or object within prefab for modify_contents (name or path like 'Parent/Child').\"] | None"
+        },
+        {
+          "name": "allow_overwrite",
+          "annotation": "Annotated[bool, 'Allow replacing existing prefab.'] | None"
+        },
+        {
+          "name": "search_inactive",
+          "annotation": "Annotated[bool, 'Include inactive GameObjects in search.'] | None"
+        },
+        {
+          "name": "unlink_if_instance",
+          "annotation": "Annotated[bool, 'Unlink from existing prefab before creating new one.'] | None"
+        },
+        {
+          "name": "position",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'New local position [x, y, z] or {x, y, z} for modify_contents.'] | None"
+        },
+        {
+          "name": "rotation",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'New local rotation (euler angles) [x, y, z] or {x, y, z} for modify_contents.'] | None"
+        },
+        {
+          "name": "scale",
+          "annotation": "Annotated[list[float] | dict[str, float] | str, 'New local scale [x, y, z] or {x, y, z} for modify_contents.'] | None"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'New name for the target object in modify_contents.'] | None"
+        },
+        {
+          "name": "tag",
+          "annotation": "Annotated[str, 'New tag for the target object in modify_contents.'] | None"
+        },
+        {
+          "name": "layer",
+          "annotation": "Annotated[str, 'New layer name for the target object in modify_contents.'] | None"
+        },
+        {
+          "name": "set_active",
+          "annotation": "Annotated[bool, 'Set active state of target object in modify_contents.'] | None"
+        },
+        {
+          "name": "parent",
+          "annotation": "Annotated[str, 'New parent object name/path within prefab for modify_contents.'] | None"
+        },
+        {
+          "name": "components_to_add",
+          "annotation": "Annotated[list[str], 'Component types to add in modify_contents.'] | None"
+        },
+        {
+          "name": "components_to_remove",
+          "annotation": "Annotated[list[str], 'Component types to remove in modify_contents.'] | None"
+        },
+        {
+          "name": "create_child",
+          "annotation": "Annotated[dict[str, Any] | list[dict[str, Any]], \"Create child GameObject(s) in the prefab. Single object or array of objects, each with: name (required), parent (optional, defaults to target), source_prefab_path (optional: asset path to instantiate as nested prefab, e.g. 'Assets/Prefabs/Bullet.prefab'), primitive_type (optional: Cube, Sphere, Capsule, Cylinder, Plane, Quad), position, rotation, scale, components_to_add, tag, layer, set_active. source_prefab_path and primitive_type are mutually exclusive.\"] | None"
+        },
+        {
+          "name": "delete_child",
+          "annotation": "Annotated[str | list[str], \"Child name(s) or path(s) to remove from the prefab. Supports single string or array for batch deletion (e.g. 'Child1' or ['Child1', 'Child1/Grandchild']).\"] | None"
+        },
+        {
+          "name": "component_properties",
+          "annotation": "Annotated[dict[str, dict[str, Any]], 'Set properties on existing components in modify_contents. Keys are component type names, values are dicts of property name to value. Example: {\"Rigidbody\": {\"mass\": 5.0}, \"MyScript\": {\"health\": 100}}. Supports object references via {\"guid\": \"...\"}, {\"path\": \"Assets/...\"}, or {\"instanceID\": 123}. For Sprite sub-assets: {\"guid\": \"...\", \"spriteName\": \"<name>\"}. Single-sprite textures auto-resolve.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_prefabs.py",
+        "start_line": 24,
+        "end_line": 228,
+        "sha256": "33ceb2729a23fa55aa4e23c374a03cf88a56693bd41d69a29091a495e5426a95"
+      },
+      "name_zh": "预制体管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_probuilder",
+      "unity_target": "manage_probuilder",
+      "group": "probuilder",
+      "declared_actions": [
+        "create_shape",
+        "create_poly_shape",
+        "extrude_faces",
+        "extrude_edges",
+        "bevel_edges",
+        "subdivide",
+        "delete_faces",
+        "bridge_edges",
+        "connect_elements",
+        "detach_faces",
+        "flip_normals",
+        "merge_faces",
+        "combine_meshes",
+        "merge_objects",
+        "duplicate_and_flip",
+        "create_polygon",
+        "merge_vertices",
+        "weld_vertices",
+        "split_vertices",
+        "move_vertices",
+        "insert_vertex",
+        "append_vertices_to_edge",
+        "select_faces",
+        "set_face_material",
+        "set_face_color",
+        "set_face_uvs",
+        "get_mesh_info",
+        "convert_to_probuilder",
+        "set_smoothing",
+        "auto_smooth",
+        "center_pivot",
+        "freeze_transform",
+        "set_pivot",
+        "validate_mesh",
+        "repair_mesh"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'Action to perform.']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | None, 'Target GameObject (name/path/id).']"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer'] | None, 'How to find the target GameObject.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str | None, 'Action-specific parameters (dict or JSON string).']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_probuilder.py",
+        "start_line": 49,
+        "end_line": 172,
+        "sha256": "7ca9cef968eef31c94fee43007861c2d74d74f8ad4ba00ed7d92a2abf1a56935"
+      },
+      "name_zh": "几何建模",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_profiler",
+      "unity_target": "manage_profiler",
+      "group": "profiling",
+      "declared_actions": [
+        "profiler_start",
+        "profiler_stop",
+        "profiler_status",
+        "profiler_set_areas",
+        "get_frame_timing",
+        "get_counters",
+        "get_object_memory",
+        "memory_take_snapshot",
+        "memory_list_snapshots",
+        "memory_compare_snapshots",
+        "frame_debugger_enable",
+        "frame_debugger_disable",
+        "frame_debugger_get_events",
+        "ping"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The profiler action to perform.']"
+        },
+        {
+          "name": "category",
+          "annotation": "Annotated[Optional[str], 'Profiler category name for get_counters (e.g. Render, Scripts, Memory, Physics).']"
+        },
+        {
+          "name": "counters",
+          "annotation": "Annotated[Optional[list[str]], 'Specific counter names for get_counters. Omit to read all in category.']"
+        },
+        {
+          "name": "object_path",
+          "annotation": "Annotated[Optional[str], 'Scene hierarchy or asset path for get_object_memory.']"
+        },
+        {
+          "name": "log_file",
+          "annotation": "Annotated[Optional[str], 'Path to .raw file for profiler_start recording.']"
+        },
+        {
+          "name": "enable_callstacks",
+          "annotation": "Annotated[Optional[bool], 'Enable allocation callstacks for profiler_start.']"
+        },
+        {
+          "name": "areas",
+          "annotation": "Annotated[Optional[dict[str, bool]], 'Dict of area name to bool for profiler_set_areas.']"
+        },
+        {
+          "name": "snapshot_path",
+          "annotation": "Annotated[Optional[str], 'Output path for memory_take_snapshot.']"
+        },
+        {
+          "name": "search_path",
+          "annotation": "Annotated[Optional[str], 'Search directory for memory_list_snapshots.']"
+        },
+        {
+          "name": "snapshot_a",
+          "annotation": "Annotated[Optional[str], 'First snapshot path for memory_compare_snapshots.']"
+        },
+        {
+          "name": "snapshot_b",
+          "annotation": "Annotated[Optional[str], 'Second snapshot path for memory_compare_snapshots.']"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[Optional[int], 'Page size for frame_debugger_get_events (default 50).']"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[Optional[int], 'Cursor offset for frame_debugger_get_events.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_profiler.py",
+        "start_line": 35,
+        "end_line": 106,
+        "sha256": "726310f272e49de2f53b1b548dcdec91400951ba00a33dc6883bd8cca1b05380"
+      },
+      "name_zh": "性能分析与内存快照",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_scene",
+      "unity_target": "manage_scene",
+      "group": "core",
+      "declared_actions": [
+        "create",
+        "load",
+        "save",
+        "get_hierarchy",
+        "get_active",
+        "get_build_settings",
+        "scene_view_frame",
+        "close_scene",
+        "set_active_scene",
+        "get_loaded_scenes",
+        "move_to_scene",
+        "validate"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'load', 'save', 'get_hierarchy', 'get_active', 'get_build_settings', 'scene_view_frame', 'close_scene', 'set_active_scene', 'get_loaded_scenes', 'move_to_scene', 'validate'], 'Perform CRUD operations on Unity scenes and control the Scene View camera.']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Scene name.'] | None"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, 'Scene path, under Assets/ or Packages/. A bare path is treated as relative to Assets/.'] | None"
+        },
+        {
+          "name": "build_index",
+          "annotation": "Annotated[int | str, \"Unity build index (quote as string, e.g., '0').\"] | None"
+        },
+        {
+          "name": "scene_view_target",
+          "annotation": "Annotated[str | int, 'GameObject reference for scene_view_frame (name, path, or instance ID).'] | None"
+        },
+        {
+          "name": "parent",
+          "annotation": "Annotated[str | int, 'Optional parent GameObject reference (name/path/instanceID) to list direct children.'] | None"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[int | str, 'Page size for get_hierarchy paging.'] | None"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[int | str, 'Opaque cursor for paging (offset).'] | None"
+        },
+        {
+          "name": "max_nodes",
+          "annotation": "Annotated[int | str, 'Hard cap on returned nodes per request (safety).'] | None"
+        },
+        {
+          "name": "max_depth",
+          "annotation": "Annotated[int | str, 'Accepted for forward-compatibility; current paging returns a single level.'] | None"
+        },
+        {
+          "name": "max_children_per_node",
+          "annotation": "Annotated[int | str, 'Child paging hint (safety).'] | None"
+        },
+        {
+          "name": "include_transform",
+          "annotation": "Annotated[bool | str, 'If true, include local transform in node summaries.'] | None"
+        },
+        {
+          "name": "scene_name",
+          "annotation": "Annotated[str, 'Scene name for multi-scene operations.'] | None"
+        },
+        {
+          "name": "scene_path",
+          "annotation": "Annotated[str, \"Full scene path (e.g. 'Assets/Scenes/Level2.unity').\"] | None"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | int, 'GameObject reference (name, path, or instanceID) for move_to_scene.'] | None"
+        },
+        {
+          "name": "remove_scene",
+          "annotation": "Annotated[bool | str, 'For close_scene: true to fully remove, false to just unload.'] | None"
+        },
+        {
+          "name": "additive",
+          "annotation": "Annotated[bool | str, 'For load: true to open scene additively (keeps current scene).'] | None"
+        },
+        {
+          "name": "template",
+          "annotation": "Annotated[str, \"For create: scene template ('empty', 'default', '3d_basic', '2d_basic'). Omit for empty scene.\"] | None"
+        },
+        {
+          "name": "auto_repair",
+          "annotation": "Annotated[bool | str, 'For validate: true to auto-fix missing scripts (undoable).'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_scene.py",
+        "start_line": 14,
+        "end_line": 159,
+        "sha256": "acf30bc4da2bb89d340c4d8d83b4b89f2fd8eae7ae9dbcbacd4a7b8878169755"
+      },
+      "name_zh": "场景管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_script",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [
+        "create",
+        "read",
+        "delete"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'read', 'delete'], 'Perform CRUD operations on C# scripts.']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Script name (no .cs extension)', 'Name of the script to create']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, \"Asset path (default: 'Assets/')\", \"Path under Assets/ to create the script at, e.g., 'Assets/Scripts/My.cs'\"]"
+        },
+        {
+          "name": "contents",
+          "annotation": "Annotated[str, 'Contents of the script to create', \"C# code for 'create' action\"] | None"
+        },
+        {
+          "name": "script_type",
+          "annotation": "Annotated[str, \"Script type (e.g., 'C#')\", \"Type hint (e.g., 'MonoBehaviour')\"] | None"
+        },
+        {
+          "name": "namespace",
+          "annotation": "Annotated[str, 'Namespace for the script'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 528,
+        "end_line": 615,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "脚本读写",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_script_capabilities",
+      "unity_target": null,
+      "group": null,
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 618,
+        "end_line": 658,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "脚本能力查询",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_scriptable_object",
+      "unity_target": "manage_scriptable_object",
+      "group": "scripting_ext",
+      "declared_actions": [
+        "create",
+        "modify"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'modify'], 'Action to perform: create or modify.']"
+        },
+        {
+          "name": "type_name",
+          "annotation": "Annotated[str | None, 'Namespace-qualified ScriptableObject type name (for create).']"
+        },
+        {
+          "name": "folder_path",
+          "annotation": "Annotated[str | None, 'Target folder under Assets/... (for create).']"
+        },
+        {
+          "name": "asset_name",
+          "annotation": "Annotated[str | None, 'Asset file name without extension (for create).']"
+        },
+        {
+          "name": "overwrite",
+          "annotation": "Annotated[bool | str | None, 'If true, overwrite existing asset at same path (for create).']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[dict[str, Any] | str | None, 'Target asset reference {guid|path} (for modify).']"
+        },
+        {
+          "name": "patches",
+          "annotation": "Annotated[list[dict[str, Any]] | str | None, 'Patch list (or JSON string) to apply. For object references: use {\"ref\": {\"guid\": \"...\"}} or {\"value\": {\"guid\": \"...\"}}. For Sprite sub-assets: include \"spriteName\" in the ref/value object. Single-sprite textures auto-resolve from guid/path alone.']"
+        },
+        {
+          "name": "dry_run",
+          "annotation": "Annotated[bool | str | None, 'If true, validate patches without applying (modify only).']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_scriptable_object.py",
+        "start_line": 25,
+        "end_line": 91,
+        "sha256": "3a2322ba912968d76c2fe14146822c2702b927d5c3b7ef8620e7a9ce18e09c32"
+      },
+      "name_zh": "序列化数据资产修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_shader",
+      "unity_target": "manage_shader",
+      "group": "vfx",
+      "declared_actions": [
+        "create",
+        "read",
+        "update",
+        "delete"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'read', 'update', 'delete'], 'Perform CRUD operations on shader scripts.']"
+        },
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Shader name (no .cs extension)']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, 'Asset path (default: \"Assets/\")']"
+        },
+        {
+          "name": "contents",
+          "annotation": "Annotated[str, \"Shader code for 'create'/'update'\"] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_shader.py",
+        "start_line": 13,
+        "end_line": 72,
+        "sha256": "22319b638913fc0b0e055d0b642ec73f8e0836ea7c78cca0b414b2296d40ab39"
+      },
+      "name_zh": "着色器读写",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_texture",
+      "unity_target": "manage_texture",
+      "group": "vfx",
+      "declared_actions": [
+        "create",
+        "modify",
+        "delete",
+        "create_sprite",
+        "apply_pattern",
+        "apply_gradient",
+        "apply_noise",
+        "set_import_settings"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['create', 'modify', 'delete', 'create_sprite', 'apply_pattern', 'apply_gradient', 'apply_noise', 'set_import_settings'], 'Action to perform.']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, \"Output texture path (e.g., 'Assets/Textures/MyTexture.png')\"] | None"
+        },
+        {
+          "name": "width",
+          "annotation": "Annotated[int, 'Texture width in pixels (default: 64)'] | None"
+        },
+        {
+          "name": "height",
+          "annotation": "Annotated[int, 'Texture height in pixels (default: 64)'] | None"
+        },
+        {
+          "name": "fill_color",
+          "annotation": "Annotated[list[int | float] | dict[str, int | float] | str, 'Fill color as [r, g, b] or [r, g, b, a] array, {r, g, b, a} object, or hex string. Accepts both 0-255 range (e.g., [255, 0, 0]) or 0.0-1.0 normalized range (e.g., [1.0, 0, 0])'] | None"
+        },
+        {
+          "name": "pattern",
+          "annotation": "Annotated[Literal['checkerboard', 'stripes', 'stripes_h', 'stripes_v', 'stripes_diag', 'dots', 'grid', 'brick'], 'Pattern type for apply_pattern action'] | None"
+        },
+        {
+          "name": "palette",
+          "annotation": "Annotated[list[list[int | float]] | str, 'Color palette as [[r,g,b,a], ...]. Accepts both 0-255 range or 0.0-1.0 normalized range'] | None"
+        },
+        {
+          "name": "pattern_size",
+          "annotation": "Annotated[int, 'Pattern cell size in pixels (default: 8)'] | None"
+        },
+        {
+          "name": "pixels",
+          "annotation": "Annotated[list[list[int]] | str, 'Pixel data as JSON array of [r,g,b,a] values or base64 string'] | None"
+        },
+        {
+          "name": "image_path",
+          "annotation": "Annotated[str, 'Source image file path for create/create_sprite (PNG/JPG).'] | None"
+        },
+        {
+          "name": "gradient_type",
+          "annotation": "Annotated[Literal['linear', 'radial'], 'Gradient type (default: linear)'] | None"
+        },
+        {
+          "name": "gradient_angle",
+          "annotation": "Annotated[float, 'Gradient angle in degrees for linear gradient (default: 0)'] | None"
+        },
+        {
+          "name": "noise_scale",
+          "annotation": "Annotated[float, 'Noise scale/frequency (default: 0.1)'] | None"
+        },
+        {
+          "name": "octaves",
+          "annotation": "Annotated[int, 'Number of noise octaves for detail (default: 1)'] | None"
+        },
+        {
+          "name": "set_pixels",
+          "annotation": "Annotated[dict, 'Region to modify: {x, y, width, height, color or pixels}'] | None"
+        },
+        {
+          "name": "as_sprite",
+          "annotation": "Annotated[dict | bool, 'Configure as sprite: {pivot: [x,y], pixels_per_unit: 100} or true for defaults'] | None"
+        },
+        {
+          "name": "import_settings",
+          "annotation": "Annotated[dict, 'TextureImporter settings dict. Keys: texture_type (default/normal_map/sprite/etc), texture_shape (2d/cube), srgb (bool), alpha_source (none/from_input/from_gray_scale), alpha_is_transparency (bool), readable (bool), generate_mipmaps (bool), wrap_mode/wrap_mode_u/wrap_mode_v (repeat/clamp/mirror/mirror_once), filter_mode (point/bilinear/trilinear), aniso_level (0-16), max_texture_size (32-16384), compression (none/low_quality/normal_quality/high_quality), compression_quality (0-100), sprite_mode (single/multiple/polygon), sprite_pixels_per_unit, sprite_pivot, sprite_mesh_type (full_rect/tight), sprite_extrude (0-32)'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_texture.py",
+        "start_line": 376,
+        "end_line": 593,
+        "sha256": "a159c2d0885e6596c03dcedd50d6770459fcf8ab2f6f3e91794efc867a47e5d6"
+      },
+      "name_zh": "纹理与导入设置",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_tools",
+      "unity_target": null,
+      "group": null,
+      "declared_actions": [
+        "list_groups",
+        "activate",
+        "deactivate",
+        "sync",
+        "reset"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['list_groups', 'activate', 'deactivate', 'sync', 'reset'], 'Action to perform.']"
+        },
+        {
+          "name": "group",
+          "annotation": "Annotated[str | None, 'Group name (required for activate / deactivate). Valid groups: ' + ', '.join(sorted(TOOL_GROUPS.keys()))]"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_tools.py",
+        "start_line": 24,
+        "end_line": 123,
+        "sha256": "f478e6a47be344439b321c87de9afde224c63d83c0f3b8a0bd9169b36a58f871"
+      },
+      "name_zh": "工具组启停",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_ui",
+      "unity_target": "manage_ui",
+      "group": "ui",
+      "declared_actions": [
+        "ping",
+        "create",
+        "read",
+        "update",
+        "delete",
+        "attach_ui_document",
+        "detach_ui_document",
+        "create_panel_settings",
+        "update_panel_settings",
+        "get_visual_tree",
+        "render_ui",
+        "link_stylesheet",
+        "list",
+        "modify_visual_element"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['ping', 'create', 'read', 'update', 'delete', 'attach_ui_document', 'detach_ui_document', 'create_panel_settings', 'update_panel_settings', 'get_visual_tree', 'render_ui', 'link_stylesheet', 'list', 'modify_visual_element'], 'Action to perform.']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, \"Assets-relative path (e.g., 'Assets/UI/MainMenu.uxml' or 'Assets/UI/Styles.uss'). For render_ui: optional UXML path to render directly without a scene GameObject.\"] | None"
+        },
+        {
+          "name": "contents",
+          "annotation": "Annotated[str, 'File content (UXML or USS markup). Plain text - encoding handled automatically.'] | None"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str, 'Target GameObject name or path for attach_ui_document / get_visual_tree / render_ui.'] | None"
+        },
+        {
+          "name": "source_asset",
+          "annotation": "Annotated[str, \"Path to UXML VisualTreeAsset (e.g., 'Assets/UI/MainMenu.uxml').\"] | None"
+        },
+        {
+          "name": "panel_settings",
+          "annotation": "Annotated[str, 'Path to PanelSettings asset. Auto-creates default if omitted.'] | None"
+        },
+        {
+          "name": "sort_order",
+          "annotation": "Annotated[int, 'UIDocument sort order (default 0).'] | None"
+        },
+        {
+          "name": "scale_mode",
+          "annotation": "Annotated[Literal['ConstantPixelSize', 'ConstantPhysicalSize', 'ScaleWithScreenSize'], \"Panel scale mode. Legacy shorthand; prefer using 'settings' dict.\"] | None"
+        },
+        {
+          "name": "reference_resolution",
+          "annotation": "Annotated[dict[str, int], \"Reference resolution as {width, height}. Legacy shorthand; prefer using 'settings' dict.\"] | None"
+        },
+        {
+          "name": "settings",
+          "annotation": "Annotated[dict[str, Any], 'Generic PanelSettings properties dict for create_panel_settings. Keys: scaleMode (ConstantPixelSize|ConstantPhysicalSize|ScaleWithScreenSize), referenceResolution ({width,height}), screenMatchMode (MatchWidthOrHeight|ShrinkToFit|ExpandToFill), match (0-1 float), referenceDpi, fallbackDpi, sortingOrder, targetDisplay, clearColor (bool), colorClearValue (#RRGGBB or {r,g,b,a}), clearDepthStencil, themeStyleSheet (asset path), dynamicAtlasSettings ({minAtlasSize,maxAtlasSize,maxSubTextureSize,activeFilters}).'] | None"
+        },
+        {
+          "name": "max_depth",
+          "annotation": "Annotated[int, 'Max depth to traverse visual tree (default 10).'] | None"
+        },
+        {
+          "name": "width",
+          "annotation": "Annotated[int, 'Render width in pixels (default 1920). For render_ui.'] | None"
+        },
+        {
+          "name": "height",
+          "annotation": "Annotated[int, 'Render height in pixels (default 1080). For render_ui.'] | None"
+        },
+        {
+          "name": "include_image",
+          "annotation": "Annotated[bool, 'Return inline base64 PNG in the response (default false). For render_ui.'] | None"
+        },
+        {
+          "name": "max_resolution",
+          "annotation": "Annotated[int, 'Max resolution for inline base64 image (default 640). For render_ui.'] | None"
+        },
+        {
+          "name": "screenshot_file_name",
+          "annotation": "Annotated[str, 'Custom file name for the render output (default: auto-generated). For render_ui.'] | None"
+        },
+        {
+          "name": "output_folder",
+          "annotation": "Annotated[str, \"Optional folder for the render output. Project-relative (e.g. 'Assets/Screenshots' or 'Captures') or absolute path inside the project. Overrides the user's Editor preference. If omitted, falls back to the Editor preference, then to the built-in default (Assets/Screenshots). For render_ui.\"] | None"
+        },
+        {
+          "name": "stylesheet",
+          "annotation": "Annotated[str, \"Path to USS stylesheet to link (e.g., 'Assets/UI/Styles.uss'). For link_stylesheet.\"] | None"
+        },
+        {
+          "name": "filter_type",
+          "annotation": "Annotated[str, \"Filter UI assets by type: 'uxml', 'uss', 'PanelSettings', or omit for all. For list.\"] | None"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[int, 'Number of results per page (default 50). For list.'] | None"
+        },
+        {
+          "name": "page_number",
+          "annotation": "Annotated[int, 'Page number, 1-based (default 1). For list.'] | None"
+        },
+        {
+          "name": "element_name",
+          "annotation": "Annotated[str, \"Name of the visual element to modify (the 'name' attribute in UXML). For modify_visual_element.\"] | None"
+        },
+        {
+          "name": "text",
+          "annotation": "Annotated[str, 'New text content for Label/Button elements. For modify_visual_element.'] | None"
+        },
+        {
+          "name": "add_classes",
+          "annotation": "Annotated[list[str], 'USS class names to add to the element. For modify_visual_element.'] | None"
+        },
+        {
+          "name": "remove_classes",
+          "annotation": "Annotated[list[str], 'USS class names to remove from the element. For modify_visual_element.'] | None"
+        },
+        {
+          "name": "toggle_classes",
+          "annotation": "Annotated[list[str], 'USS class names to toggle on the element. For modify_visual_element.'] | None"
+        },
+        {
+          "name": "style",
+          "annotation": "Annotated[dict[str, Any], \"Inline styles to set (e.g., {'backgroundColor': '#FF0000', 'fontSize': 24}). For modify_visual_element.\"] | None"
+        },
+        {
+          "name": "enabled",
+          "annotation": "Annotated[bool, 'Set element enabled/disabled state. For modify_visual_element.'] | None"
+        },
+        {
+          "name": "visible",
+          "annotation": "Annotated[bool, 'Set element visibility (display: flex/none). For modify_visual_element.'] | None"
+        },
+        {
+          "name": "tooltip",
+          "annotation": "Annotated[str, 'Set element tooltip text. For modify_visual_element.'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_ui.py",
+        "start_line": 24,
+        "end_line": 295,
+        "sha256": "f2a34f2a447a9d8dcceea52d80f8d8b41473553f4976dae1659b8c21a568d479"
+      },
+      "name_zh": "用户界面管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "manage_vfx",
+      "unity_target": "manage_vfx",
+      "group": "vfx",
+      "declared_actions": [
+        "particle_create",
+        "particle_get_info",
+        "particle_set_main",
+        "particle_set_emission",
+        "particle_set_shape",
+        "particle_set_color_over_lifetime",
+        "particle_set_size_over_lifetime",
+        "particle_set_velocity_over_lifetime",
+        "particle_set_noise",
+        "particle_set_renderer",
+        "particle_enable_module",
+        "particle_play",
+        "particle_stop",
+        "particle_pause",
+        "particle_restart",
+        "particle_clear",
+        "particle_add_burst",
+        "particle_clear_bursts",
+        "vfx_create_asset",
+        "vfx_assign_asset",
+        "vfx_list_templates",
+        "vfx_list_assets",
+        "vfx_get_info",
+        "vfx_set_float",
+        "vfx_set_int",
+        "vfx_set_bool",
+        "vfx_set_vector2",
+        "vfx_set_vector3",
+        "vfx_set_vector4",
+        "vfx_set_color",
+        "vfx_set_gradient",
+        "vfx_set_texture",
+        "vfx_set_mesh",
+        "vfx_set_curve",
+        "vfx_send_event",
+        "vfx_play",
+        "vfx_stop",
+        "vfx_pause",
+        "vfx_reinit",
+        "vfx_set_playback_speed",
+        "vfx_set_seed",
+        "line_get_info",
+        "line_set_positions",
+        "line_add_position",
+        "line_set_position",
+        "line_set_width",
+        "line_set_color",
+        "line_set_material",
+        "line_set_properties",
+        "line_clear",
+        "line_create_line",
+        "line_create_circle",
+        "line_create_arc",
+        "line_create_bezier",
+        "trail_get_info",
+        "trail_set_time",
+        "trail_set_width",
+        "trail_set_color",
+        "trail_set_material",
+        "trail_set_properties",
+        "trail_clear",
+        "trail_emit"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'Action to perform (prefix: particle_, vfx_, line_, trail_).']"
+        },
+        {
+          "name": "target",
+          "annotation": "Annotated[str | None, 'Target GameObject (name/path/id).']"
+        },
+        {
+          "name": "search_method",
+          "annotation": "Annotated[Literal['by_id', 'by_name', 'by_path', 'by_tag', 'by_layer'] | None, 'How to find the target GameObject.']"
+        },
+        {
+          "name": "properties",
+          "annotation": "Annotated[dict[str, Any] | str | None, 'Action-specific parameters (dict or JSON string).']"
+        },
+        {
+          "name": "component_index",
+          "annotation": "Annotated[Optional[int], 'Zero-based index to select which component when multiple of the same type exist (e.g., multiple ParticleSystems). If omitted, targets the first instance.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_vfx.py",
+        "start_line": 45,
+        "end_line": 128,
+        "sha256": "557927130d7875265db7bf6b9d54cee17596704c97ada4742e457e498913fc67"
+      },
+      "name_zh": "粒子与特效管理",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "read_console",
+      "unity_target": "read_console",
+      "group": "core",
+      "declared_actions": [
+        "get",
+        "clear"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[Literal['get', 'clear'], \"Get or clear the Unity Editor console. Defaults to 'get' if omitted.\"] | None"
+        },
+        {
+          "name": "types",
+          "annotation": "Annotated[list[Literal['error', 'warning', 'log', 'all']] | str, 'Message types to get (accepts list or JSON string)'] | None"
+        },
+        {
+          "name": "count",
+          "annotation": "Annotated[int | str, \"Max messages to return in non-paging mode (accepts int or string, e.g., 5 or '5'). Ignored when paging with page_size/cursor.\"] | None"
+        },
+        {
+          "name": "filter_text",
+          "annotation": "Annotated[str, 'Text filter for messages'] | None"
+        },
+        {
+          "name": "page_size",
+          "annotation": "Annotated[int | str, 'Page size for paginated console reads. Defaults to 50 when omitted.'] | None"
+        },
+        {
+          "name": "cursor",
+          "annotation": "Annotated[int | str, 'Opaque cursor for paging (0-based offset). Defaults to 0.'] | None"
+        },
+        {
+          "name": "format",
+          "annotation": "Annotated[Literal['plain', 'detailed', 'json'], 'Output format'] | None"
+        },
+        {
+          "name": "include_stacktrace",
+          "annotation": "Annotated[bool | str, \"Include stack traces in output (accepts true/false or 'true'/'false')\"] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/read_console.py",
+        "start_line": 23,
+        "end_line": 154,
+        "sha256": "a5d45eb40fe39976f8e9b2593ee719256389b0630922bfdefd1b641ee6b9f0fb"
+      },
+      "name_zh": "控制台读取与清除",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "refresh_unity",
+      "unity_target": "refresh_unity",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "mode",
+          "annotation": "Annotated[Literal['if_dirty', 'force'], 'Refresh mode']"
+        },
+        {
+          "name": "scope",
+          "annotation": "Annotated[Literal['assets', 'scripts', 'all'], 'Refresh scope']"
+        },
+        {
+          "name": "compile",
+          "annotation": "Annotated[Literal['none', 'request'], 'Whether to request compilation']"
+        },
+        {
+          "name": "wait_for_ready",
+          "annotation": "Annotated[bool, 'If true, wait until mcpforunity://editor/state reports data.advice.ready_for_tools true']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/refresh_unity.py",
+        "start_line": 168,
+        "end_line": 273,
+        "sha256": "0f5c3e684212f9cc03286a92165c4f9aa4b13dbfde04fa80fc0cb1a3bee8b312"
+      },
+      "name_zh": "资源刷新与编译",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "run_tests",
+      "unity_target": "run_tests",
+      "group": "testing",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "mode",
+          "annotation": "Annotated[Literal['EditMode', 'PlayMode'], 'Unity test mode to run']"
+        },
+        {
+          "name": "test_names",
+          "annotation": "Annotated[list[str] | str, 'Full names of specific tests to run'] | None"
+        },
+        {
+          "name": "group_names",
+          "annotation": "Annotated[list[str] | str, 'Same as test_names, except it allows for Regex'] | None"
+        },
+        {
+          "name": "category_names",
+          "annotation": "Annotated[list[str] | str, 'NUnit category names to filter by'] | None"
+        },
+        {
+          "name": "assembly_names",
+          "annotation": "Annotated[list[str] | str, 'Assembly names to filter tests by'] | None"
+        },
+        {
+          "name": "include_failed_tests",
+          "annotation": "Annotated[bool, 'Include details for failed/skipped tests only (default: false)']"
+        },
+        {
+          "name": "include_details",
+          "annotation": "Annotated[bool, 'Include details for all tests (default: false)']"
+        },
+        {
+          "name": "init_timeout",
+          "annotation": "Annotated[int | None, 'Initialization timeout in milliseconds. PlayMode tests may need longer due to domain reload (default: 15000). Recommended: 120000 for PlayMode.']"
+        },
+        {
+          "name": "clear_stuck",
+          "annotation": "Annotated[bool, 'Clear an orphaned running job instead of starting a run. Use when a job was lost to a domain reload and is blocking every subsequent run.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/run_tests.py",
+        "start_line": 146,
+        "end_line": 237,
+        "sha256": "84b5379b5f93fe32f03126f15dcc048ae511d0125b07055d0ac91fe998ec20a7"
+      },
+      "name_zh": "运行编辑器测试",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "script_apply_edits",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "name",
+          "annotation": "Annotated[str, 'Name of the script to edit']"
+        },
+        {
+          "name": "path",
+          "annotation": "Annotated[str, 'Path to the script to edit under Assets/ directory']"
+        },
+        {
+          "name": "edits",
+          "annotation": "Annotated[Union[list[dict[str, Any]], str], 'List of edits to apply to the script (JSON list or stringified JSON)']"
+        },
+        {
+          "name": "options",
+          "annotation": "Annotated[dict[str, Any], 'Options for the script edit'] | None"
+        },
+        {
+          "name": "script_type",
+          "annotation": "Annotated[str, 'Type of the script to edit']"
+        },
+        {
+          "name": "namespace",
+          "annotation": "Annotated[str, 'Namespace of the script to edit'] | None"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/script_apply_edits.py",
+        "start_line": 671,
+        "end_line": 1368,
+        "sha256": "5796a2c2d1d3af9ef3b92f2bbab441b647f4927907822d259470e93a5fcc634a"
+      },
+      "name_zh": "脚本结构化修改",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "set_active_instance",
+      "unity_target": null,
+      "group": null,
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "instance",
+          "annotation": "Annotated[str, 'Target instance (Name@hash, hash prefix, or port number in stdio mode)']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/set_active_instance.py",
+        "start_line": 14,
+        "end_line": 157,
+        "sha256": "409978af5da9ce787bfa3a2e2ec52acb7984b42dc33521dc1a4f50ae35a51b53"
+      },
+      "name_zh": "切换Unity实例",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "unity_docs",
+      "unity_target": "unity_reflect",
+      "group": "docs",
+      "declared_actions": [
+        "get_doc",
+        "get_manual",
+        "get_package_doc",
+        "lookup"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The documentation action to perform.']"
+        },
+        {
+          "name": "class_name",
+          "annotation": "Annotated[Optional[str], \"Unity class name (e.g. 'Physics', 'Transform').\"]"
+        },
+        {
+          "name": "member_name",
+          "annotation": "Annotated[Optional[str], 'Method or property name to look up.']"
+        },
+        {
+          "name": "version",
+          "annotation": "Annotated[Optional[str], \"Unity version (e.g. '6000.0.38f1'). Auto-extracted.\"]"
+        },
+        {
+          "name": "slug",
+          "annotation": "Annotated[Optional[str], \"Manual page slug (e.g., 'execution-order').\"]"
+        },
+        {
+          "name": "package",
+          "annotation": "Annotated[Optional[str], \"Package name (e.g., 'com.unity.render-pipelines.universal').\"]"
+        },
+        {
+          "name": "page",
+          "annotation": "Annotated[Optional[str], \"Package doc page (e.g., 'index', '2d-index').\"]"
+        },
+        {
+          "name": "pkg_version",
+          "annotation": "Annotated[Optional[str], \"Package version major.minor (e.g., '17.0').\"]"
+        },
+        {
+          "name": "query",
+          "annotation": "Annotated[Optional[str], 'Single search query for lookup (class name, topic, or slug).']"
+        },
+        {
+          "name": "queries",
+          "annotation": "Annotated[Optional[str], \"Comma-separated search queries for batch lookup (e.g., 'Physics.Raycast,NavMeshAgent,Light2D').\"]"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/unity_docs.py",
+        "start_line": 697,
+        "end_line": 773,
+        "sha256": "b6d17f0683bb179c9b81f01995f21c12bb20f3f5c798066909128a8b504d5ccd"
+      },
+      "name_zh": "Unity文档查询",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "unity_reflect",
+      "unity_target": "unity_reflect",
+      "group": "docs",
+      "declared_actions": [
+        "get_type",
+        "get_member",
+        "search"
+      ],
+      "has_action_parameter": true,
+      "parameters": [
+        {
+          "name": "action",
+          "annotation": "Annotated[str, 'The reflection action to perform.']"
+        },
+        {
+          "name": "class_name",
+          "annotation": "Annotated[Optional[str], 'Fully qualified or simple C# class name.']"
+        },
+        {
+          "name": "member_name",
+          "annotation": "Annotated[Optional[str], 'Method, property, or field name to inspect.']"
+        },
+        {
+          "name": "query",
+          "annotation": "Annotated[Optional[str], 'Search query for type name search.']"
+        },
+        {
+          "name": "scope",
+          "annotation": "Annotated[Optional[str], 'Assembly scope for search: unity, packages, project, all.']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/unity_reflect.py",
+        "start_line": 27,
+        "end_line": 95,
+        "sha256": "3ca37b28635dc771187875dc3fbbb6c394bf083453c4a807a9c8b570bb09d58e"
+      },
+      "name_zh": "类型与成员反射查询",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    },
+    {
+      "name": "validate_script",
+      "unity_target": "manage_script",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "parameters": [
+        {
+          "name": "uri",
+          "annotation": "Annotated[str, 'URI of the script to validate under Assets/ directory, mcpforunity://path/Assets/... or file://... or Assets/...']"
+        },
+        {
+          "name": "level",
+          "annotation": "Annotated[Literal['basic', 'standard'], 'Validation level']"
+        },
+        {
+          "name": "include_diagnostics",
+          "annotation": "Annotated[bool, 'Include full diagnostics and summary']"
+        }
+      ],
+      "source": {
+        "path": "Server/src/services/tools/manage_script.py",
+        "start_line": 477,
+        "end_line": 525,
+        "sha256": "7405bb8204fd74cfd5906abddb9d01783a443be475437f313719dd966e497fe1"
+      },
+      "name_zh": "脚本校验",
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    }
+  ],
+  "scope_zh": "离线原生能力目录；材质候选写另走专用受限入口，不开放原生泛用写工具。"
+}

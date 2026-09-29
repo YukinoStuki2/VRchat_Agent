@@ -1,0 +1,13 @@
+{
+  "upstream_url": "https://github.com/CoplayDev/unity-mcp",
+  "upstream_tag": "v10.2.0",
+  "upstream_commit": "30d22075093d1d35dfb0091c1c7550e9ad948577",
+  "path": "MCPForUnity/Editor/Services/Transport/Transports/WebSocketTransportClient.cs",
+  "upstream_sha256": "79a911dd5cd2539d0ab6cdfb92defa873184f6d91dc1a64a213d6cf3fa7d8665",
+  "patched_sha256": "6516d61f06aaf1cc414f2b63bb873e2280beaef73b4be7ee41681c619bfc8822",
+  "patch_sha256": "3c76b62e9d87e573d664af74e10d0ad769b7fb4791ea9ab3072c635adf43e656",
+  "scope": "Candidate-only explicit pinned-TLS constructor; default constructor remains upstream behavior",
+  "product_enabled": false,
+  "independent_approval": false,
+  "unity_mono_acceptance": false
+}

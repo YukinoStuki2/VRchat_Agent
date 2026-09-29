@@ -1,0 +1,10 @@
+<Project>
+  <!-- Relocate only the unchanged review project's hard-coded output reference. -->
+  <Target Name="FixReviewReferenceLocation" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Condition="'%(Reference.Identity)' == 'MCPForUnity.Editor'">
+        <HintPath>$(MSBuildThisFileDirectory)FixBuild/ReviewUpstreamApi/bin/Release/net8.0/MCPForUnity.Editor.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+  </Target>
+</Project>

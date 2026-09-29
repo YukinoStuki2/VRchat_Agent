@@ -1,0 +1,26 @@
+--- a/mcp/server/streamable_http.py
++++ b/mcp/server/streamable_http.py
+@@ -645,6 +645,11 @@
+                     await sse_stream_writer.aclose()
+                     await sse_stream_reader.aclose()
+                     await self._clean_up_memory_streams(request_id)
++                finally:
++                    # Candidate patch: allocation owns both ends, including on
++                    # normal EOF and cancellation. Memory stream close is sync.
++                    sse_stream_writer.close()
++                    sse_stream_reader.close()
+ 
+         except Exception as err:
+             logger.exception("Error handling POST request")
+@@ -750,6 +755,11 @@
+             await sse_stream_writer.aclose()
+             await sse_stream_reader.aclose()
+             await self._clean_up_memory_streams(GET_STREAM_KEY)
++        finally:
++            # Candidate patch: EventSourceResponse iterates but does not own
++            # closure of this receive stream on normal exit or cancellation.
++            sse_stream_writer.close()
++            sse_stream_reader.close()
+ 
+     async def _handle_delete_request(self, request: Request, send: Send) -> None:  # pragma: no cover
+         """Handle DELETE requests for explicit session termination."""

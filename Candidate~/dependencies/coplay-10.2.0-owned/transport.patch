@@ -1,0 +1,176 @@
+--- a/Editor/Services/Transport/Transports/WebSocketTransportClient.cs
++++ b/Editor/Services/Transport/Transports/WebSocketTransportClient.cs
+@@ -60,6 +60,29 @@
+         private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
+         private string _apiKey;
+         private bool _disposed;
++        private readonly Uri _ownedEndpoint;
++        private readonly string _ownedBearer;
++        private readonly byte[] _ownedPin;
++        private readonly Func<string, JObject, object> _ownedDispatch;
++        private int _ownedStarted;
++
++        // Explicit local-owner API. No discovery, preferences or shared manager.
++        // Pin must come from trusted bootstrap, never TOFU or a network response.
++        public WebSocketTransportClient(Uri endpoint, string bearer, byte[] certificateSha256,
++            Func<string, JObject, object> dispatch)
++        {
++            if (endpoint == null || !endpoint.IsAbsoluteUri || endpoint.Scheme != "wss" ||
++                endpoint.Host != "127.0.0.1" || endpoint.Port < 1024 ||
++                endpoint.UserInfo != "" || endpoint.Query != "" || endpoint.Fragment != "" ||
++                endpoint.AbsolutePath != "/hub/plugin" || string.IsNullOrEmpty(bearer) ||
++                bearer.Length > 16384 || bearer.IndexOfAny(new[] { '\r', '\n', '\0' }) >= 0 ||
++                certificateSha256 == null || certificateSha256.Length != 32 || dispatch == null)
++                throw new ArgumentException("owned_transport_options_invalid");
++            _ownedEndpoint = endpoint;
++            _ownedBearer = bearer;
++            _ownedPin = (byte[])certificateSha256.Clone();
++            _ownedDispatch = dispatch;
++        }
+ 
+         public WebSocketTransportClient(IToolDiscoveryService toolDiscoveryService = null)
+         {
+@@ -79,15 +102,16 @@
+ 
+         public async Task<bool> StartAsync()
+         {
++            if (_ownedEndpoint != null && (_disposed || Interlocked.Exchange(ref _ownedStarted, 1) != 0)) return false;
+             // Capture identity values on the main thread before any async context switching
+             _projectName = ProjectIdentityUtility.GetProjectName();
+             _projectHash = ProjectIdentityUtility.GetProjectHash();
+             _unityVersion = Application.unityVersion;
+-            _apiKey = HttpEndpointUtility.IsRemoteScope()
++            _apiKey = _ownedEndpoint == null && HttpEndpointUtility.IsRemoteScope()
+                 ? EditorPrefs.GetString(EditorPrefKeys.ApiKey, string.Empty)
+                 : string.Empty;
+ 
+-            if (HttpEndpointUtility.IsRemoteScope()
++            if (_ownedEndpoint == null && HttpEndpointUtility.IsRemoteScope()
+                 && !HttpEndpointUtility.IsCurrentRemoteUrlAllowed(out string remoteUrlError))
+             {
+                 string message = remoteUrlError ?? "HTTP Remote URL is not allowed by current security settings.";
+@@ -114,23 +138,36 @@
+             await StopAsync();
+ 
+             _lifecycleCts = new CancellationTokenSource();
+-            _endpointUri = BuildWebSocketUri(HttpEndpointUtility.GetBaseUrl());
++            _endpointUri = _ownedEndpoint ?? BuildWebSocketUri(HttpEndpointUtility.GetBaseUrl());
+             _sessionId = null;
+ 
+-            if (!await EstablishConnectionAsync(_lifecycleCts.Token))
++            var startToken = _lifecycleCts.Token;
++            if (!await EstablishConnectionAsync(startToken) ||
++                (_ownedEndpoint != null && (startToken.IsCancellationRequested || _socket == null || _socket.State != WebSocketState.Open)))
+             {
+                 await StopAsync();
+                 return false;
+             }
+ 
+             // State is connected but session ID might be pending until 'registered' message
+-            _state = TransportState.Connected(TransportDisplayName, sessionId: "pending", details: _endpointUri.ToString());
++            _state = TransportState.Connected(TransportDisplayName, sessionId: _ownedEndpoint != null ? (_sessionId ?? "pending") : "pending", details: _endpointUri.ToString());
+             _isConnected = true;
+             return true;
+         }
+ 
+         public async Task StopAsync()
+         {
++            if (_ownedEndpoint != null)
++            {
++                // Capture before ForceStop clears shared fields. Disconnect may
++                // already be tearing down; do not dereference them after awaits.
++                var receive = _receiveTask;
++                var keepAlive = _keepAliveTask;
++                ForceStop();
++                foreach (var pending in new[] { receive, keepAlive })
++                    if (pending != null) { try { await pending.ConfigureAwait(false); } catch (OperationCanceledException) { } }
++                return;
++            }
+             if (_lifecycleCts == null)
+             {
+                 return;
+@@ -265,6 +302,21 @@
+                 _socket?.Dispose();
+                 _socket = new ClientWebSocket();
+                 _socket.Options.KeepAliveInterval = _socketKeepAliveInterval;
++                if (_ownedEndpoint != null)
++                {
++                    _socket.Options.SetRequestHeader("Authorization", "Bearer " + _ownedBearer);
++                    _socket.Options.RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
++                    {
++                        if (cert == null) return false;
++                        using (var hash = System.Security.Cryptography.SHA256.Create())
++                        {
++                            byte[] actual = hash.ComputeHash(cert.GetRawCertData());
++                            int difference = 0;
++                            for (int i = 0; i < actual.Length; i++) difference |= actual[i] ^ _ownedPin[i];
++                            return difference == 0;
++                        }
++                    };
++                }
+ 
+                 // Add API key header if configured (for remote-hosted mode)
+                 if (!string.IsNullOrEmpty(_apiKey))
+@@ -510,11 +562,14 @@
+ 
+         private async Task HandleRegisteredAsync(JObject payload, CancellationToken token)
+         {
++            token.ThrowIfCancellationRequested();
+             string newSessionId = payload.Value<string>("session_id");
++            if (_ownedEndpoint != null && (_sessionId != null || string.IsNullOrEmpty(newSessionId) || newSessionId == "pending"))
++            { ForceStop(); return; }
+             if (!string.IsNullOrEmpty(newSessionId))
+             {
+                 _sessionId = newSessionId;
+-                ProjectIdentityUtility.SetSessionId(_sessionId);
++                if (_ownedEndpoint == null) ProjectIdentityUtility.SetSessionId(_sessionId);
+                 _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
+                 McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}", false);
+ 
+@@ -621,14 +676,27 @@
+             {
+                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+-                responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
++                if (_ownedEndpoint == null)
++                    responseJson = await TransportCommandDispatcher.ExecuteCommandJsonAsync(commandEnvelope.ToString(Formatting.None), timeoutCts.Token).ConfigureAwait(false);
++                else
++                {
++                    if (commandName != "vrchat_agent_dispatch" && commandName != "vrchat_agent_material_dispatch")
++                        throw new InvalidOperationException("owned_command_denied");
++                    var response = await TransportCommandDispatcher.RunOnMainThreadAsync(() =>
++                    {
++                        timeoutCts.Token.ThrowIfCancellationRequested();
++                        if (!_isConnected || string.IsNullOrEmpty(_sessionId)) throw new InvalidOperationException("owned_disconnected");
++                        return _ownedDispatch(commandName, parameters);
++                    }, timeoutCts.Token).ConfigureAwait(false);
++                    responseJson = JsonConvert.SerializeObject(new { status = "success", result = response });
++                }
+             }
+             catch (OperationCanceledException)
+             {
+                 responseJson = JsonConvert.SerializeObject(new
+                 {
+                     status = "error",
+-                    error = $"Command '{commandName}' timed out after {timeoutSeconds} seconds"
++                    error = _ownedEndpoint != null ? "owned_command_cancelled" : $"Command '{commandName}' timed out after {timeoutSeconds} seconds"
+                 });
+             }
+             catch (Exception ex)
+@@ -636,7 +704,7 @@
+                 responseJson = JsonConvert.SerializeObject(new
+                 {
+                     status = "error",
+-                    error = ex.Message
++                    error = _ownedEndpoint != null ? "owned_command_failed" : ex.Message
+                 });
+             }
+ 
+@@ -744,6 +812,7 @@
+ 
+         private async Task HandleSocketClosureAsync(string reason)
+         {
++            if (_ownedEndpoint != null) { ForceStop(); return; }
+             // Capture stack trace for debugging disconnection triggers
+             var stackTrace = new System.Diagnostics.StackTrace(true);
+             McpLog.Debug($"[WebSocket] HandleSocketClosureAsync called. Reason: {reason}\nStack trace:\n{stackTrace}");

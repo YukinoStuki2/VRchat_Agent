@@ -1,0 +1,11 @@
+{
+  "upstream_commit": "30d22075093d1d35dfb0091c1c7550e9ad948577",
+  "upstream_path": "Editor/Services/Transport/Transports/WebSocketTransportClient.cs",
+  "upstream_sha256": "79a911dd5cd2539d0ab6cdfb92defa873184f6d91dc1a64a213d6cf3fa7d8665",
+  "patch_sha256": "3c76b62e9d87e573d664af74e10d0ad769b7fb4791ea9ab3072c635adf43e656",
+  "additive_type": "CandidateOwnedWebSocketTransportClient",
+  "source_sha256": "58b3825e2dab66e6445c84325ca414da2232a0442fe473b50d38fe1ede818a79",
+  "assembly_reference_guid": "98f702da6ca044be59a864a9419c4eab",
+  "installed_upstream_files_modified": false,
+  "unity_import_verified": false
+}

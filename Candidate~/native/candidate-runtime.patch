@@ -1,0 +1,114 @@
+--- a/src/main.py
++++ b/src/main.py
+@@ -654,7 +654,12 @@
+ 
+ 
+ def main():
+-    """Entry point for uvx and console scripts."""
++    """Raw upstream startup is disabled in this explicitly patched candidate."""
++    raise SystemExit('candidate_entry_required: run Candidate~/runtime with explicit --project and --port')
++
++
++def _upstream_main_disabled():
++    """Preserved upstream implementation, not a candidate entry point."""
+     parser = argparse.ArgumentParser(
+         description="MCP for Unity Server",
+         formatter_class=argparse.RawDescriptionHelpFormatter,
+--- a/src/transport/plugin_hub.py
++++ b/src/transport/plugin_hub.py
+@@ -16,6 +16,7 @@
+ from core.config import config
+ from core.constants import API_KEY_HEADER
+ from models.models import MCPResponse
++from models.unity_response import normalize_unity_response
+ from transport.plugin_registry import PluginRegistry
+ from services.api_key_service import ApiKeyService
+ 
+@@ -116,6 +117,12 @@
+ class PluginHub(WebSocketEndpoint):
+     """Manages persistent WebSocket connections to Unity plugins."""
+ 
++    # Candidate shared egress contract. Raw native main is intentionally closed.
++    command_envelope_api = 1
++    instance_resolver: ClassVar[Any] = None
++    command_envelope: ClassVar[Any] = None
++    command_failed: ClassVar[Any] = None
++    connection_closed: ClassVar[Any] = None  # Synchronous revoke-only candidate hook.
+     encoding = "json"
+     KEEP_ALIVE_INTERVAL = 15
+     SERVER_TIMEOUT = 30
+@@ -250,6 +257,8 @@
+                 (sid for sid, ws in cls._connections.items() if ws is websocket), None)
+             if session_id:
+                 cls._connections.pop(session_id, None)
++                if cls.connection_closed is not None:
++                    cls.connection_closed(session_id)
+                 # Stop the ping loop for this session
+                 ping_task = cls._ping_tasks.pop(session_id, None)
+                 if ping_task and not ping_task.done():
+@@ -329,6 +338,7 @@
+             cls._pending[command_id] = {
+                 "future": future, "session_id": session_id}
+ 
++        result_valid = False
+         try:
+             msg = ExecuteCommandMessage(
+                 id=command_id,
+@@ -336,8 +346,15 @@
+                 params=params,
+                 timeout=unity_timeout_s,
+             )
++            payload = msg.model_dump()
++            if cls.command_envelope is None:
++                raise PermissionError("policy_unavailable")
++            payload["name"], payload["params"] = await cls.command_envelope(
++                session_id, payload["name"], payload["params"])
++            if cls._connections.get(session_id) is not websocket:
++                raise PermissionError("connection_changed")
+             try:
+-                await websocket.send_json(msg.model_dump())
++                await websocket.send_json(payload)
+             except Exception as exc:
+                 # If send fails (socket already closing), fail the future so callers don't hang.
+                 if not future.done():
+@@ -345,6 +362,8 @@
+                 raise
+             try:
+                 result = await asyncio.wait_for(future, timeout=server_wait_s)
++                result = normalize_unity_response(result)
++                result_valid = isinstance(result, dict) and result.get('success') is True
+                 return result
+             except PluginDisconnectedError as exc:
+                 return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
+@@ -357,6 +376,10 @@
+                     ).model_dump()
+                 raise
+         finally:
++            if not result_valid and cls.command_failed is not None:
++                cls.command_failed()
++            if future.done() and not future.cancelled():
++                future.exception()  # Drain send failures even when native caller returns an error.
+             async with lock:
+                 cls._pending.pop(command_id, None)
+ 
+@@ -459,6 +482,8 @@
+             # so they don't linger as orphans after a domain-reload reconnection race.
+             if evicted_session_id:
+                 evicted_ws = cls._connections.pop(evicted_session_id, None)
++                if cls.connection_closed is not None:
++                    cls.connection_closed(evicted_session_id)
+                 old_ping = cls._ping_tasks.pop(evicted_session_id, None)
+                 if old_ping and not old_ping.done():
+                     old_ping.cancel()
+@@ -1005,6 +1030,11 @@
+             user_id: User ID for session isolation in remote-hosted mode
+             retry_on_reload: If False, do not wait for session reconnect on reload.
+         """
++        # Candidate owns one admitted generation. Never wait/retry or probe a
++        # replacement generation through the upstream global discovery path.
++        if cls.instance_resolver is not None:
++            session_id = await cls.instance_resolver(unity_instance, user_id)
++            return await cls.send_command(session_id, command_type, params)
+         try:
+             session_id = await cls._resolve_session_id(
+                 unity_instance,

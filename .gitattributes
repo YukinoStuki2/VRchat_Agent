@@ -15,3 +15,9 @@
 /Candidate~/experiments/windows_tls_pipe.py text eol=lf
 /Candidate~/runtime/tls*.py text eol=lf
 /Candidate~/tests/test_tls*.py text eol=lf
+/Candidate~/runtime/** text eol=lf
+/Candidate~/launcher/** text eol=lf
+/Candidate~/native/** text eol=lf
+/Candidate~/dependencies/mcp-1.29.1/** text eol=lf
+/Candidate~/tests/test_bootstrap_runtime.py text eol=lf
+/Candidate~/tests/test_owned_launcher.py text eol=lf

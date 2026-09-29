@@ -1,0 +1,69 @@
+// Actual C# private Process + Python runtime on either OS. Synthetic Unity wire.
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Sockets;
+using System.Net.WebSockets;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using Yukino.VRChatAgent;
+internal static class EditorBootstrapCases
+{
+ static async Task<int> Main(string[] args)
+ {
+  foreach(bool dispose in new[]{false,true})
+  {
+   ClientWebSocket ws=null;Task peer=null;int port=0;
+   using(var owner=new EditorOwnerProcess())
+   {
+    async Task<bool> Connect(Uri endpoint,string token,byte[] pin)
+    {
+     port=endpoint.Port;ws=new ClientWebSocket();
+     ws.Options.RemoteCertificateValidationCallback=(_,certificate,chain,error)=>{
+      using(var hash=SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(certificate.GetRawCertData()))==Convert.ToBase64String(pin);
+     };
+     ws.Options.SetRequestHeader("Authorization","Bearer "+token);
+     await ws.ConnectAsync(endpoint,CancellationToken.None);
+     await Receive(ws);
+     await Send(ws,new JObject{["type"]="register",["project_hash"]="fixture-project",["project_name"]="TEST",["unity_version"]="FIXTURE"});
+     if((string)(await Receive(ws))["type"]!="registered")return false;
+     peer=Task.Run(async()=>{
+      try {
+       while(ws.State==WebSocketState.Open){
+        var command=await Receive(ws);
+        await Send(ws,new JObject{["type"]="command_result",["id"]=command["id"],
+         ["result"]=new JObject{["status"]="success",["result"]=new JObject{["success"]=true,["data"]=new JObject{["read_only"]=true}}}});
+       }
+      } catch(WebSocketException){} catch(ObjectDisposedException){} catch(IOException){}
+     });
+     return true;
+    }
+    async Task Close(){if(ws!=null){ws.Abort();if(peer!=null)await peer;ws.Dispose();}}
+    try
+    {
+     if(!await owner.StartAsync(args[0],args[1],"fixture-project",Connect,Close))return 3;
+     if(!owner.Ready)return 4;
+     int pid=owner.OwnerPid;
+     if(dispose){owner.Dispose();await Close();}else await owner.StopAsync();
+     if(owner.Ready || (!dispose && !owner.CleanupComplete))return 5;
+     try{using(var process=Process.GetProcessById(pid)){if(!process.HasExited)return 6;}}catch(ArgumentException){}
+     using(var probe=new TcpClient()){
+      try{await probe.ConnectAsync("127.0.0.1",port);return 7;}catch(SocketException){}
+     }
+     Console.WriteLine(dispose?"PASS ECP002 dispose-child-and-listener-absent":"PASS ECP001 ready-stop-session-child-and-listener");
+    }
+    finally{await Close();}
+   }
+  }
+  return 0;
+ }
+ static async Task Send(ClientWebSocket ws,JObject value){var bytes=Encoding.UTF8.GetBytes(value.ToString(Newtonsoft.Json.Formatting.None));await ws.SendAsync(new ArraySegment<byte>(bytes),WebSocketMessageType.Text,true,CancellationToken.None);}
+ static async Task<JObject> Receive(ClientWebSocket ws){
+  byte[] buffer=new byte[16384];int count=0;
+  while(count<buffer.Length){var message=await ws.ReceiveAsync(new ArraySegment<byte>(buffer,count,buffer.Length-count),CancellationToken.None);if(message.MessageType!=WebSocketMessageType.Text)throw new IOException();count+=message.Count;if(message.EndOfMessage)return JObject.Parse(Encoding.UTF8.GetString(buffer,0,count));}
+  throw new IOException();
+ }
+}

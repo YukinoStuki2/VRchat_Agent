@@ -54,6 +54,7 @@ def supervise_owned(raw, *, owned, stop=None, report=None):
             # Never print exceptions that may include headers or material.
             binding.failed.set()
         finally:
+            binding.ready.clear()
             if stop.is_set() and not binding.failed.is_set():halt.set()
             elif not binding.cancelled.is_set():binding.failed.set()
     thread=threading.Thread(target=observer,name='vrchat-owned-probe-'+str(owned.owner.port),daemon=False)
@@ -62,6 +63,7 @@ def supervise_owned(raw, *, owned, stop=None, report=None):
         result=supervise(c,binding=binding,stop=halt,report=report)
     finally:
         binding.cancelled.set()
+        binding.ready.clear()
         thread.join(timeout=10)
         binding.environment.clear()
     result['probe_cleanup_complete']=not thread.is_alive()

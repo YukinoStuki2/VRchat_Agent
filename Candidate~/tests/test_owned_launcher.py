@@ -88,6 +88,7 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(x['phase']=='running' for x in reports),reports)
         self.assertTrue(result['process_cleanup_complete'],result)
         self.assertTrue(result['probe_cleanup_complete'],result)
+        self.assertFalse(owned.binding.ready.is_set(),'stopped binding must not retain a ready latch')
         self.assertFalse(any(t.name.startswith('vrchat-owned-probe-') for t in threading.enumerate()))
         with socket.socket() as sock:self.assertNotEqual(sock.connect_ex(('127.0.0.1',raw['local_port'])),0)
         self.assertNotIn('PRIVATE KEY',repr(result)+repr(reports))

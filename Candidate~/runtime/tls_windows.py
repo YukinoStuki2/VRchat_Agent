@@ -59,7 +59,9 @@ class _PemPipe:
         result = win32event.WaitForMultipleObjects([self.event, self.stop], False, remaining)
         if result != 0:
             try:
-                win32file.CancelIoEx(self.handle, operation)
+                # All overlapped operations on this handle were issued by THIS
+                # worker thread; the pinned pywin32 exports CancelIo, not CancelIoEx.
+                win32file.CancelIo(self.handle)
             except pywintypes.error as error:
                 if error.winerror != 1168:  # ERROR_NOT_FOUND: already completed
                     raise

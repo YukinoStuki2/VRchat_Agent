@@ -1,4 +1,5 @@
 # Preserve reviewed Candidate Windows source bytes on every CI checkout.
+/.gitattributes text eol=lf
 /Candidate~/launcher/windows_processes.py text eol=lf
 /Candidate~/tests/test_launcher_candidate_windows.py text eol=lf
 /Candidate~/diagnostics/windows_handles.py text eol=lf

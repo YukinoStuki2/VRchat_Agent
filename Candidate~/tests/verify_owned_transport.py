@@ -47,7 +47,7 @@ async def main(label):
    doubled=work/'GateUnityDoubles.cs';doubled.write_text(text+'\ninternal static class WriteUnityCases {}\n')
    source=[p for p in source if p.name!='OwnedTransportCases.cs']+[doubled,UP/'Editor/Helpers/Response.cs',ROOT/'tests/unity-core/OwnedGatePeer.cs',*sorted(p for p in (ROOT/'package/Editor').rglob('*.cs') if 'OwnedTransport' not in p.parts)]
   if editor:source=[ROOT/'tests/unity-core/EditorOwnerPeer.cs' if p.name=='OwnedGatePeer.cs' else p for p in source]
-  freeze=source+[ROOT/'distribution/materialize_owned_transport.py',diff,diff.parent/'PROVENANCE.json',*shipped.iterdir()]+list((ROOT/'runtime').glob('*.py'))+list((ROOT/'launcher').glob('*.py'))+list((ROOT/'native/src').rglob('*.py'))+[ROOT/'tests/unity-core/WriteUnityStubs.cs',Path(__file__),ROOT/'tests/owned_descendants.py'];hashes={str(x):hashlib.sha256(x.read_bytes()).hexdigest() for x in freeze};report['input_sha256']=hashes
+  freeze=source+[ROOT/'distribution/materialize_owned_transport.py',diff,diff.parent/'PROVENANCE.json',*shipped.iterdir()]+list((ROOT/'runtime').glob('*.py'))+list((ROOT/'launcher').glob('*.py'))+list((ROOT/'native/src').rglob('*.py'))+[ROOT/'tests/unity-core/WriteUnityStubs.cs',Path(__file__),ROOT/'tests/owned_descendants.py',ROOT/'distribution/assemble_source.py',ROOT/'distribution/source-inputs.json',ROOT/'build_candidate.py'];hashes={str(x):hashlib.sha256(x.read_bytes()).hexdigest() for x in freeze};report['input_sha256']=hashes
   csproj=work/'OwnedTransport.csproj'
   application=[p for p in source if p.name in ('OwnedGatePeer.cs','OwnedTransportCases.cs','EditorOwnerPeer.cs') or ((ROOT/'package/Editor') in p.parents and p!=additive)]
   support=[p for p in source if p not in application]
@@ -85,8 +85,14 @@ async def main(label):
   if editor:
    if p.returncode==0:
     project=work/'FixtureProject';(project/'Assets').mkdir(parents=True)
-    package=work/'FixturePackage';package.mkdir();(package/'Runtime~').symlink_to(ROOT,target_is_directory=True)
-    await run(str(sys.executable),str(ROOT/'launcher/editor_owner.py'),str(project),str(package))
+    from assemble_source import collect
+    payload=collect(ROOT);package=work/'FixturePackage';package.mkdir()
+    for relative,data in payload.items():
+     destination=package/relative;destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(data)
+    report['source_payload_sha256']={name:hashlib.sha256(data).hexdigest() for name,data in payload.items()}
+    await run(str(sys.executable),str(package/'Runtime~/launcher/editor_owner.py'),str(project),str(package))
+    report['source_payload_unchanged']=({str(x.relative_to(package)):hashlib.sha256(x.read_bytes()).hexdigest() for x in package.rglob('*') if x.is_file()}==report['source_payload_sha256'])
+    assert report['source_payload_unchanged'] and not any(x.is_symlink() for x in package.rglob('*'))
    report['sources_unchanged']=all(hashlib.sha256(x.read_bytes()).hexdigest()==hashes[str(x)] for x in freeze)
    report['passed']=(p.returncode==0 and len(report['runs'])==1 and all(r['exit']==0 and r['pid_absent'] and r['descendants']['clean'] and 'private_editor_clean' in r['stdout'] and 'private_editor_ready' in r['stdout'] for r in report['runs']) and report['sources_unchanged'])
    out.write_text(json.dumps(report,indent=2));print(json.dumps({'passed':report['passed'],'evidence':str(out)}))

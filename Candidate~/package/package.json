@@ -1,0 +1,16 @@
+{
+  "name": "com.yukino.vrchat-agent",
+  "version": "0.2.0-preview.1",
+  "displayName": "Yukino VRChat Agent (Unreleased Candidate)",
+  "description": "Development candidate with explicitly gated local editor ownership. Not an approved installable release.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Yukino"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "com.coplaydev.unity-mcp": "10.2.0",
+    "com.unity.nuget.newtonsoft-json": "3.0.2"
+  },
+  "vpmDependencies": {}
+}

@@ -2,7 +2,7 @@ name: Candidate locked dependencies and run identities
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/experiments/windows_tls_pipe.py', 'Candidate~/runtime/tls*.py', 'Candidate~/tests/test_tls*.py', 'Candidate~/runtime/**', 'Candidate~/launcher/**', 'Candidate~/native/**', 'Candidate~/dependencies/mcp-1.29.1/**', 'Candidate~/tests/test_bootstrap_runtime.py', 'Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', '.gitattributes', '.github/workflows/candidate-dependencies.yml']
+    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/experiments/windows_tls_pipe.py', 'Candidate~/runtime/tls*.py', 'Candidate~/tests/test_tls*.py', 'Candidate~/runtime/**', 'Candidate~/launcher/**', 'Candidate~/native/**', 'Candidate~/dependencies/mcp-1.29.1/**', 'Candidate~/tests/test_bootstrap_runtime.py', 'Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', '.gitattributes', '.github/workflows/candidate-dependencies.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,14 +30,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dependency-evidence -Force | Out-Null
           git rev-parse HEAD | Set-Content dependency-evidence/commit.txt
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-before.json
           python -m venv "$env:RUNNER_TEMP/candidate-locked-env"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install exact hashed wheels (no resolver-only substitute)
         shell: pwsh
         run: |
-          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -m pip install --isolated --no-cache-dir --require-hashes --only-binary=:all: -r 'Candidate~/distribution/requirements.lock' 2>&1 | Tee-Object dependency-evidence/install.txt
+          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -m pip install --isolated --no-cache-dir --require-hashes --only-binary=:all: --report dependency-evidence/pip-install-report.json -r 'Candidate~/distribution/requirements.lock' 2>&1 | Tee-Object dependency-evidence/install.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -m pip check 2>&1 | Tee-Object dependency-evidence/pip-check.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -51,6 +51,19 @@ jobs:
           $raw = Get-Content dependency-evidence/identity-tests.txt -Raw
           if ($raw -notmatch 'Ran 4 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Identity tests incomplete or warning' }
           if ((Get-Content dependency-evidence/imports.txt -Raw) -match 'ResourceWarning') { throw 'Import ResourceWarning' }
+      - name: Collect actual locked Windows LICENSE and NOTICE files
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/tests/test_license_inventory.py' 2>&1 | Tee-Object dependency-evidence/license-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $raw = Get-Content dependency-evidence/license-tests.txt -Raw
+          if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'License checks incomplete' }
+          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/distribution/license_inventory.py' dependency-evidence/licenses 2>&1 | Tee-Object dependency-evidence/license-inventory.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-Content dependency-evidence/license-inventory.txt -Raw) -match 'ResourceWarning') { throw 'License ResourceWarning' }
+          $inventory = Get-Content dependency-evidence/licenses/inventory.json -Raw | ConvertFrom-Json
+          $installed = Get-Content dependency-evidence/installed.json -Raw | ConvertFrom-Json
+          if (-not $inventory.complete -or $inventory.active_lock_count -ne $installed.active_lock_count) { throw 'Incomplete license inventory' }
       - name: Bounded synthetic TLS pipe feasibility probe (not product approval)
         shell: pwsh
         run: |
@@ -100,7 +113,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-after.json
           if (Test-Path "$env:RUNNER_TEMP/candidate-locked-env") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/candidate-locked-env" }
           if (Test-Path "$env:RUNNER_TEMP/editor-csharp") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/editor-csharp" }

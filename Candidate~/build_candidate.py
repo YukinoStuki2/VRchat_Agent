@@ -20,18 +20,7 @@ GATES = ('implementation_complete', 'local_checks_passed',
          'independent_source_reviews_passed', 'windows_kernel_checks_passed')
 
 
-def build(package, proof, asset_base):
-    if (type(proof) is not dict or any(proof.get(k) is not True for k in GATES)
-            or proof.get('unity_verified') is not False
-            or proof.get('remaining_implementation_gaps') != []):
-        raise ValueError('incomplete candidate verification')
-    package = Path(package)
-    files = {}
-    for name, expected in proof.get('source_sha256', {}).items():
-        data = base.read_regular(package, name)
-        if hashlib.sha256(data).hexdigest() != expected:
-            raise ValueError('reviewed source drift: ' + name)
-        files[name] = data
+def validate_sources(files):
     required = {'package.json', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md'}
     if not required <= files.keys() or not any(n.endswith('.cs') for n in files):
         raise ValueError('incomplete package source')
@@ -55,6 +44,22 @@ def build(package, proof, asset_base):
         raise ValueError('wrong package identity')
     if any(k.startswith('legacy') for k in manifest):
         raise ValueError('implicit deletion forbidden')
+    return manifest
+
+
+def build(package, proof, asset_base):
+    if (type(proof) is not dict or any(proof.get(k) is not True for k in GATES)
+            or proof.get('unity_verified') is not False
+            or proof.get('remaining_implementation_gaps') != []):
+        raise ValueError('incomplete candidate verification')
+    package = Path(package)
+    files = {}
+    for name, expected in proof.get('source_sha256', {}).items():
+        data = base.read_regular(package, name)
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise ValueError('reviewed source drift: ' + name)
+        files[name] = data
+    manifest = validate_sources(files)
     filename = PACKAGE_ID + '-' + VERSION + '.zip'
     manifest['url'] = asset_base + filename
     files['package.json'] = base.json_bytes(manifest)

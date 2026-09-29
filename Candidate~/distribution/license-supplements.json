@@ -1,0 +1,16 @@
+{
+  "fastmcp-slim": {
+    "version": "3.4.7",
+    "license_expression": "Apache-2.0",
+    "upstream_commit": "758397efa66e2cedac95ada540001bc44a95a646",
+    "source_url": "https://raw.githubusercontent.com/PrefectHQ/fastmcp/758397efa66e2cedac95ada540001bc44a95a646/LICENSE",
+    "sdist_url": "https://files.pythonhosted.org/packages/12/ac/7924e803368d0758ee4d6b1259066550df78f58f0f9f8bfebd5a123e957d/fastmcp_slim-3.4.7.tar.gz",
+    "sdist_sha256": "06b32a358320a7dc2b2ee040ba89ea55ddc20763dff2949f384f7974b13b5d8f",
+    "pyproject_source_url": "https://raw.githubusercontent.com/PrefectHQ/fastmcp/758397efa66e2cedac95ada540001bc44a95a646/fastmcp_slim/pyproject.toml",
+    "pyproject_sha256": "c75d7da0a3f4d0c4a712d2f3f507ce21f2d82df7d7e62492487dbd66eb106e58",
+    "upstream_project_matches_sdist": true,
+    "files": {
+      "fastmcp-slim-3.4.7/LICENSE": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    }
+  }
+}

@@ -4,7 +4,7 @@
     {
       "source": "Packages~/com.yukino.vrchat-agent-launcher/Editor/Runtime~/windows_processes.py",
       "source_sha256": "0e5af911160be10b21918decce49c8a856333b697a6d3da38694236036480110",
-      "usage": "Byte-identical reuse; Linux fixture also reuses NativeProcess bounded stderr drain.",
+      "usage": "Derived from fixed MIT source. Candidate delta uses CreateProcessW STARTUPINFOEX HANDLE_LIST + JOB_LIST for atomic job membership; assign seam now checks IsProcessInJob. NativeProcess bounded stderr drain remains reused.",
       "destination": "launcher/windows_processes.py",
       "license": "MIT"
     },
@@ -18,7 +18,7 @@
     {
       "source": "Tests~/launcher_windows_live.py",
       "source_sha256": "eab6df7546dfee6dbf43e9dcc1f06a1561a3a7cb7e5fa84d2bbc59c5e7bfe453",
-      "usage": "Adapted package-relative module path, -B subprocess flags, and named W001-W004; real Windows-only tests, NOT run on Windows in this task.",
+      "usage": "Adapted package-relative module path and -B flags. W001-W004 ran on real Windows. Added W005 create/assign crash-window counterexample; first real Windows RED retained in evidence/launcher-atomic-job-red-evidence.json. Later gates must be read from their own evidence.",
       "destination": "tests/test_launcher_candidate_windows.py",
       "license": "MIT"
     },
@@ -38,7 +38,7 @@
     }
   ],
   "license_sha256": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
-  "byte_identical_windows_owner": true,
+  "byte_identical_windows_owner": false,
   "runtime_dependency": "Existing interpreter and Candidate~/runtime + native + dependencies/mcp-1.29.1 supplied by parent; launcher does not install or import MCP.",
   "auth_protocol_invented": false,
   "production_configuration_read": false

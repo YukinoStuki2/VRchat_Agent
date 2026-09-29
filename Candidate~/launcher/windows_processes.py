@@ -1,5 +1,6 @@
 """Windows CPython 3.11+ process ownership; import is inert on all platforms.
-Children stay suspended until assigned to our non-inheritable kill-on-close job.
+Children are born in our non-inheritable kill-on-close job, then resumed.
+Windows 10 / Server 2016+ JOB_LIST is required; no create-then-assign fallback.
 Never find/kill a process by port, executable name or reused PID.
 """
 import ctypes as C
@@ -26,6 +27,17 @@ class EXTENDED_LIMIT(C.Structure):
 class ACCOUNTING(C.Structure):
     _fields_=[(n,C.c_int64) for n in ('TotalUserTime','TotalKernelTime','ThisPeriodTotalUserTime','ThisPeriodTotalKernelTime')]+[(n,DWORD) for n in ('TotalPageFaultCount','TotalProcesses','ActiveProcesses','TotalTerminatedProcesses')]
 
+class STARTUPINFO(C.Structure):
+    _fields_=[('cb',DWORD),('lpReserved',C.c_wchar_p),('lpDesktop',C.c_wchar_p),
+              ('lpTitle',C.c_wchar_p)]+[(n,DWORD) for n in
+              ('dwX','dwY','dwXSize','dwYSize','dwXCountChars','dwYCountChars','dwFillAttribute','dwFlags')]+[
+              ('wShowWindow',C.c_uint16),('cbReserved2',C.c_uint16),('lpReserved2',C.c_void_p),
+              ('hStdInput',HANDLE),('hStdOutput',HANDLE),('hStdError',HANDLE)]
+class STARTUPINFOEX(C.Structure):
+    _fields_=[('StartupInfo',STARTUPINFO),('lpAttributeList',C.c_void_p)]
+class PROCESS_INFORMATION(C.Structure):
+    _fields_=[('hProcess',HANDLE),('hThread',HANDLE),('dwProcessId',DWORD),('dwThreadId',DWORD)]
+
 class WinAPI:
     def __init__(self):
         if os.name!='nt':raise OSError('Windows CPython required')
@@ -37,7 +49,12 @@ class WinAPI:
             'CreateJobObjectW':([C.c_void_p,C.c_wchar_p],HANDLE),
             'SetInformationJobObject':([HANDLE,C.c_int,C.c_void_p,DWORD],C.c_int),
             'QueryInformationJobObject':([HANDLE,C.c_int,C.c_void_p,DWORD,C.c_void_p],C.c_int),
-            'AssignProcessToJobObject':([HANDLE,HANDLE],C.c_int),
+            'IsProcessInJob':([HANDLE,HANDLE,C.POINTER(C.c_int)],C.c_int),
+            'InitializeProcThreadAttributeList':([C.c_void_p,DWORD,DWORD,C.POINTER(SIZE_T)],C.c_int),
+            'UpdateProcThreadAttribute':([C.c_void_p,DWORD,SIZE_T,C.c_void_p,SIZE_T,C.c_void_p,C.c_void_p],C.c_int),
+            'DeleteProcThreadAttributeList':([C.c_void_p],None),
+            'CreateProcessW':([C.c_wchar_p,C.c_wchar_p,C.c_void_p,C.c_void_p,C.c_int,DWORD,
+                               C.c_void_p,C.c_wchar_p,C.POINTER(STARTUPINFOEX),C.POINTER(PROCESS_INFORMATION)],C.c_int),
             'TerminateJobObject':([HANDLE,C.c_uint],C.c_int),
             'ResumeThread':([HANDLE],DWORD)}
         for name,(args,result) in signatures.items():
@@ -59,14 +76,18 @@ class WinAPI:
             self.checked(self.k.SetInformationJobObject(job,9,C.byref(limit),C.sizeof(limit)))
             return job
         except BaseException:self.close_handle(job);raise
-    def assign(self,job,process):self.checked(self.k.AssignProcessToJobObject(job,process))
+    def assign(self,job,process):
+        # Legacy caller seam now verifies membership established atomically at birth.
+        inside=C.c_int()
+        self.checked(self.k.IsProcessInJob(process,job,C.byref(inside)))
+        if not inside.value:raise OSError('Child was not created inside owned job')
     def resume(self,thread):
         if self.k.ResumeThread(thread)==0xffffffff:raise C.WinError(C.get_last_error())
     def terminate_job(self,job):self.checked(self.k.TerminateJobObject(job,1))
     def job_empty(self,job):
         info=ACCOUNTING();self.checked(self.k.QueryInformationJobObject(job,1,C.byref(info),C.sizeof(info),None))
         return info.ActiveProcesses==0
-    def create_suspended(self,args,env,callback):
+    def create_suspended(self,args,env,callback,job):
         # Explicit handle_list prevents leaking parent's unrelated inheritable handles.
         nullfd=os.open(os.devnull,os.O_RDWR);readfd=writefd=None;process=thread=None
         try:
@@ -75,11 +96,32 @@ class WinAPI:
                 readfd,writefd=os.pipe();os.set_inheritable(writefd,True)
             null=self.m.get_osfhandle(nullfd)
             err=self.m.get_osfhandle(writefd) if writefd is not None else null
-            startup=subprocess.STARTUPINFO();startup.dwFlags=subprocess.STARTF_USESTDHANDLES
-            startup.hStdInput=null;startup.hStdOutput=null;startup.hStdError=err
-            startup.lpAttributeList={'handle_list':list({null,err})}
-            flags=CREATE_SUSPENDED|subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.CREATE_NO_WINDOW|0x00000400
-            process,thread,pid,tid=self.w.CreateProcess(args[0],subprocess.list2cmdline(args),None,None,True,flags,env,None,startup)
+            if not job:raise ValueError('Owned job required')
+            if type(env) is not dict or any(type(k) is not str or type(v) is not str or not k or
+                    '=' in k or '\0' in k or '\0' in v for k,v in env.items()):
+                raise ValueError('Invalid child environment')
+            startup=STARTUPINFOEX();startup.StartupInfo.cb=C.sizeof(startup)
+            startup.StartupInfo.dwFlags=subprocess.STARTF_USESTDHANDLES
+            startup.StartupInfo.hStdInput=null;startup.StartupInfo.hStdOutput=null;startup.StartupInfo.hStdError=err
+            size=SIZE_T()
+            self.k.InitializeProcThreadAttributeList(None,2,0,C.byref(size))
+            if C.get_last_error()!=122 or not size.value:raise C.WinError(C.get_last_error())
+            attributes=C.create_string_buffer(size.value)
+            self.checked(self.k.InitializeProcThreadAttributeList(attributes,2,0,C.byref(size)))
+            try:
+                startup.lpAttributeList=C.cast(attributes,C.c_void_p)
+                allowed=list({null,err});handles=(HANDLE*len(allowed))(*allowed);jobs=(HANDLE*1)(job)
+                # Documented HANDLE_LIST (2) and JOB_LIST (13), both input attributes.
+                self.checked(self.k.UpdateProcThreadAttribute(attributes,0,0x20002,handles,C.sizeof(handles),None,None))
+                self.checked(self.k.UpdateProcThreadAttribute(attributes,0,0x2000D,jobs,C.sizeof(jobs),None,None))
+                environment=C.create_unicode_buffer('\0'.join(k+'='+env[k] for k in sorted(env,key=str.upper))+'\0')
+                command=C.create_unicode_buffer(subprocess.list2cmdline(args))
+                info=PROCESS_INFORMATION()
+                flags=CREATE_SUSPENDED|subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.CREATE_NO_WINDOW|0x00000400|0x00080000
+                self.checked(self.k.CreateProcessW(args[0],command,None,None,True,flags,environment,None,C.byref(startup),C.byref(info)))
+                process,thread=info.hProcess,info.hThread
+            finally:
+                self.k.DeleteProcThreadAttributeList(attributes)
             result=NativeProcess(self,process,thread,readfd,callback);readfd=None
             return result
         except BaseException:
@@ -148,7 +190,7 @@ class OwnedProcesses:
     def alive(self):return not self.closed and self.api.parent_alive(self.parent)
     def spawn(self,args,env,stderr_line_callback=None):
         if self.closed or not self.alive():raise OSError('Parent unavailable')
-        child=self.api.create_suspended(args,env,stderr_line_callback)
+        child=self.api.create_suspended(args,env,stderr_line_callback,self.job)
         try:
             self.api.assign(self.job,child.handle)
             self.api.resume(child.thread)

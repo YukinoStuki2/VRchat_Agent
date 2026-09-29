@@ -84,7 +84,7 @@ jobs:
           & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/tests/test_editor_owner.py' 2>&1 | Tee-Object dependency-evidence/editor-owner-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $raw = Get-Content dependency-evidence/editor-owner-tests.txt -Raw
-          if ($raw -notmatch 'Ran 7 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Editor owner tests incomplete or warning' }
+          if ($raw -notmatch 'Ran 8 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Editor owner tests incomplete or warning' }
       - name: Verify unchanged bytes and remove owned environment
         if: always()
         shell: pwsh

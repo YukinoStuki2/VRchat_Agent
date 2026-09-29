@@ -142,6 +142,22 @@ os._exit(0)
             if parent.returncode is None:parent.kill();await parent.communicate()
             if pin is not None:pin.close()
 
+    async def test_EB008_actual_interpreter_parent_and_private_pipes(self):
+        code = """import os,sys,json
+sys.path.insert(0,sys.argv[1])
+from launcher.editor_owner import private_pipes
+row={'pid':os.getpid(),'ppid':os.getppid()}
+try:row['private_pipes']=private_pipes()
+except Exception as exc:row['error_type']=type(exc).__name__
+print(json.dumps(row),flush=True)
+"""
+        p=await asyncio.create_subprocess_exec(sys.executable,'-B','-c',code,str(ROOT),
+            env=environment(),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+        out,err=await asyncio.wait_for(p.communicate(),5)
+        self.assertEqual(p.returncode,0)
+        row=json.loads(out)
+        self.assertEqual(row,{'pid':p.pid,'ppid':os.getpid(),'private_pipes':True})
+
     async def test_EB004_nonpipe_output_refused(self):
         self.assertTrue(ENTRY.exists())
         with tempfile.TemporaryFile() as output:

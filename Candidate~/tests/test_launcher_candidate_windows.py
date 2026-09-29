@@ -104,6 +104,26 @@ o.spawn([sys.executable,'-B','-I','-c','import time;time.sleep(60)'],dict(os.env
     try:self.assertEqual(safety.api.w.WaitForSingleObject(handle,5000),0,'test fixture cleanup failed')
     finally:safety.api.close_handle(handle)
 
+ def test_W006_unicode_env_and_explicit_handle_list_survive_native_creation(self):
+  owner=m.OwnedProcesses(os.getpid());ready=threading.Event();rows=[]
+  readfd,writefd=os.pipe();os.set_inheritable(writefd,True)
+  stray=owner.api.m.get_osfhandle(writefd)
+  code="""import ctypes as c,os,sys,json,time
+k=c.WinDLL('kernel32',use_last_error=True); k.WriteFile.argtypes=[c.c_void_p,c.c_void_p,c.c_uint32,c.POINTER(c.c_uint32),c.c_void_p];k.WriteFile.restype=c.c_int
+n=c.c_uint32(); leaked=bool(k.WriteFile(int(sys.argv[1]),b'X',1,c.byref(n),None))
+print(json.dumps({'stray_writable':leaked,'value':os.environ.get('CANDIDATE_FIXTURE_UNICODE'),'arg':sys.argv[2]}),file=sys.stderr,flush=True)
+time.sleep(60)
+"""
+  def line(text):rows.append(text);ready.set()
+  try:
+   env=dict(os.environ);env['CANDIDATE_FIXTURE_UNICODE']='中文 空格'
+   process=owner.spawn([sys.executable,'-B','-I','-c',code,str(stray),'引号 " 与尾斜线\\'],env,line)
+   self.assertTrue(ready.wait(10));value=json.loads(rows[0])
+   self.assertEqual(value,{'stray_writable':False,'value':'中文 空格','arg':'引号 " 与尾斜线\\'})
+   self.assertTrue(owner.close())
+  finally:
+   self.assertTrue(owner.close());os.close(writefd);os.close(readfd)
+
 if __name__=='__main__':
  if os.name!='nt':raise SystemExit('Real Windows test requires Windows; do not count a skip as a pass')
  unittest.main(verbosity=2)

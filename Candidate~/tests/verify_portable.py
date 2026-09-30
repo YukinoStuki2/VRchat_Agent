@@ -22,6 +22,9 @@ def compile_environment(runtime_environment):
             value = os.environ.get(key)
             if value:
                 result[key] = value
+        home = Path(runtime_environment['USERPROFILE'])
+        result['APPDATA'] = str(home/'AppData/Roaming')
+        result['LOCALAPPDATA'] = str(home/'AppData/Local')
     return result
 
 

@@ -25,9 +25,10 @@ class PortableVerifierTests(unittest.TestCase):
         runtime = {'HOME': '/owned', 'USERPROFILE': '/owned', 'PATH': '/system'}
         fixed = dict(runtime)
         additions = {'ProgramFiles': 'C:/Program Files', 'ProgramFiles(x86)': 'C:/Program Files (x86)', 'ProgramData': 'C:/ProgramData'}
-        with patch.object(m.sys, 'platform', 'win32'), patch.dict(os.environ, {**additions, 'GH_TOKEN':'fixture-secret', 'HTTPS_PROXY':'fixture-proxy'}, clear=True):
+        with patch.object(m.sys, 'platform', 'win32'), patch.dict(os.environ, {**additions, 'GH_TOKEN':'fixture-secret', 'HTTPS_PROXY':'fixture-proxy', 'APPDATA':'C:/private/roaming', 'LOCALAPPDATA':'C:/private/local'}, clear=True):
             actual = m.compile_environment(runtime)
-        self.assertEqual(actual, {**runtime, **additions})
+        owned_appdata = {'APPDATA': str(Path(runtime['USERPROFILE'])/'AppData/Roaming'), 'LOCALAPPDATA': str(Path(runtime['USERPROFILE'])/'AppData/Local')}
+        self.assertEqual(actual, {**runtime, **additions, **owned_appdata})
         self.assertEqual(runtime, fixed)
         with patch.object(m.sys, 'platform', 'linux'):
             self.assertEqual(m.compile_environment(runtime), runtime)

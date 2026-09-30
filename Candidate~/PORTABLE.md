@@ -32,3 +32,26 @@ The final product packer's independent-review and implementation-completeness ga
 The Windows **compilation step only** receives ProgramFiles/ProgramFiles(x86)/ProgramData and task-owned APPDATA/LOCALAPPDATA paths required by NuGet; runtime subprocesses keep their original restrictive environment. Reports observe TemporaryDirectory cleanup after both success and failure while propagating the original failure.
 
 Unity traffic is explicitly synthetic in this C# fixture. It does not prove Unity import/Mono behavior, actual Hermes/Codex brand/session binding or task continuation. `.github/workflows/candidate-portable.yml` executes the Windows path on a real Windows runner and uploads raw failures as well as successful evidence. Never replace an unsuccessful Windows run with a Linux result.
+
+## Default Editor entry (parent-tested development candidate)
+
+The local window defaults to the package's fixed `Runtime~/python` interpreter.
+A missing/invalid portable entry is a refusal, never a search of PATH or a fallback
+to a typed host interpreter. Host Python remains an explicit, non-persistent
+**development-only** local checkbox. Import/repaint/window-open remain inert;
+starting a connection does not approve a task or identify a Hermes/Codex process.
+
+After dependencies and notices are collected, the builder writes
+`Runtime~/portable-launch.json` with exact schema, platform, Python version and
+SHA-256 for the platform's fixed interpreter plus `launcher/editor_owner.py` and
+`launcher/direct_python.py`. C# rejects duplicate/unknown fields, wrong platform,
+missing/changed files, oversized descriptor/files, and reparse ancestors before
+running the metadata preflight. It selects only Windows/Linux x64; no executable
+path is taken from the descriptor. Relocation preserves these relative entries.
+
+This is **launch-entry integrity**, not a signed provenance assertion or a complete
+runtime dependency scan. Whoever can rewrite the package can also rewrite this
+unsigned descriptor. It does not provide atomic hash-to-exec file identity,
+protection against local administrators, Unity/Mono compatibility approval, or
+permission to publish/install the full product. Final packaging provenance,
+client binding, task continuation and independent review remain separate gates.

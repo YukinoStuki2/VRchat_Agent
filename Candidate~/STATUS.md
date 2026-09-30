@@ -2,7 +2,17 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
-## 便携运行时增量（实现 `87a0b1d`，当前）
+## 默认便携入口增量（实现 `5ef9b5d`，当前）
+
+- 本地窗口默认选择随包固定Python，不再要求用户填写解释器路径。外部Python仅在明确勾选“开发测试”后使用，选项/凭据不持久化。缺包、错误平台或入口校验失败不会搜索PATH/回退外部Python，也不会自动创建连接或批准任务。
+- builder在依赖/许可成功后写入固定格式`Runtime~/portable-launch.json`；启动前C#核对Linux/Windows x64、Python3.11.16、解释器/两个引导文件的字节hash，拒绝重复/未知字段、额外路径、缺失/变化、超限和既有链接/junction祖先。**只是入口完整性**：清单未签名、不扫描所有依赖、不是对抗能替换包的本地进程，也不保证hash到exec原子身份；见`PORTABLE.md`。
+- 同一实现提交`5ef9b5d5f62c35baf5dc0c5c43cba5d77898dbba`：实际搬迁载荷后，C#仅接收包目录并走默认解析，Linux28/28、Windows27/27相关Python回归通过，每端ECP001/ECP002启停/Dispose通过、PS001–PS004固定路径/描述/入口字节/链接拒绝通过。Windows CI`36734831866`成功，473份文件前后/提交一致；Linux451份冻结输入与提交一致。各组不相加。
+- 编译后的核心/协议67个唯一ID回归通过，源码稳定；源载荷UI替身实测默认模式拒绝typed外部Python、显式开发模式可启动/停止/重载，9后代/3监听清理。真实便携链路Linux另有6后代/2监听清理，不混合计数。测试临时目录与导出源码树已删除并实际检查。
+- 一次并行源UI回归退出3且外层clean=false，安全清理完成；未记录到精确拒绝分类，不能确定根因。待其他测试退出后同一源码隔离重跑通过。原失败及`-I`漏加测试辅助模块路径的调用错误均保留。不是“所有尝试都通过”。父级证据`evidence/portable-entry-final-parent-acceptance.json`。
+- 新builder用例PP009、选择器PS001/PS002与默认UI行为有RED→GREEN；哈希/链接补充用例属于通过后的characterization，不冒称都独立复现。小组回归：便携9、driver4、源码布局6、许可5、原打包器4通过；仍无新独立批准。
+- **仍未完成**：最终安装包整合、真实Hermes/Codex分别绑定与停止、任务暂停续接、最终独立复核、真实Candidate VPM/Unity/ALCOM验收。没有生成安装ZIP；候选分支开发不等于发布，不改main、历史发布、公网VPM索引或真实客户端配置。
+
+## 便携运行时增量（实现 `87a0b1d`，历史）
 
 - 已实现并实际运行**便携开发运行目录**：固定 Astral PBS `20260929` / CPython `3.11.16`，Linux GNU x64 / Windows x64，归档hash、对应完整发行的元数据与每平台19份许可证原字节绑定。不是空白操作系统/所有Unity版本保证；Linux glibc、Windows vcruntime前置与最终分发合规仍需产品层审查。细节见 `PORTABLE.md`。
 - 同一实现提交 `87a0b1d5d84cb403cd22b88eef250b6ea5171b64`：从独立Git树构建并搬迁后，Linux **28/28**、Windows **27/27**实际Python身份/引导/所有者/TLS回归通过；每端实际C#私有管道/TLS/MCP启停和Dispose **ECP001/ECP002**通过。Unity wire仍为synthetic fixture，不是Unity Editor/Mono或客户端品牌身份验收。各测试组不相加。

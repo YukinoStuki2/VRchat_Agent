@@ -26,6 +26,13 @@ internal static class EditorOwnerPeer
   var draw=typeof(CandidateWindow).GetMethod("OnGUI",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
   UnityEditor.EditorGUILayout.NextText=args[0];draw.Invoke(window,null);
   if(CandidateSession.HasLocalOwner)return 13;
+  // A typed external path must not opt out of the default portable mode.
+  GUILayout.NextButton="启动本地受控连接";draw.Invoke(window,null);
+  if(CandidateSession.HasLocalOwner)throw new Exception("PE001 default mode started external Python");
+  var option=typeof(CandidateWindow).GetField("externalPython",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+  if(option==null)throw new Exception("PE001 explicit developer opt-in missing");
+  option.SetValue(window,true);
+  UnityEditor.EditorGUILayout.NextText=args[0];
   GUILayout.NextButton="启动本地受控连接";draw.Invoke(window,null);
   var deadline=System.Diagnostics.Stopwatch.StartNew();
   while(!CandidateSession.LocalOwnerReady && deadline.Elapsed.TotalSeconds<15)await Task.Delay(25);

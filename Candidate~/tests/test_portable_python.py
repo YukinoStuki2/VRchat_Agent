@@ -19,6 +19,20 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP009_launch_descriptor_pins_fixed_entry_bytes(self):
+        m=module()
+        self.assertTrue(hasattr(m, 'write_launch_descriptor'), 'portable launch descriptor missing')
+        with tempfile.TemporaryDirectory() as td:
+            package=Path(td)/'package'
+            for relative in ('python/bin/python3.11', 'launcher/editor_owner.py', 'launcher/direct_python.py'):
+                file=package/'Runtime~'/relative;file.parent.mkdir(parents=True, exist_ok=True);file.write_bytes(relative.encode())
+            m.write_launch_descriptor(package, 'linux-x86_64', '3.11.16')
+            descriptor=json.loads((package/'Runtime~/portable-launch.json').read_bytes())
+            self.assertEqual(descriptor, {'schema':1, 'platform':'linux-x86_64', 'python_version':'3.11.16',
+                'files':{relative:hashlib.sha256(relative.encode()).hexdigest() for relative in
+                ('python/bin/python3.11','launcher/editor_owner.py','launcher/direct_python.py')}})
+            with self.assertRaises(FileExistsError):m.write_launch_descriptor(package, 'linux-x86_64', '3.11.16')
+
     def test_PP008_offline_wheels_require_exact_local_root_and_pinned_bytes(self):
         import inspect
         m=module()

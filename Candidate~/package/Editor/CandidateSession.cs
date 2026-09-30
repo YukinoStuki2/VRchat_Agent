@@ -34,12 +34,17 @@ namespace Yukino.VRChatAgent
         internal static bool HasLocalOwner => localOwner != null;
         internal static bool LocalOwnerReady => localOwner != null && localOwner.Ready && LiveConnection() != "";
         internal static string LocalOwnerStatus { get; private set; } = "未启动";
-        internal static async Task<bool> StartLocalOwnerAsync(string python)
+        internal static async Task<bool> StartLocalOwnerAsync(string python = null)
         {
             if (localOwner != null || ownedClient != null || EditorApplication.isCompiling ||
                 EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return false;
             var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CandidateSession).Assembly);
             string entry = package == null ? "" : Path.Combine(package.resolvedPath, "Runtime~", "launcher", "editor_owner.py");
+            if (python == null)
+            {
+                try { python = EditorOwnerProcess.ResolvePortablePython(package?.resolvedPath); }
+                catch { LocalOwnerStatus = "随包运行时缺失、不匹配或入口校验失败；未启动且不回退本机Python"; return false; }
+            }
             if (!Path.IsPathRooted(python) || !File.Exists(python) || !File.Exists(entry))
             { LocalOwnerStatus = "固定运行时或Python缺失，未启动"; return false; }
             var owner = new EditorOwnerProcess(); localOwner = owner; localStop = null;

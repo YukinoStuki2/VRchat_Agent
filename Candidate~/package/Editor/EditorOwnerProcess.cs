@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -11,6 +13,66 @@ namespace Yukino.VRChatAgent
     // Local, single-use owner. Never registered as a tool or given model-provided paths.
     internal sealed class EditorOwnerProcess : IDisposable
     {
+        // Fixed package-relative entry only; no PATH search or system fallback.
+        internal static string ResolvePortablePython(string package)
+        {
+            if (string.IsNullOrWhiteSpace(package) || !Path.IsPathRooted(package))
+                throw new InvalidOperationException("portable_package_required");
+            bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
+            if ((!windows && !RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) ||
+                RuntimeInformation.ProcessArchitecture != Architecture.X64)
+                throw new InvalidOperationException("portable_platform_unsupported");
+            string executable = windows ? "python/python.exe" : "python/bin/python3.11";
+            string python = Path.Combine(Path.GetFullPath(package), "Runtime~", executable);
+            string runtime = Path.Combine(Path.GetFullPath(package), "Runtime~");
+            var descriptor = Parse(new UTF8Encoding(false, true).GetString(
+                PortableBytes(Path.Combine(runtime, "portable-launch.json"), 8192)));
+            if (!descriptor.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(
+                new[] {"files", "platform", "python_version", "schema"}) ||
+                descriptor["schema"].Type != JTokenType.Integer || (int)descriptor["schema"] != 1 ||
+                descriptor["platform"].Type != JTokenType.String ||
+                (string)descriptor["platform"] != (windows ? "windows-x86_64" : "linux-x86_64") ||
+                descriptor["python_version"].Type != JTokenType.String || (string)descriptor["python_version"] != "3.11.16" ||
+                !(descriptor["files"] is JObject files))
+                throw new InvalidOperationException("portable_descriptor_invalid");
+            var names = new[] {executable, "launcher/editor_owner.py", "launcher/direct_python.py"};
+            if (!files.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(names.OrderBy(x=>x)))
+                throw new InvalidOperationException("portable_file_set_invalid");
+            foreach (string name in names)
+            {
+                if (files[name].Type != JTokenType.String) throw new InvalidOperationException("portable_hash_invalid");
+                using (var hash = SHA256.Create())
+                {
+                    string digest = BitConverter.ToString(hash.ComputeHash(PortableBytes(Path.Combine(runtime, name), 128 * 1024 * 1024))).Replace("-", "").ToLowerInvariant();
+                    if (digest != (string)files[name]) throw new InvalidOperationException("portable_entry_drift");
+                }
+            }
+            return python;
+        }
+
+        static byte[] PortableBytes(string path, int limit)
+        {
+            // Reject existing links/junctions, but do not claim OS sandbox/atomic
+            // hash-to-exec identity. An actor able to replace the package is trusted.
+            for (string current = path; current != null; current = Path.GetDirectoryName(current))
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("portable_reparse_refused");
+            using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (input.Length > limit) throw new IOException("portable_file_oversize");
+                using (var output = new MemoryStream())
+                {
+                    var buffer = new byte[8192]; int count;
+                    while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                    {
+                        if (output.Length + count > limit) throw new IOException("portable_file_oversize");
+                        output.Write(buffer, 0, count);
+                    }
+                    return output.ToArray();
+                }
+            }
+        }
+
         Process process;
         Task stderrDrain, monitor, starting;
         Func<Task> disconnect;

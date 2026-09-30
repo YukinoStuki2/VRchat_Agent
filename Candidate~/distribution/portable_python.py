@@ -82,6 +82,20 @@ def check_wheels(report, lock, installed, wheelhouse=None):
     return selected
 
 
+def write_launch_descriptor(package, platform_key, version):
+    """Launch-entry integrity only, not a signature or full-runtime approval."""
+    executable = {'linux-x86_64': 'python/bin/python3.11', 'windows-x86_64': 'python/python.exe'}[platform_key]
+    runtime = Path(package)/'Runtime~'
+    paths = (executable, 'launcher/editor_owner.py', 'launcher/direct_python.py')
+    files = {}
+    for name in paths:
+        path = runtime/name
+        if path.is_symlink() or not path.is_file(): raise ValueError('launch_file_invalid')
+        files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    with (runtime/'portable-launch.json').open('x', encoding='utf-8') as output:
+        json.dump({'schema':1, 'platform':platform_key, 'python_version':version, 'files':files}, output, indent=2)
+
+
 def build(archive, destination, wheelhouse=None):
     """Task-owned dev directory only. No ZIP, VPM, config or existing env writes."""
     system = platform.system().lower()
@@ -138,6 +152,7 @@ def build(archive, destination, wheelhouse=None):
             target = package/'Runtime~/python-notices'/name
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)
         shutil.copytree(evidence/'wheel-notices', package/'Runtime~/wheel-notices')
+        write_launch_descriptor(package, key, pins['python_version'])
         result = {'scope': 'Local portable development runtime, not product/Unity acceptance',
             'platform': key, 'dependency_source': 'offline-wheelhouse' if wheelhouse else 'pypi', 'python_archive_sha256': pin['sha256'], 'python_release': pins['release'],
             'executable': str(executable.relative_to(destination)), 'python_identity': observed,

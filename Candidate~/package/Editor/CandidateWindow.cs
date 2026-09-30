@@ -7,6 +7,7 @@ namespace Yukino.VRChatAgent
     public sealed class CandidateWindow : EditorWindow
     {
         Vector2 scroll;
+        bool externalPython; // Explicit development opt-in; default never searches host Python.
         string python = ""; // Local window only; never persists credentials or client configuration.
         [MenuItem("Tools/VRChat Agent/候选权限与清单")]
         static void Open() { GetWindow<CandidateWindow>("候选权限与清单"); }
@@ -18,7 +19,9 @@ namespace Yukino.VRChatAgent
             EditorGUILayout.LabelField("当前工程", CoplayProjectIdentity.GetProjectHash());
             EditorGUILayout.LabelField("本地连接", CandidateSession.LocalOwnerReady ? "门控已就绪，客户端另行绑定" : CandidateSession.LocalOwnerStatus);
             EditorGUI.BeginDisabledGroup(CandidateSession.HasLocalOwner);
-            python = EditorGUILayout.TextField("本机Python 3.11绝对路径", python);
+            externalPython = EditorGUILayout.ToggleLeft("开发测试：改用本机Python（不属于便携交付）", externalPython);
+            if (externalPython) python = EditorGUILayout.TextField("本机Python 3.11绝对路径", python);
+            else EditorGUILayout.LabelField("运行时", "随包固定Python；缺失或校验失败不自动回退");
             if (GUILayout.Button("启动本地受控连接")) StartLocal();
             EditorGUI.EndDisabledGroup();
             EditorGUI.BeginDisabledGroup(!CandidateSession.HasLocalOwner);
@@ -64,7 +67,7 @@ namespace Yukino.VRChatAgent
         }
         async void StartLocal()
         {
-            try { await CandidateSession.StartLocalOwnerAsync(python); }
+            try { await CandidateSession.StartLocalOwnerAsync(externalPython ? python : null); }
             catch { CandidateSession.Gate.StopAll("本地连接启动失败，未批准任务"); }
             Repaint();
         }

@@ -69,7 +69,7 @@ def main():
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     assert hasattr(module,'build'),'portable runtime assembly not implemented'
     freeze=[ROOT/name for name in json.loads((ROOT/'distribution/source-inputs.json').read_text())['files']]
-    freeze += list((ROOT/'tests').glob('*.py'))+list((ROOT/'distribution').rglob('*'))+list((ROOT/'tests/unity-core').glob('*.cs'))+[Path(__file__), ROOT.parent/'VPM~/build_repository.py', ROOT/'build_candidate.py']
+    freeze += list((ROOT/'tests').glob('*.py'))+list((ROOT/'distribution').rglob('*'))+list((ROOT/'tests/unity-core').glob('*.cs'))+list((ROOT/'tests/unity-core').glob('*.csproj'))+[Path(__file__), ROOT.parent/'VPM~/build_repository.py', ROOT/'build_candidate.py']
     hashes={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in freeze if p.is_file() and '__pycache__' not in p.parts}
     def inventory(folder):
         return {str(p.relative_to(folder)): ('link:'+os.readlink(p) if p.is_symlink() else hashlib.sha256(p.read_bytes()).hexdigest()) for p in folder.rglob('*') if p.is_file() or p.is_symlink()}
@@ -89,13 +89,16 @@ def main():
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
         build=compile_fixture(command,env,report)
         assert build.returncode==0,build.stdout+build.stderr
+        selection=subprocess.run([str(args.dotnet),str(out/'EditorBootstrapCases.dll'),'--selection-tests'],env=env,capture_output=True,text=True,timeout=20)
+        report['selection']={'code':selection.returncode,'stdout':selection.stdout,'stderr':selection.stderr}
+        assert selection.returncode==0 and all('PASS PS00'+str(i) in selection.stdout for i in range(1,5)),selection.stdout+selection.stderr
         async def execute_csharp():
             tracker=None
             if sys.platform=='linux':
                 from owned_descendants import Descendants
                 tracker=Descendants()
             done=asyncio.Event()
-            proc=await asyncio.create_subprocess_exec(str(args.dotnet),str(out/'EditorBootstrapCases.dll'),str(executable),str(relocated/'package/Runtime~/launcher/editor_owner.py'),env=env,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+            proc=await asyncio.create_subprocess_exec(str(args.dotnet),str(out/'EditorBootstrapCases.dll'),str(relocated/'package'),env=env,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
             watch=asyncio.create_task(tracker.watch(proc.pid,done)) if tracker else None
             try:
                 stdout,stderr=await asyncio.wait_for(proc.communicate(),90)
@@ -110,7 +113,7 @@ def main():
             return subprocess.CompletedProcess([],proc.returncode,stdout.decode(),stderr.decode())
         sys.path.insert(0,str(ROOT/'tests'))
         run=asyncio.run(execute_csharp())
-        report['csharp']={'code':run.returncode,'stdout':run.stdout,'stderr':run.stderr}
+        report['csharp']={'code':run.returncode,'stdout':run.stdout,'stderr':run.stderr,'entry_mode':'default-package-relative'}
         assert run.returncode==0 and 'PASS ECP001' in run.stdout and 'PASS ECP002' in run.stdout,run.stdout+run.stderr
         report['regressions']=[]
         suites=['test_run_identity.py','test_bootstrap_runtime.py','test_owned_launcher.py','test_editor_owner.py','test_tls_windows.py' if os.name=='nt' else 'test_tls_context.py']

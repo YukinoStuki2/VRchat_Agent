@@ -2,7 +2,18 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
-## 默认便携入口增量（实现 `5ef9b5d`，当前）
+## 原生客户端兼容性与内部探针增量（当前）
+
+- 生产增量 `eaaad18d111ec7e3db60e1ec800221116e7e9321`：内部就绪探针改用独立 `probe:<run>`，不再持Hermes角色令牌。已签发有限身份仅发现/调用`agent_status`；prepare、stop、材质/原生入口在派发前拒绝，Unity audience拒绝该角色。RI005、AU006、AU007保留RED/GREEN。
+- 冻结父级runtime **99/99**、新编译C#核心/协议 **67个唯一ID**通过，分别280/159份输入前后及当前生产字节一致。各组不相加；C#使用Unity API替身，不是Editor/Mono验收。
+- 原生验证器 `422c20caab267fa96b2d01253afbc9717242ce8e`：实际安装Hermes MCP引擎和固定官方Codex0.159.2 app-server分别执行认证工具调用，未连接Unity时拒绝；无批准计划的stop只返回本地停止且`unity_confirmed:false`。两客户端各创建/成功DELETE一条独立会话；runtime会话清空，3个观测后代/1监听、临时home均清理；359份Candidate输入和原生入口字节稳定，输出/临时文件未发现生成令牌或私钥。未调用模型、登录账号、改现用客户端配置。Hermes整体agent工具暴露与完整依赖锁未在这里验证。
+- 原冻结native轮捕获3个残留Git后代，失败并安全清理，未覆写为通过。取证定位到Codex默认插件同步对`openai/plugins.git`的ls-remote链。仅测试home显式关闭原生`features.plugins`后，三次带取证复测和最终Git树复测通过；这是缩小测试无关活动，不是修复/批准上游默认插件生命周期。
+- 同一生产增量的默认便携搬迁回归：Linux **29项**、Windows **28项**，每端选择器4项及C#启停2项通过。Windows最终run `36741024583`、476份受检文件前后/提交一致；Linux453份冻结输入一致。各端74份实际wheel精确匹配锁，85/99份许可证正文分别回读hash；源码/搬迁载荷/清理均核对。
+- Windows认证组首轮run `36740421526`在AU006出现`ASGI callable returned without completing response`并超时，保留失败及清理产物。CI改为相同7方法各在新进程有界运行，不减少断言、不跳过；`85078c5a8c9e5d30d13bbd70d4a32941d59794e5`的run `36741472151`全程通过，7项认证、身份5、TLS5、入口6、监督器4、Editor入口8、C#2等均通过；294份源前后/提交一致、venv及构建清理。未证明原共享进程失败的全部内部根因，不称已修复SDK。
+- 证据：`evidence/native-clients-final-parent-acceptance.json`；接口/来源/重放边界见`CLIENTS.md`。候选分支已推送读回，main、历史发布和公网VPM索引不动。
+- **仍未实现/验收**：可信客户端凭据交付和显式分别绑定，真实批准任务的双客户端停止/撤权，任务暂停续接、完整安装包、独立复核、真实Unity/VPM/ALCOM验收。Codex自定义CA是附加信任而非独占证书固定；令牌角色也不是客户端品牌证明。没有生成安装ZIP或对当前产品自授批准。
+
+## 默认便携入口增量（实现 `5ef9b5d`，历史）
 
 - 本地窗口默认选择随包固定Python，不再要求用户填写解释器路径。外部Python仅在明确勾选“开发测试”后使用，选项/凭据不持久化。缺包、错误平台或入口校验失败不会搜索PATH/回退外部Python，也不会自动创建连接或批准任务。
 - builder在依赖/许可成功后写入固定格式`Runtime~/portable-launch.json`；启动前C#核对Linux/Windows x64、Python3.11.16、解释器/两个引导文件的字节hash，拒绝重复/未知字段、额外路径、缺失/变化、超限和既有链接/junction祖先。**只是入口完整性**：清单未签名、不扫描所有依赖、不是对抗能替换包的本地进程，也不保证hash到exec原子身份；见`PORTABLE.md`。

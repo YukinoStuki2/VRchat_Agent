@@ -19,6 +19,24 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP008_offline_wheels_require_exact_local_root_and_pinned_bytes(self):
+        import inspect
+        m=module()
+        self.assertIn('wheelhouse', inspect.signature(m.check_wheels).parameters)
+        with tempfile.TemporaryDirectory() as td:
+            house=Path(td)/'wheels';house.mkdir()
+            source=house/'one-1.0-py3-none-any.whl';source.write_bytes(b'fixture-wheel')
+            digest=hashlib.sha256(source.read_bytes()).hexdigest()
+            lock='one==1.0 --hash=sha256:'+digest+'\n'
+            report={'install':[{'metadata':{'name':'one','version':'1.0'},'download_info':{'url':source.as_uri(),'archive_info':{'hashes':{'sha256':digest}}}}]}
+            with self.assertRaises(ValueError): m.check_wheels(report,lock,{'one':'1.0'})
+            self.assertEqual(len(m.check_wheels(report,lock,{'one':'1.0'},wheelhouse=house)),1)
+            outside=Path(td)/source.name;outside.write_bytes(source.read_bytes())
+            report['install'][0]['download_info']['url']=outside.as_uri()
+            with self.assertRaises(ValueError): m.check_wheels(report,lock,{'one':'1.0'},wheelhouse=house)
+            report['install'][0]['download_info']['url']=source.as_uri();source.write_bytes(b'tampered')
+            with self.assertRaises(ValueError): m.check_wheels(report,lock,{'one':'1.0'},wheelhouse=house)
+
     def test_PP007_json_reports_are_utf8_not_windows_locale(self):
         m=module();self.assertTrue(hasattr(m,'read_json'),'locale-independent JSON loading missing')
         with tempfile.TemporaryDirectory() as td:

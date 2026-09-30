@@ -14,6 +14,7 @@ import platform
 import subprocess
 import re
 from urllib.parse import urlparse, unquote
+from urllib.request import url2pathname
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,7 +52,7 @@ def load(name, path):
     return module
 
 
-def check_wheels(report, lock, installed):
+def check_wheels(report, lock, installed, wheelhouse=None):
     canonical = lambda name: re.sub(r'[-_.]+', '-', name).lower()
     entries = list(re.finditer(r'^([A-Za-z0-9_.-]+)==([^\s;]+)', lock, re.M))
     hashes = {}
@@ -64,8 +65,16 @@ def check_wheels(report, lock, installed):
         name, version = canonical(item['metadata']['name']), item['metadata']['version']
         info = item['download_info']; url = urlparse(info['url'])
         digest = info['archive_info']['hashes']['sha256']
+        if wheelhouse is None:
+            allowed_origin = url.scheme == 'https' and url.netloc == 'files.pythonhosted.org'
+        else:
+            origin = Path(url2pathname(url.path))
+            house = Path(wheelhouse).resolve(strict=True)
+            allowed_origin = (url.scheme == 'file' and not url.netloc and not url.query and not url.fragment
+                and origin.parent == house and not origin.is_symlink() and origin.is_file()
+                and hashlib.sha256(origin.read_bytes()).hexdigest() == digest)
         if (name in selected or expected.get(name) != version or digest not in hashes.get((name,version), ())
-            or url.scheme != 'https' or url.netloc != 'files.pythonhosted.org'
+            or not allowed_origin
             or not unquote(url.path).endswith('.whl')):
             raise ValueError('selected_wheel_mismatch')
         selected[name] = {'version': version, 'url': info['url'], 'sha256': digest}
@@ -73,7 +82,7 @@ def check_wheels(report, lock, installed):
     return selected
 
 
-def build(archive, destination):
+def build(archive, destination, wheelhouse=None):
     """Task-owned dev directory only. No ZIP, VPM, config or existing env writes."""
     system = platform.system().lower()
     if platform.machine().lower() not in ('x86_64', 'amd64') or system not in ('linux', 'windows'):
@@ -112,20 +121,25 @@ def build(archive, destination):
             (evidence/(name+'.log')).write_text(result.stdout+result.stderr, encoding='utf-8')
             if result.returncode or 'ResourceWarning' in result.stderr:
                 raise RuntimeError(name+'_failed: '+result.stderr[-1200:])
+        index = ['--index-url', 'https://pypi.org/simple']
+        if wheelhouse is not None:
+            wheelhouse = Path(wheelhouse).resolve(strict=True)
+            if not wheelhouse.is_dir(): raise ValueError('wheelhouse_not_directory')
+            index = ['--no-index', '--find-links', wheelhouse.as_uri()]
         run('pip-install', ['-m', 'pip', '--isolated', '--disable-pip-version-check', 'install',
-            '--index-url', 'https://pypi.org/simple', '--no-cache-dir', '--no-compile',
+            *index, '--no-cache-dir', '--no-compile',
             '--require-hashes', '--only-binary=:all:', '--report', str(evidence/'pip-report.json'),
             '-r', str(ROOT/'distribution/requirements.lock')], timeout=600)
         run('pip-check', ['-m', 'pip', '--isolated', 'check'])
         run('installed', [str(ROOT/'distribution/verify_dependency_install.py'), str(evidence/'installed.json')])
         run('licenses', [str(ROOT/'distribution/license_inventory.py'), str(evidence/'wheel-notices')])
-        selected = check_wheels(read_json(evidence/'pip-report.json'), (ROOT/'distribution/requirements.lock').read_text(encoding='utf-8'), read_json(evidence/'installed.json')['installed'])
+        selected = check_wheels(read_json(evidence/'pip-report.json'), (ROOT/'distribution/requirements.lock').read_text(encoding='utf-8'), read_json(evidence/'installed.json')['installed'], wheelhouse=wheelhouse)
         for name, data in licenses.items():
             target = package/'Runtime~/python-notices'/name
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)
         shutil.copytree(evidence/'wheel-notices', package/'Runtime~/wheel-notices')
         result = {'scope': 'Local portable development runtime, not product/Unity acceptance',
-            'platform': key, 'python_archive_sha256': pin['sha256'], 'python_release': pins['release'],
+            'platform': key, 'dependency_source': 'offline-wheelhouse' if wheelhouse else 'pypi', 'python_archive_sha256': pin['sha256'], 'python_release': pins['release'],
             'executable': str(executable.relative_to(destination)), 'python_identity': observed,
             'python_notice_records': len(pin['licenses']),
             'requirements_sha256': hashlib.sha256((ROOT/'distribution/requirements.lock').read_bytes()).hexdigest(),

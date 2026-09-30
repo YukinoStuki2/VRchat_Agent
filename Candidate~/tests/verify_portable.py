@@ -47,6 +47,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--archive',required=True,type=Path)
     parser.add_argument('--dotnet',required=True,type=Path)
+    parser.add_argument('--wheelhouse', type=Path)
     parser.add_argument('--output',required=True,type=Path)
     args=parser.parse_args()
     if args.output.exists():raise FileExistsError(args.output)
@@ -61,7 +62,7 @@ def main():
         return {str(p.relative_to(folder)): ('link:'+os.readlink(p) if p.is_symlink() else hashlib.sha256(p.read_bytes()).hexdigest()) for p in folder.rglob('*') if p.is_file() or p.is_symlink()}
     report={'scope':'Parent isolated portable CPython, locks and C# process/SDK; synthetic Unity wire, not Unity/product approval','passed':False}
     with recorded_directory(report, args.output) as work:
-        built=module.build(args.archive,work/'initial')
+        built=module.build(args.archive,work/'initial',wheelhouse=args.wheelhouse)
         relocated=work/'relocated';(work/'initial').rename(relocated)
         executable=relocated/built['executable']
         before=inventory(relocated/'package')

@@ -24,12 +24,17 @@ class PortableArchiveTests(unittest.TestCase):
         m=module()
         self.assertIn('wheelhouse', inspect.signature(m.check_wheels).parameters)
         with tempfile.TemporaryDirectory() as td:
-            house=Path(td)/'wheels';house.mkdir()
+            raw_house=Path(td)/'wheels';raw_house.mkdir()
+            house=raw_house.resolve(strict=True)  # Match build()'s canonical find-links root; CI TEMP may be 8.3.
+            if raw_house != house:
+                print('PP008 fixture canonicalized:', str(raw_house), '=>', str(house))
             source=house/'one-1.0-py3-none-any.whl';source.write_bytes(b'fixture-wheel')
             digest=hashlib.sha256(source.read_bytes()).hexdigest()
             lock='one==1.0 --hash=sha256:'+digest+'\n'
             report={'install':[{'metadata':{'name':'one','version':'1.0'},'download_info':{'url':source.as_uri(),'archive_info':{'hashes':{'sha256':digest}}}}]}
             with self.assertRaises(ValueError): m.check_wheels(report,lock,{'one':'1.0'})
+            from urllib.parse import urlparse
+            self.assertEqual(Path(m.url2pathname(urlparse(source.as_uri()).path)).parent, house)
             self.assertEqual(len(m.check_wheels(report,lock,{'one':'1.0'},wheelhouse=house)),1)
             outside=Path(td)/source.name;outside.write_bytes(source.read_bytes())
             report['install'][0]['download_info']['url']=outside.as_uri()

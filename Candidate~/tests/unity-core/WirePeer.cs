@@ -26,7 +26,7 @@ internal static class WirePeer
    if(input["fixture_connection"]!=null){connection=(string)input["fixture_connection"];output=new JObject{["fixture_ready"]=true};}
    else if(input["fixture_local_plans"]!=null){output=new JObject{["fixture_plans"]=isMaterial?material.LocalPlans():gate.LocalPlans()};}
    else if(input["fixture_approve_exact"] is JObject a){output=new JObject{["fixture_approved"]=isMaterial?material.Approve((string)a["plan_id"],(string)a["digest"]):gate.Approve((string)a["plan_id"],(string)a["digest"])};}
-   else if(input["fixture_bytes"]!=null){output=new JObject{["candidate"]=backend.Value("Assets/candidate.mat"),["source"]=backend.Value("Assets/source.mat"),["writes"]=backend.Writes};}
+   else if(input["fixture_bytes"]!=null){output=new JObject{["candidate"]=backend.Value(input["fixture_bytes"].Type==JTokenType.String && (string)input["fixture_bytes"]=="codex"?"Assets/codex-candidate.mat":"Assets/candidate.mat"),["source"]=backend.Value("Assets/source.mat"),["writes"]=backend.Writes};}
    else if(input["fixture_local_approve"]!=null){var p=gate.LocalPlans();output=new JObject{["fixture_approved"]=p.Count==1&&gate.Approve((string)p[0]["plan_id"],(string)p[0]["digest"])};}
    else {
     var result=isMaterial?material.Dispatch((JObject)input["request"]):gate.Dispatch((JObject)input["request"]);

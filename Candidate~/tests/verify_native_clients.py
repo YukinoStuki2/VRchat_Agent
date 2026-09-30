@@ -33,7 +33,7 @@ async def run(args, report):
             with socket.socket() as listener:
                 listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
                 watcher.ports.add(port)
-                owner = new_local_run('native-client-fixture',port)
+                owner = new_local_run('fixture-project' if args.approved_tasks else 'native-client-fixture',port)
                 child = consume_environment(owner.project,port,environment=owner.take_environment())
                 mcp_auth,unity_auth = child.verifiers()
                 mcp = create_server(owner.project,mcp_auth=mcp_auth)
@@ -66,100 +66,105 @@ async def run(args, report):
                             if task.done():await task;raise AssertionError('server_start_failed')
                             await asyncio.sleep(.02)
                     endpoint=f'https://127.0.0.1:{port}/mcp'
-                    hermes_home=home/'hermes';hermes_home.mkdir()
-                    env={**child_environment(hermes_home),'HERMES_HOME':str(hermes_home),
-                         'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['hermes'].token}
-                    process=await asyncio.create_subprocess_exec(args.hermes_python,'-I','-B',
-                        str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source,cwd=hermes_home,env=env,
-                        stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
-                    processes.append(process)
-                    doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode()}
-                    out,err=await asyncio.wait_for(process.communicate((json.dumps(doc)+'\n').encode()),25)
-                    captured.extend((out,err))
-                    if process.returncode:
-                        report['hermes_failure']=json.loads(out.decode().splitlines()[-1])
-                        raise AssertionError('native_hermes_failed')
-                    report['hermes']=json.loads(out.decode().splitlines()[-1])
-                    assert len(created.get('hermes',set()))==1
-                    assert deleted.get('hermes')==created['hermes']
-                    codex_home=home/'codex';codex_home.mkdir()
-                    ca=codex_home/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
-                    text='''[features]
-plugins = false
-[analytics]
-enabled = false
-[feedback]
-enabled = false
-[mcp_servers.candidate]
-url = ENDPOINT
-bearer_token_env_var = "VRCHAT_AGENT_TEST_TOKEN"
-startup_timeout_sec = 8
-tool_timeout_sec = 8
-enabled_tools = ["agent_status", "agent_stop"]
-required = true
-'''.replace('ENDPOINT',json.dumps(endpoint))
-                    (codex_home/'config.toml').write_text(text,encoding='utf-8')
-                    env={**child_environment(codex_home),'CODEX_HOME':str(codex_home),
-                        'CODEX_CA_CERTIFICATE':str(ca),
-                        'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['codex'].token}
-                    process=await asyncio.create_subprocess_exec(args.codex,'app-server','--stdio',
-                        cwd=codex_home,env=env,stdin=asyncio.subprocess.PIPE,
-                        stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
-                    processes.append(process)
-                    assert process.stdin is not None and process.stdout is not None and process.stderr is not None
-                    errors=asyncio.create_task(process.stderr.read())
-                    async def request(number,method,params):
-                        process.stdin.write((json.dumps({'id':number,'method':method,'params':params})+'\n').encode())
-                        await process.stdin.drain()
-                        async with asyncio.timeout(20):
-                            while True:
-                                line=await process.stdout.readline()
-                                if not line:raise AssertionError('codex_eof')
-                                captured.append(line)
-                                value=json.loads(line)
-                                if value.get('id')==number:
-                                    if 'error' in value:
-                                        report['codex_error_code']=value['error'].get('code')
-                                        raise AssertionError('codex_rpc_error')
-                                    return value['result']
-                    try:
-                        await request(1,'initialize',{'clientInfo':{'name':'candidate-verifier','version':'1'},
-                                                     'capabilities':{'experimentalApi':True}})
-                        process.stdin.write(b'{"method":"initialized"}\n');await process.stdin.drain()
-                        thread=await request(2,'thread/start',{'cwd':str(codex_home),'ephemeral':True,
-                            'approvalPolicy':'on-request','sandbox':'read-only'})
-                        thread_id=thread['thread']['id']
-                        data=await request(3,'mcpServerStatus/list',{'detail':'toolsAndAuthOnly',
-                            'serverName':'candidate','threadId':thread_id})
-                        report['codex_inventory']=[{'name':v['name'],'tools':sorted(v['tools']),
-                            'has_tools_error':v.get('toolsError') is not None, 'auth_status':v['authStatus']} for v in data['data']]
-                        assert data['nextCursor'] is None and len(data['data'])==1
-                        assert set(data['data'][0]['tools'])=={'agent_status','agent_stop'}
-                        assert data['data'][0]['authStatus']=='bearerToken'
-                        call=await request(4,'mcpServer/tool/call',{'threadId':thread_id,'server':'candidate',
-                            'tool':'agent_status','arguments':{}})
-                        assert call.get('isError') is True
-                        assert any('expected_project_not_connected' in x.get('text','') for x in call['content'])
-                        report['codex_missing_unity_refused']=True
-                        stopped=await request(5,'mcpServer/tool/call',{'threadId':thread_id,'server':'candidate',
-                            'tool':'agent_stop','arguments':{'task_id':'no-approved-plan'}})
-                        assert not stopped.get('isError')
-                        assert stopped['structuredContent']=={'success':True,'data':{'status':'locally_stopped','unity_confirmed':False}}
-                        report['codex_unapproved_stop_local_only']=True
-                        await request(6,'thread/unsubscribe',{'threadId':thread_id})
-                    finally:
-                        process.stdin.close()
-                        try:await asyncio.wait_for(process.wait(),12)
-                        except TimeoutError:process.kill();await process.wait();raise
-                        captured.append(await errors)
-                    assert process.returncode==0
-                    report['codex_unrelated_plugin_sync_disabled']=not (codex_home/'.tmp/plugins.sync.lock').exists()
-                    assert report['codex_unrelated_plugin_sync_disabled']
-                    assert len(created.get('codex',set()))==1
-                    assert deleted.get('codex')==created['codex']
-                    assert created['hermes'].isdisjoint(created['codex'])
-                    report['session_cleanup']={role:{'created':len(created[role]),'deleted':len(deleted[role])}
-                                               for role in ('hermes','codex')}
+                    if args.approved_tasks:
+                        from native_approved_tasks import check_approved_tasks
+                        await check_approved_tasks(args, home, endpoint, owner, mcp._candidate_runtime,
+                            processes, captured, report, created, deleted)
+                    else:
+                        hermes_home=home/'hermes';hermes_home.mkdir()
+                        env={**child_environment(hermes_home),'HERMES_HOME':str(hermes_home),
+                             'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['hermes'].token}
+                        process=await asyncio.create_subprocess_exec(args.hermes_python,'-I','-B',
+                            str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source,cwd=hermes_home,env=env,
+                            stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+                        processes.append(process)
+                        doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode()}
+                        out,err=await asyncio.wait_for(process.communicate((json.dumps(doc)+'\n').encode()),25)
+                        captured.extend((out,err))
+                        if process.returncode:
+                            report['hermes_failure']=json.loads(out.decode().splitlines()[-1])
+                            raise AssertionError('native_hermes_failed')
+                        report['hermes']=json.loads(out.decode().splitlines()[-1])
+                        assert len(created.get('hermes',set()))==1
+                        assert deleted.get('hermes')==created['hermes']
+                        codex_home=home/'codex';codex_home.mkdir()
+                        ca=codex_home/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
+                        text='''[features]
+    plugins = false
+    [analytics]
+    enabled = false
+    [feedback]
+    enabled = false
+    [mcp_servers.candidate]
+    url = ENDPOINT
+    bearer_token_env_var = "VRCHAT_AGENT_TEST_TOKEN"
+    startup_timeout_sec = 8
+    tool_timeout_sec = 8
+    enabled_tools = ["agent_status", "agent_stop"]
+    required = true
+    '''.replace('ENDPOINT',json.dumps(endpoint))
+                        (codex_home/'config.toml').write_text(text,encoding='utf-8')
+                        env={**child_environment(codex_home),'CODEX_HOME':str(codex_home),
+                            'CODEX_CA_CERTIFICATE':str(ca),
+                            'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['codex'].token}
+                        process=await asyncio.create_subprocess_exec(args.codex,'app-server','--stdio',
+                            cwd=codex_home,env=env,stdin=asyncio.subprocess.PIPE,
+                            stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+                        processes.append(process)
+                        assert process.stdin is not None and process.stdout is not None and process.stderr is not None
+                        errors=asyncio.create_task(process.stderr.read())
+                        async def request(number,method,params):
+                            process.stdin.write((json.dumps({'id':number,'method':method,'params':params})+'\n').encode())
+                            await process.stdin.drain()
+                            async with asyncio.timeout(20):
+                                while True:
+                                    line=await process.stdout.readline()
+                                    if not line:raise AssertionError('codex_eof')
+                                    captured.append(line)
+                                    value=json.loads(line)
+                                    if value.get('id')==number:
+                                        if 'error' in value:
+                                            report['codex_error_code']=value['error'].get('code')
+                                            raise AssertionError('codex_rpc_error')
+                                        return value['result']
+                        try:
+                            await request(1,'initialize',{'clientInfo':{'name':'candidate-verifier','version':'1'},
+                                                         'capabilities':{'experimentalApi':True}})
+                            process.stdin.write(b'{"method":"initialized"}\n');await process.stdin.drain()
+                            thread=await request(2,'thread/start',{'cwd':str(codex_home),'ephemeral':True,
+                                'approvalPolicy':'on-request','sandbox':'read-only'})
+                            thread_id=thread['thread']['id']
+                            data=await request(3,'mcpServerStatus/list',{'detail':'toolsAndAuthOnly',
+                                'serverName':'candidate','threadId':thread_id})
+                            report['codex_inventory']=[{'name':v['name'],'tools':sorted(v['tools']),
+                                'has_tools_error':v.get('toolsError') is not None, 'auth_status':v['authStatus']} for v in data['data']]
+                            assert data['nextCursor'] is None and len(data['data'])==1
+                            assert set(data['data'][0]['tools'])=={'agent_status','agent_stop'}
+                            assert data['data'][0]['authStatus']=='bearerToken'
+                            call=await request(4,'mcpServer/tool/call',{'threadId':thread_id,'server':'candidate',
+                                'tool':'agent_status','arguments':{}})
+                            assert call.get('isError') is True
+                            assert any('expected_project_not_connected' in x.get('text','') for x in call['content'])
+                            report['codex_missing_unity_refused']=True
+                            stopped=await request(5,'mcpServer/tool/call',{'threadId':thread_id,'server':'candidate',
+                                'tool':'agent_stop','arguments':{'task_id':'no-approved-plan'}})
+                            assert not stopped.get('isError')
+                            assert stopped['structuredContent']=={'success':True,'data':{'status':'locally_stopped','unity_confirmed':False}}
+                            report['codex_unapproved_stop_local_only']=True
+                            await request(6,'thread/unsubscribe',{'threadId':thread_id})
+                        finally:
+                            process.stdin.close()
+                            try:await asyncio.wait_for(process.wait(),12)
+                            except TimeoutError:process.kill();await process.wait();raise
+                            captured.append(await errors)
+                        assert process.returncode==0
+                        report['codex_unrelated_plugin_sync_disabled']=not (codex_home/'.tmp/plugins.sync.lock').exists()
+                        assert report['codex_unrelated_plugin_sync_disabled']
+                        assert len(created.get('codex',set()))==1
+                        assert deleted.get('codex')==created['codex']
+                        assert created['hermes'].isdisjoint(created['codex'])
+                        report['session_cleanup']={role:{'created':len(created[role]),'deleted':len(deleted[role])}
+                                                   for role in ('hermes','codex')}
                     report['requests']=request_counts
                 finally:
                     for process in processes:
@@ -187,15 +192,21 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('--hermes-python',required=True);p.add_argument('--hermes-source',required=True)
     p.add_argument('--codex',required=True);p.add_argument('--output',required=True)
+    p.add_argument('--approved-tasks',action='store_true',help='real clients, compiled gate/file fixture; not Unity')
+    p.add_argument('--dotnet',default='/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
     args=p.parse_args()
     if Path(args.output).exists():raise FileExistsError(args.output)
     report={'passed':False,'independent_approval':False,'trusted_delivery_verified':False,
         'unity_editor_verified':False,'codex_scope':'native MCP call in ephemeral thread; no model turn',
         'codex_ca_scope':'custom CA is additional trust, not exclusive certificate pinning'}
-    paths=sorted(p for folder in ('runtime','launcher','native','dependencies','tests')
+    paths=sorted(p for folder in ('runtime','launcher','native','dependencies','tests','package')
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}
+    if args.approved_tasks:
+        import xml.etree.ElementTree as ET
+        response=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateResponseSource').text
+        external.update(dotnet_binary=Path(args.dotnet),upstream_response=Path(response))
     external_before={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}
     report['native_inputs']=external_before
     report['expected_codex_version']='0.159.2'
@@ -205,9 +216,13 @@ def main():
     try:
         assert external_before['codex_binary']=='1748767b230ebfc3d4ab7e4e254920d0c0ad9691fd8c11f190e7d44511a4a92e', 'unreviewed_codex_binary'
         asyncio.run(run(args,report))
-        report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty'])
+        report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty']
+            and (not args.approved_tasks or report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)]))
     except BaseException as exc:
         report['error_type']=type(exc).__name__
+        import traceback
+        report['error_frames']=[{'file':Path(f.filename).name,'line':f.lineno,'function':f.name}
+            for f in traceback.extract_tb(exc.__traceback__)[-8:]]
     after={str(x.relative_to(ROOT)):hashlib.sha256(x.read_bytes()).hexdigest() for x in paths}
     report['source_unchanged']=before==after;report['source_hashes']=before
     report['native_inputs_unchanged']=external_before=={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}

@@ -119,5 +119,56 @@ client's native-read approval. It is **not** a real Unity or human approval test
 This closes the missing authenticated-principal propagation into a plan, **not**
 the operator-to-client credential handoff or client-software authentication gap.
 A signed role (including a `hermes:` or `codex:` role) does not prove the program
-holding it is Hermes/Codex. End-user handoff, real native-client approved task
-stop/resume, Windows Unity and final independent review remain separate gates.
+holding it is Hermes/Codex. End-user handoff, real-Unity approved-task stop/resume,
+Windows native clients/Unity and final independent review remain separate gates.
+
+## Approved-task native-client verification (Linux fixture)
+
+Add `--approved-tasks` to the reproduction command to run both installed native
+clients concurrently against authenticated TLS and a **freshly compiled net8**
+`WirePeer` containing the production read and material gates. Optional `--dotnet`
+selects the separately provisioned compiler/runtime. The verifier records the
+compiler, upstream Response.cs, native client inputs and complete Candidate source
+hashes before/after; it never accepts an old DLL supplied by the caller.
+
+`tests/native_approved_tasks.py` reuses the existing owner, TLS, session recorder,
+compiled gate fixture and outer descendant/secret scanner. Its exact local
+approval pipe belongs to the test driver, not either MCP client. The Hermes test
+peer's additional NDJSON mode only forwards seven fixed test tools through the
+installed MCP engine; it cannot approve, execute arbitrary tools or run a model.
+None of these test files are part of the shipped source payload.
+
+The six case IDs are a separate group, not added to the existing C# or SDK totals:
+
+- NA001: each local plan contains the corresponding signed principal and exact
+  native MCP session, not the program's self-reported brand/name.
+- NA002: one client's local read approval does not authorize the other client.
+- NA003: material editing retains the existing **single-writer per project**
+  rule. Another client cannot prepare over or stop the active write plan. After
+  exact stop, the other client may prepare its own separately approved candidate.
+- NA004: both real native clients explicitly stop approved read/material work;
+  stopped grants reject reuse, candidate bytes stay changed, original bytes stay
+  unchanged, and stopping A's read leaves B's independently approved read usable.
+- NA005: fresh read plans after stopping are pending and cannot reuse approval.
+- NA006: fresh material-edit plans require local approval again. Each native
+  client's actual session DELETE revokes both its read and material plans with
+  compiled-gate acknowledgements, without undoing files. Closing A leaves B's
+  read usable; finally both gate plans, runtime sessions and histories are empty.
+
+The first harness incorrectly expected concurrent material writers. Production
+correctly rejected it with `project_write_busy`; the fixture was corrected to
+exercise the existing serial-write contract, **not** to relax the production gate.
+A separate retained RED demonstrated the old fixture readback could only select
+one candidate; a fixed two-candidate fixture selector now checks both exact files.
+Expected denied calls may produce fixed rejection/stop-unconfirmed warnings when
+a gate already removed an unapproved plan. Positive approved-task stop and DELETE
+acknowledgements are asserted separately, not inferred from the overall exit code.
+
+This establishes **real native MCP calls against fixture-approved production gates**,
+not a model-loop turn, trusted operator-to-client credential delivery, software
+attestation, a real human click, Windows native-client acceptance or Unity Editor
+execution. Re-preparing after stop requires new approval; it is **not** the still
+missing task-preserving pause/reload/resume workflow. No secret/private key is
+written; generated child output and owned test-home files are scanned before
+report persistence, and tracked descendants/listeners and temporary roots must be
+absent. The original no-Unity compatibility mode remains separately runnable.

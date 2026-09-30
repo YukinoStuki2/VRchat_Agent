@@ -84,7 +84,9 @@ async def run(args, report):
                     assert deleted.get('hermes')==created['hermes']
                     codex_home=home/'codex';codex_home.mkdir()
                     ca=codex_home/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
-                    text='''[analytics]
+                    text='''[features]
+plugins = false
+[analytics]
 enabled = false
 [feedback]
 enabled = false
@@ -151,6 +153,8 @@ required = true
                         except TimeoutError:process.kill();await process.wait();raise
                         captured.append(await errors)
                     assert process.returncode==0
+                    report['codex_unrelated_plugin_sync_disabled']=not (codex_home/'.tmp/plugins.sync.lock').exists()
+                    assert report['codex_unrelated_plugin_sync_disabled']
                     assert len(created.get('codex',set()))==1
                     assert deleted.get('codex')==created['codex']
                     assert created['hermes'].isdisjoint(created['codex'])

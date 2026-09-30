@@ -30,6 +30,12 @@ written into the owned temporary home, scanned, then removed.
   sandbox and on-request approval, then uses its native MCP status/tool-call
   APIs. No `turn/start` or account login is used. `thread/unsubscribe` and stdin
   EOF end the test. Only `agent_status` and `agent_stop` are configured.
+  Native `[features] plugins = false` is explicit in this test-only home: the
+  default curated-plugin startup sync otherwise spawns unrelated Git egress.
+  A frozen run reproduced a surviving `git ls-remote` process chain targeting
+  `https://github.com/openai/plugins.git`; failed evidence and safety cleanup
+  are retained. Disabling that unneeded feature is test scoping, **not** a fix
+  or acceptance claim for upstream default-plugin process lifetime.
 - Both clients must reject status when the expected Unity project is absent.
   Stopping a task with no approved plan must report `locally_stopped` and
   `unity_confirmed:false`; this is **not** a stop of an approved real Unity task.

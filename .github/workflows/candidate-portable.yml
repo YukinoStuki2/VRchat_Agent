@@ -37,6 +37,11 @@ jobs:
           $hashes | ConvertTo-Json | Set-Content artifacts/source-before.json
           python -I -B -W always::ResourceWarning Candidate~/tests/test_portable_python.py 2>&1 | Tee-Object artifacts/unit-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify driver environment and cleanup boundaries
+        shell: pwsh
+        run: |
+          python -I -B -W always::ResourceWarning Candidate~/tests/test_portable_verifier.py 2>&1 | Tee-Object artifacts/verifier-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate source layout on Windows
         shell: pwsh
         run: |

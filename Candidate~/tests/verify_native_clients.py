@@ -1,6 +1,8 @@
 """Real native-client compatibility (Linux); not trusted delivery or Unity approval.
-Only public TLS certificate may be written. Credentials use child env or memory.
-No model request, account login, MCP registration, or existing configuration edit.
+Only public certificates and non-secret test-home metadata may be written.
+Credentials use child env or memory.
+No model request, account login or existing configuration edit. Optional registry
+mode registers only within an owned isolated Hermes process.
 """
 import argparse
 import asyncio
@@ -38,7 +40,7 @@ async def run(args, report):
                 mcp_auth,unity_auth = child.verifiers()
                 mcp = create_server(owner.project,mcp_auth=mcp_auth)
                 app = create_app(mcp,unity_auth=unity_auth)
-                created={}; deleted={}; request_counts={}
+                created={}; deleted={}; request_counts={}; tool_calls={}
                 async def recording(scope, receive, send):
                     role='anonymous'
                     if scope['type']=='http':
@@ -54,7 +56,18 @@ async def run(args, report):
                                 sid=dict(scope['headers']).get(b'mcp-session-id')
                                 if sid:deleted.setdefault(role,set()).add(sid)
                         await send(message)
-                    await app(scope,receive,recorded)
+                    body=bytearray()
+                    async def recorded_receive():
+                        message=await receive()
+                        if scope.get('method')=='POST' and message['type']=='http.request':
+                            body.extend(message.get('body',b''))
+                            assert len(body)<=65536
+                            if not message.get('more_body',False) and body:
+                                request=json.loads(body)
+                                if request.get('method')=='tools/call':
+                                    tool_calls.setdefault(role,[]).append(request['params']['name'])
+                        return message
+                    await app(scope,recorded_receive,recorded)
                 config=uvicorn.Config(recording,log_level='error',access_log=False,timeout_graceful_shutdown=3)
                 config.load();config.ssl=load_tls_context(owner.tls)
                 server=uvicorn.Server(config)
@@ -78,13 +91,24 @@ async def run(args, report):
                             str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source,cwd=hermes_home,env=env,
                             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
                         processes.append(process)
-                        doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode()}
+                        doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode(),
+                             'registry':args.hermes_registry}
                         out,err=await asyncio.wait_for(process.communicate((json.dumps(doc)+'\n').encode()),25)
                         captured.extend((out,err))
+                        for line in out.decode().splitlines():
+                            try: record=json.loads(line)
+                            except ValueError: continue
+                            if 'registry_diagnostic' in record:
+                                report['hermes_registry_diagnostic']=record['registry_diagnostic']
                         if process.returncode:
                             report['hermes_failure']=json.loads(out.decode().splitlines()[-1])
                             raise AssertionError('native_hermes_failed')
                         report['hermes']=json.loads(out.decode().splitlines()[-1])
+                        if args.hermes_registry:
+                            assert report['hermes'].get('registry_verified') is True
+                            assert report['hermes']['pass_ids']==[f'HR{i:03d}' for i in range(1,7)]
+                            assert tool_calls.get('hermes')==['agent_status','agent_stop']
+                            report['hermes_wire_tools']=tool_calls['hermes']
                         assert len(created.get('hermes',set()))==1
                         assert deleted.get('hermes')==created['hermes']
                         codex_home=home/'codex';codex_home.mkdir()
@@ -192,7 +216,9 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('--hermes-python',required=True);p.add_argument('--hermes-source',required=True)
     p.add_argument('--codex',required=True);p.add_argument('--output',required=True)
-    p.add_argument('--approved-tasks',action='store_true',help='real clients, compiled gate/file fixture; not Unity')
+    modes=p.add_mutually_exclusive_group()
+    modes.add_argument('--approved-tasks',action='store_true',help='real clients, compiled gate/file fixture; not Unity')
+    modes.add_argument('--hermes-registry',action='store_true',help='isolated native in-memory registry and dispatch; no model turn')
     p.add_argument('--dotnet',default='/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
     args=p.parse_args()
     if Path(args.output).exists():raise FileExistsError(args.output)
@@ -203,6 +229,9 @@ def main():
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}
+    if args.hermes_registry:
+        for name in ('registry','mcp_schema_cache'):
+            external['hermes_'+name]=Path(args.hermes_source)/('tools/'+name+'.py')
     if args.approved_tasks:
         import xml.etree.ElementTree as ET
         response=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateResponseSource').text
@@ -210,7 +239,7 @@ def main():
     external_before={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}
     report['native_inputs']=external_before
     report['expected_codex_version']='0.159.2'
-    report['hermes_scope']='installed native MCP engine; not whole agent/model loop'
+    report['hermes_scope']=('installed public memory registration and tool-registry dispatch' if args.hermes_registry else 'installed native MCP engine')+'; not whole agent/model loop'
     report['hermes_dependencies_fully_locked']=False
     before={str(x.relative_to(ROOT)):hashlib.sha256(x.read_bytes()).hexdigest() for x in paths}
     try:

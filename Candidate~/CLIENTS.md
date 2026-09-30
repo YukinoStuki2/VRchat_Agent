@@ -71,6 +71,44 @@ PINNED_CANDIDATE_PYTHON -I -B -W always::ResourceWarning tests/verify_native_cli
 The test does not install those clients or register them in an existing profile.
 It is Linux-specific, not Windows native-client acceptance.
 
+## Hermes native tool registry (isolated development slice)
+
+Use `--hermes-registry` instead of `--approved-tasks` to exercise installed
+`register_mcp_servers` and `tools.registry.registry.dispatch`, rather than
+calling the SDK session directly. Registration occurs only inside a newly
+created child process with its own temporary HERMES_HOME; no real profile,
+gateway toolset or model prompt is altered, and there is no model turn.
+
+The test config explicitly sets `lazy: false`, `trust: full` for the fixed local
+fixture, `tools.include: [agent_status, agent_stop]`, `tools.resources: false`,
+`tools.prompts: false`, and disables sampling/elicitation. Server trust here is
+not a human task approval. The original test helper incorrectly placed the
+resource/prompt switches at top level. A real registry run exposed four extra
+utility tools; retained RED evidence captured their exact non-secret names.
+Fixing the field locations made the exact-two-tools assertion pass without
+changing installed Hermes or Candidate server permissions. SDK-only results
+never established that filter boundary.
+
+The independent HR001–HR006 group checks exact registered schemas/toolset,
+local unknown-tool rejection, actual dispatch preserving the missing-Unity
+error and unapproved-stop response, idempotent same-run registration, complete
+shutdown/deregistration and post-stop refusal, and the documented fact that
+`enabled: false`/a changed allowlist for an existing name is NOT reconfiguration
+or revocation. The parent server observes exactly the two intended tool calls,
+one created/deleted Hermes session and no calls for blocked/stale tools.
+A native registry success contains `result` plus `structuredContent`; both
+are checked against the real response, not confused with the SDK envelope.
+
+**Integration constraints remain:** this global shutdown API is safe here only
+because the isolated process owns every registered MCP service. It must NOT be
+transplanted into a shared gateway as per-project disconnect. A future receiver
+must own the exact lifecycle, avoid same-name credential replacement, and respect
+immutable per-conversation tool snapshots. The registry may write non-secret
+schema caches; the whole test home is secret-scanned and removed. These tests do
+not prove trusted operator-to-client delivery, per-session gateway integration,
+chat approval, Windows Hermes, or the full model loop. Existing direct SDK,
+Codex and approved-task/pause fixture modes remain separately runnable.
+
 ## Explicit local client admission (development slice)
 
 The local Unity window has independent Hermes/Codex role toggles, both off by
@@ -121,9 +159,9 @@ only the provided public CA, but this does not solve a trusted handoff itself.
 Environment possession is not process attestation, credentials are not brand
 identity, and a test-owned home is not a sandbox against the same OS user.
 
-Still required: trusted client delivery and explicit per-client selection;
-remote topology and endpoint authentication; approved-task stop/revocation and
-pause/resume continuity; full Hermes model-loop and Windows Codex verification;
+Still required: trusted client delivery beyond the implemented local role selection;
+remote topology and endpoint authentication; real-Unity approved-task stop/revocation
+and cross-reload/reconnection continuity; full Hermes model-loop and Windows Codex verification;
 actual Unity import/runtime/human checks; final independent review; complete
 Candidate packaging and real VPM/ALCOM acceptance. No production configuration,
 main branch, historical release, or public VPM index is changed by these tests.

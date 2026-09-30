@@ -7,6 +7,70 @@ from pathlib import Path
 import ssl
 import sys
 
+async def registry_probe(config, allowed):
+    # This module only runs in the verifier's newly created Hermes process/home.
+    # Do not call global shutdown inside a user's gateway or shared process.
+    import importlib.metadata
+    from tools import mcp_tool
+    from tools.registry import registry
+    name='candidate-native-test'
+    assert not mcp_tool.get_registered_mcp_server_names()
+    baseline=set(registry.get_all_tool_names())
+    config.update(lazy=False, trust='full')  # fixed test server, not task approval
+    expected={mcp_tool.mcp_prefixed_tool_name(name,raw) for raw in allowed}
+    result={'native':'hermes','mcp_version':importlib.metadata.version('mcp'),
+            'registry_verified':False,'pass_ids':[],
+            'test_server_trust':'full; fixed fixture only, not task approval'}
+    try:
+        registered=await asyncio.to_thread(mcp_tool.register_mcp_servers,{name:config})
+        actual=set(registry.get_all_tool_names())-baseline
+        if not set(registered)==actual==expected:
+            print(json.dumps({'registry_diagnostic':{'returned':sorted(registered),'added':sorted(actual),'expected':sorted(expected),
+                'registered_servers':sorted(mcp_tool.get_registered_mcp_server_names())}}),flush=True)
+        assert set(registered)==actual==expected
+        assert set(registry.get_tool_names_for_toolset('mcp-'+name))==expected
+        assert {registry.get_schema(n)['name'] for n in expected}==expected
+        result['tools']=sorted(actual);result['pass_ids'].append('HR001')
+        async def dispatch(raw,args):
+            value=await asyncio.to_thread(registry.dispatch,mcp_tool.mcp_prefixed_tool_name(name,raw),args)
+            return json.loads(value) if isinstance(value,str) else value
+        denied=await dispatch('material_prepare',{})
+        assert type(denied) is dict and 'Unknown tool:' in denied.get('error','')
+        result['pass_ids'].append('HR002')
+        status=await dispatch('agent_status',{})
+        if 'expected_project_not_connected' not in status.get('error',''):
+            print(json.dumps({'registry_diagnostic':{'phase':'status','keys':sorted(status),
+                'expected_error_seen': 'expected_project_not_connected' in json.dumps(status),
+                'error_type':type(status.get('error')).__name__,
+                'error_safe_categories':[x for x in ('Unknown tool','not connected','trust','approval','event loop','timeout','Invalid','NameError','TypeError') if x in json.dumps(status)]}}),flush=True)
+        assert 'expected_project_not_connected' in status.get('error','')
+        stopped=await dispatch('agent_stop',{'task_id':'no-approved-plan'})
+        expected_stop={'success':True,'data':{'status':'locally_stopped','unity_confirmed':False}}
+        assert set(stopped)=={'result','structuredContent'}
+        assert stopped['structuredContent']==json.loads(stopped['result'])==expected_stop
+        result['missing_unity_refused']=True;result['unapproved_stop_local_only']=True
+        result['pass_ids'].append('HR003')
+        again=await asyncio.to_thread(mcp_tool.register_mcp_servers,{name:config})
+        assert set(again)==expected and set(registry.get_all_tool_names())-baseline==expected
+        result['pass_ids'].append('HR004')
+        # Characterize documented native semantics: disabled/reconfigured existing
+        # names are NOT revocation. Never use this API as a credential rotation.
+        disabled={**config,'enabled':False,'tools':{'include':[], 'resources':False, 'prompts':False}}
+        unchanged=await asyncio.to_thread(mcp_tool.register_mcp_servers,{name:disabled})
+        assert set(unchanged)==expected and set(registry.get_all_tool_names())-baseline==expected
+        result['existing_name_not_reconfigured']=True
+    finally:
+        await asyncio.to_thread(mcp_tool.shutdown_mcp_servers)
+        config['headers'].clear()
+    assert not mcp_tool.get_registered_mcp_server_names()
+    assert set(registry.get_all_tool_names())==baseline
+    assert mcp_tool._mcp_loop is None or not mcp_tool._mcp_loop.is_running()
+    stale=await dispatch('agent_stop',{'task_id':'no-approved-plan'})
+    assert 'Unknown tool:' in stale.get('error','')
+    result['pass_ids'].extend(['HR005','HR006'])
+    result['registry_verified']=True;result['shutdown_complete']=True
+    print(json.dumps(result),flush=True)
+
 async def main():
     # Source path is test-operator-selected, never exposed as a Candidate tool.
     source = Path(sys.argv[1]).resolve(strict=True)
@@ -25,9 +89,13 @@ async def main():
     token = os.environ.pop('VRCHAT_AGENT_TEST_TOKEN')
     config = {'url': doc['endpoint'], 'headers': {'Authorization': 'Bearer '+token},
         'ssl_verify': context, 'strict_redirect_headers': True, 'connect_timeout': 8,
-        'tools': {'include': allowed}, 'resources': {'enabled': False},
-        'prompts': {'enabled': False}, 'sampling': {'enabled': False},
+        'tools': {'include': allowed, 'resources': False, 'prompts': False},
+        'sampling': {'enabled': False},
         'elicitation': {'enabled': False}}
+    if doc.get('registry') is True:
+        assert not interactive
+        await registry_probe(config,allowed)
+        return
     peer = MCPServerTask('candidate-native-test')
     try:
         await asyncio.wait_for(peer.start(config), 12)

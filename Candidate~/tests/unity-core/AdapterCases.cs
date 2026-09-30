@@ -56,6 +56,11 @@ internal static class AdapterCases
    p=prepare();GUILayout.NextButton="批准此清单";gui.Invoke(window,null);
    Check((bool)gate.LocalPlans()[0]["approved"],"button must approve");
    Check(EditorGUILayout.Labels.Exists(s=>s.Contains("Assets/Read.mat"))&&EditorGUILayout.Labels.Exists(s=>s.Contains((string)p["data"]["digest"])),"exact target/digest displayed");
+   execute["plan_id"]=p["data"]["plan_id"];int beforePauseCalls=CommandRegistry.Calls;
+   GUILayout.NextButton="暂停此清单（不回退）";gui.Invoke(window,null);
+   Check((bool?)gate.LocalPlans()[0]["paused"]==true && (string)call(execute)["error"]=="plan_paused" && CommandRegistry.Calls==beforePauseCalls,"UI pause must block handler");
+   GUILayout.NextButton="核验后继续原清单";gui.Invoke(window,null);
+   Check((string)gate.LocalPlans()[0]["plan_id"]==(string)p["data"]["plan_id"] && (bool?)call(execute)["success"]==true,"UI resume exact old plan");
    Console.WriteLine("PASS UA006 local UI displays and approves exact plan via doubled UI events");
    p=prepare();GUILayout.BeforeClick=()=> { prepare(); };GUILayout.NextButton="批准此清单";gui.Invoke(window,null);GUILayout.BeforeClick=null;
    Check(!(bool)gate.LocalPlans()[0]["approved"],"stale displayed plan must not approve replacement");

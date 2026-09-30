@@ -91,7 +91,7 @@ def main(label):
             if build('ReviewUpstreamApi'):
                 build('ReviewExternalAssembly')
             for name in ('CoreTests', 'AdapterTests', 'FixOutputCases', 'ReviewLeakCases',
-                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'WirePeer'):
+                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'WirePeer'):
                 if not build(name):
                     continue
                 if name == 'FixIdentityCases':
@@ -137,6 +137,9 @@ def main(label):
             report['source_unchanged'] = report['hashes_before'] == report['hashes_after']
             save()
     report['owned_build_directory_removed'] = not Path(td).exists()
+    report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
+        '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
+    assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,6)]
     report['all_commands_succeeded'] = bool(report['runs']) and all(
         r['exit_code'] == 0 and not r['timeout'] and r['process_group_absent'] and r['pid_absent']
         for r in report['runs'])

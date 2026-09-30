@@ -339,6 +339,7 @@ class PluginHub(WebSocketEndpoint):
                 "future": future, "session_id": session_id}
 
         result_valid = False
+        result = None
         try:
             msg = ExecuteCommandMessage(
                 id=command_id,
@@ -377,7 +378,7 @@ class PluginHub(WebSocketEndpoint):
                 raise
         finally:
             if not result_valid and cls.command_failed is not None:
-                cls.command_failed()
+                cls.command_failed(result)
             if future.done() and not future.cancelled():
                 future.exception()  # Drain send failures even when native caller returns an error.
             async with lock:

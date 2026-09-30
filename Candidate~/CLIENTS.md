@@ -71,6 +71,25 @@ PINNED_CANDIDATE_PYTHON -I -B -W always::ResourceWarning tests/verify_native_cli
 The test does not install those clients or register them in an existing profile.
 It is Linux-specific, not Windows native-client acceptance.
 
+## Same-connection local pause (development slice)
+
+The existing Unity windows now expose exact-plan Pause and evidence-revalidated
+Resume. No MCP client receives those controls. The same plan/digest/task/client,
+connection and absolute expiry are retained; no TTL renewal, implicit approval,
+rollback or automatic reconnect occurs. Stopped, expired, replaced, disconnected,
+reloaded, evidence-changed or locally revoked grants cannot be resumed. A material
+pause retains the existing project-wide single writer. Calls while paused return
+an explicit error, not fabricated successful work; only an exact live-plan paused
+response is retained by the runtime. Other failure paths still revoke.
+
+`ContinuityCases` PC001–PC005 and `test_runtime_pause.py` PR001–PR005 cover
+identity/expiry, relevant-state conflicts, local-only controls and strict error
+classification. The native `--approved-tasks` mode adds a **separate** NP001–NP004
+group: both Hermes/Codex exercise read and material calls while fixture-paused,
+then continue under the identical locally resumed plan. These are not cross-reload
+continuation, real human clicks or real Unity execution. The existing adapter UI
+test uses Unity API doubles; source seams do not replace Editor acceptance.
+
 ## Known boundaries, not production approval
 
 Codex's `CODEX_CA_CERTIFICATE` is **additional** trust; upstream retains native
@@ -168,7 +187,7 @@ This establishes **real native MCP calls against fixture-approved production gat
 not a model-loop turn, trusted operator-to-client credential delivery, software
 attestation, a real human click, Windows native-client acceptance or Unity Editor
 execution. Re-preparing after stop requires new approval; it is **not** the still
-missing task-preserving pause/reload/resume workflow. No secret/private key is
+missing cross-reload/reconnection task-continuation workflow. No secret/private key is
 written; generated child output and owned test-home files are scanned before
 report persistence, and tracked descendants/listeners and temporary roots must be
 absent. The original no-Unity compatibility mode remains separately runnable.

@@ -230,6 +230,7 @@ class Runtime(Middleware):
         invocation = Invocation(self, ctx.session_id, name, args, approval_client=identity)
         token = _CURRENT.set(invocation)
         read_succeeded = False
+        paused = False
         try:
             if name == 'agent_prepare':
                 self.plans.pop(invocation.client_id, None)
@@ -266,12 +267,15 @@ class Runtime(Middleware):
                 data = result.structured_content
                 read_succeeded = (not result.is_error and isinstance(data, dict)
                                   and data.get('success') is True)
+                paused = self.paused_response(invocation, data)
+                if paused:
+                    result.is_error = True
             return result
         finally:
             # Includes failures before PluginHub.send_command, exceptions and
             # server-side cancellation. command_failed compares plan identity.
             try:
-                if name in SPECS and not read_succeeded:
+                if name in SPECS and not read_succeeded and not paused:
                     self.command_failed()
                 if invocation.revoked_plan is not None:
                     await self.notify_stop(invocation.client_id, invocation.revoked_plan)
@@ -303,10 +307,22 @@ class Runtime(Middleware):
             raise ToolError('request_not_bound')
         return await self.connection()
 
-    def command_failed(self):
+    def paused_response(self, invocation, result):
+        # A gate-denied, non-executed call is not successful, but its exact local
+        # pause must not be mistaken for an execution failure that destroys it.
+        plan = invocation.plan
+        plans = self.material.plans if invocation.name == 'material_execute' else self.plans
+        return (invocation.active and not invocation.cancelled and plan is not None
+                and plans.get(invocation.client_id) is plan and time.monotonic() < plan.expires_at
+                and isinstance(result, dict) and result.get('success') is False
+                and result.get('error') == 'plan_paused'
+                and result.get('data') == {'status': 'paused', 'reason': 'plan_paused', 'plan_id': plan.plan_id})
+
+    def command_failed(self, result=None):
         invocation = _CURRENT.get()
         if (invocation is not None and invocation.owner is self and invocation.name in SPECS
-                and self.plans.get(invocation.client_id) is invocation.plan):
+                and self.plans.get(invocation.client_id) is invocation.plan
+                and not self.paused_response(invocation, result)):
             # Preserve the precise identity until middleware can await bounded
             # Unity revocation. A cancelled read exits before SDK stack cleanup.
             invocation.revoked_plan = self.plans.pop(invocation.client_id, None)

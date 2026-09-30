@@ -36,6 +36,24 @@
 - Unity扩展返回原生SuccessResponse/ErrorResponse，重要字段放data内，符合上游线格式。
 - 所有返回数据需要保留原生错误语义；wrapper success envelope不能把底层success=false变成功。
 
+
+## 同连接本地暂停/继续
+
+读取及材质清单可由本地窗口暂停，并在同一有效连接内核验后继续。
+暂停保持原plan_id/digest/task/client/connection、清单、当前证据及原到期时间，
+不延长期限，不回退文件，也不释放材质工程单写占用。暂停不是撤权：只有
+已批准清单可暂停/继续；普通Approve不能解暂停。本地点击在同步安全点生效，
+门控忙时拒绝本地切换，停止/能力撤销仍可先撤权。
+
+继续调用已有Current+Capture/Verify：目标/候选、依赖、宿主、能力、工程、
+连接、期限或回调中撤权不一致即撤销原清单，保留现场。重载、断线、退出、
+StopAll、到期仍清除授权；**本节不实现跨重载/重连的任务续接**。
+
+合法暂停清单的execute返回success=false/error=plan_paused，data严格包含
+status=paused、reason=plan_paused、当前plan_id。Python仅在这份精确拒绝且
+原映射仍有效时保留它；调用仍是错误/未执行，不伪装成功。其他失败保持原
+撤权语义。没有新增MCP pause/resume/approve/renew工具或Unity远程kind。
+
 ## 所有权
 
 并行实现只可写各自目录：

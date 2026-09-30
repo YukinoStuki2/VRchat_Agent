@@ -16,7 +16,7 @@ namespace Yukino.VRChatAgent
         {
             internal string Id, Digest, Client, Connection, Project, Task;
             internal double Expires;
-            internal bool Approved;
+            internal bool Approved, Paused;
             internal JObject Manifest;
             internal Dictionary<string, string> Evidence;
         }
@@ -129,7 +129,7 @@ namespace Yukino.VRChatAgent
                 return new JArray(plans.Values.Select(p => new JObject {
                     ["plan_id"] = p.Id, ["digest"] = p.Digest, ["client_id"] = p.Client, ["task_id"] = p.Task,
                     ["connection_id"] = p.Connection, ["project_id"] = p.Project, ["approved"] = p.Approved,
-                    ["seconds_left"] = Math.Max(0, p.Expires - clock()), ["manifest"] = p.Manifest.DeepClone() }));
+                    ["paused"] = p.Paused, ["seconds_left"] = Math.Max(0, p.Expires - clock()), ["manifest"] = p.Manifest.DeepClone() }));
             }
         }
         public bool Approve(string id, string digest)
@@ -137,7 +137,7 @@ namespace Yukino.VRChatAgent
             lock (sync)
             {
                 Plan plan = plans.Values.FirstOrDefault(p => p.Id == id);
-                if (plan == null) return false;
+                if (plan == null || plan.Paused) return false;
                 try
                 {
                     Require(!busy && digest == plan.Digest, "approval_mismatch");
@@ -145,6 +145,29 @@ namespace Yukino.VRChatAgent
                     LastReason = "本地已批准；仅本任务、本连接、本清单"; return true;
                 }
                 catch { plans.Remove(plan.Client); LastReason = "批准失败，清单已撤销"; return false; }
+            }
+        }
+        // Local UI only. Pause is not stop, and resume never extends expiry/rebinds.
+        public bool Pause(string id, string digest) => SetPaused(id, digest, true);
+        public bool Resume(string id, string digest) => SetPaused(id, digest, false);
+        bool SetPaused(string id, string digest, bool paused)
+        {
+            lock (sync)
+            {
+                Observe();
+                Plan plan = plans.Values.FirstOrDefault(p => p.Id == id);
+                if (busy || plan == null || plan.Digest != digest || !plan.Approved || plan.Paused == paused) return false;
+                busy = true;
+                try
+                {
+                    Current(plan, true);
+                    if (!paused) VerifyEvidence(plan);
+                    Current(plan, true); plan.Paused = paused;
+                    LastReason = paused ? "本地已暂停；清单与期限保留" : "定点证据复核通过；原清单继续";
+                    return true;
+                }
+                catch { plans.Remove(plan.Client); LastReason = "继续核验失败，清单已撤销"; return false; }
+                finally { busy = false; }
             }
         }
         public JObject Dispatch(JObject request)
@@ -222,7 +245,10 @@ namespace Yukino.VRChatAgent
                     string operation = Op(command, action);
                     Require(((JArray)active.Manifest["operations"]).Cast<JObject>().Any(x => (string)x["command"] == command && (string)x["action"] == action) &&
                         ((JArray)active.Manifest["targets"]).Any(x => (string)x == target), "outside_plan");
-                    Current(active, true); VerifyEvidence(active); Current(active, true);
+                    Current(active, true);
+                    if (active.Paused) return new JObject { ["success"] = false, ["error"] = "plan_paused",
+                        ["data"] = new JObject { ["status"] = "paused", ["reason"] = "plan_paused", ["plan_id"] = active.Id } };
+                    VerifyEvidence(active); Current(active, true);
                     JObject result = native(command, (JObject)args.DeepClone());
                     Require(result != null && result["success"]?.Type == JTokenType.Boolean, "native_result_invalid");
                     if ((bool)result["success"] != true) { plans.Remove(client); LastReason = "原生命令失败；已撤权，未自动回退"; return Error("native_read_failed"); }

@@ -169,6 +169,18 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     async def approve(plan,material=False):
                         assert (await exchange({'fixture_approve_exact':plan,
                             'route':'vrchat_agent_material_dispatch' if material else 'vrchat_agent_dispatch'}))['fixture_approved']
+                    report['native_pause_pass_ids']=[]
+                    async def pause_resume(role,plan,tool,arguments,material=False):
+                        route='vrchat_agent_material_dispatch' if material else 'vrchat_agent_dispatch'
+                        assert (await exchange({'fixture_pause_exact':plan,'route':route}))['fixture_paused']
+                        value=await peers[role].call(tool,arguments)
+                        assert value.get('structuredContent',{}).get('success') is False
+                        paused=value['structuredContent']['data']
+                        assert paused=={'status':'paused','reason':'plan_paused','plan_id':plan['plan_id']}
+                        remaining=await plans(material)
+                        assert any(p['plan_id']==plan['plan_id'] and p['paused'] for p in remaining),'paused_plan_lost'
+                        assert (await exchange({'fixture_resume_exact':plan,'route':route}))['fixture_resumed']
+                        await data(role,tool,arguments)
                     read_plans={}
                     report['approved_stage']='NA001_signed_local_plans'
                     for role in ('hermes','codex'):
@@ -190,6 +202,10 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     await approve(read_plans['codex'])
                     await data('codex','manage_material',READ)
                     checks.append('NA002')
+                    for role,number in [('hermes',1),('codex',2)]:
+                        report['approved_stage']='NP00'+str(number)+'_read_pause_'+role
+                        await pause_resume(role,read_plans[role],'manage_material',READ)
+                        report['native_pause_pass_ids'].append('NP00'+str(number))
                     manifests={role:{**MANIFEST,'source':'Assets/source.mat',
                         'candidate':'Assets/candidate.mat' if role=='hermes' else 'Assets/codex-candidate.mat',
                         'operations':['copy','edit'],'references':[]} for role in ('hermes','codex')}
@@ -203,6 +219,12 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         for action,arguments in [('copy',{}),('edit',{'property':'_Value','value':value})]:
                             await data(role,'material_execute',{'task_id':MANIFEST['task_id'],
                                 'plan_id':material_plans[role]['plan_id'],'action':action,'arguments':arguments})
+                        number=3 if role=='hermes' else 4
+                        report['approved_stage']='NP00'+str(number)+'_material_pause_'+role
+                        await pause_resume(role,material_plans[role],'material_execute',
+                            {'task_id':MANIFEST['task_id'],'plan_id':material_plans[role]['plan_id'],
+                             'action':'edit','arguments':{'property':'_Value','value':.625 if role=='hermes' else .875}},True)
+                        report['native_pause_pass_ids'].append('NP00'+str(number))
                         before=await file_bytes()
                         denied_result=await peers[other].call('material_prepare',manifests[other])
                         assert denied_result.get('isError') and denied_result['structuredContent']['error']=='project_write_busy'
@@ -220,8 +242,8 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         assert await file_bytes()==before
                     before=await file_bytes()
                     report['fixture_bytes_before_stop']=before
-                    assert before=={'hermes':{'source':'original','candidate':'0.625','writes':4},
-                                    'codex':{'source':'original','candidate':'0.875','writes':4}}
+                    assert before=={'hermes':{'source':'original','candidate':'0.625','writes':6},
+                                    'codex':{'source':'original','candidate':'0.875','writes':6}}
                     checks.append('NA003')
                     report['approved_stage']='NA004_explicit_stop_isolation_without_rollback'
                     for role,other in (('hermes','codex'),('codex',None)):
@@ -272,6 +294,7 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     assert not runtime.sessions and not runtime.session_identities and not runtime.plans
                     assert not runtime.material.plans and not runtime.material.history
                     checks.append('NA006')
+                    assert report['native_pause_pass_ids']==[f'NP{i:03d}' for i in range(1,5)]
                     report['approved_stage']='completed'
             finally:
                 responder.cancel();await asyncio.gather(responder,return_exceptions=True)

@@ -25,7 +25,7 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
     def config(self):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
-        return {'project':'fixture-project','local_port':port,'parent_pid':os.getpid()}
+        return {'project':f'owned-launcher-fixture-{os.getpid()}','local_port':port,'parent_pid':os.getpid()}
 
     async def run_peer(self,owner,ready,disconnect):
         import websockets
@@ -78,6 +78,7 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
         peer=asyncio.create_task(self.run_peer(owned.owner,peer_ready,disconnect))
         try:
             result=await asyncio.wait_for(asyncio.shield(task),16)
+            self.assertTrue(any(x['phase']=='running' for x in reports), {'supervisor_code':result.get('code')})
             await asyncio.wait_for(peer,3)
         finally:
             stop.set()

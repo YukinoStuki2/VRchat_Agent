@@ -34,6 +34,14 @@ namespace Yukino.VRChatAgent
                 EditorGUI.BeginDisabledGroup((bool)plan["approved"]);
                 if(GUILayout.Button("批准此材质清单"))Gate.Approve((string)plan["plan_id"],(string)plan["digest"]);
                 EditorGUI.EndDisabledGroup();
+                EditorGUILayout.LabelField("暂停状态", (bool)plan["paused"] ? "已暂停；期限不延长" : "未暂停");
+                EditorGUI.BeginDisabledGroup(!(bool)plan["approved"]);
+                if ((bool)plan["paused"])
+                {
+                    if (GUILayout.Button("核验后继续原清单")) Gate.Resume((string)plan["plan_id"], (string)plan["digest"]);
+                }
+                else if (GUILayout.Button("暂停此清单（不回退）")) Gate.Pause((string)plan["plan_id"], (string)plan["digest"]);
+                EditorGUI.EndDisabledGroup();
             }
             foreach(JObject row in Gate.LocalTransactions())
             {

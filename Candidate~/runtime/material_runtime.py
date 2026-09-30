@@ -140,19 +140,21 @@ class MaterialRuntime:
                                 approval_client=identity)
         token = _CURRENT.set(invocation)
         completed = False
+        paused = False
         try:
             validate(invocation.name, args)  # Before FastMCP/Pydantic can coerce numbers/bools.
             await ctx.set_state('unity_instance', self.runtime.project_id)
             result = await call_next(context)
             data = result.structured_content
             completed = not result.is_error and isinstance(data, dict) and data.get('success') is True
+            paused = self.runtime.paused_response(invocation, data)
             if isinstance(data, dict) and data.get('success') is False:
                 # Keep the original transaction/readback even on native ErrorResponse.
                 result.is_error = True
             return result
         finally:
             try:
-                if (invocation.name == 'material_execute' and not completed and invocation.plan is not None
+                if (invocation.name == 'material_execute' and not completed and not paused and invocation.plan is not None
                         and self.plans.get(invocation.client_id) is invocation.plan):
                     self.plans.pop(invocation.client_id)
                     await self.runtime.notify_stop(invocation.client_id, invocation.plan, 'material_stop')

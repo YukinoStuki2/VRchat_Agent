@@ -28,7 +28,7 @@ namespace Yukino.VRChatAgent
         {
             internal string Id, Digest, Project, Client, Connection, Task;
             internal double Expires;
-            internal bool Approved, Copied;
+            internal bool Approved, Copied, Paused;
             internal JObject Manifest, Evidence;
         }
         readonly Func<double> clock;
@@ -80,11 +80,31 @@ namespace Yukino.VRChatAgent
         static string Hash(JObject o) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(o.ToString(Formatting.None)))).Replace("-","").ToLowerInvariant(); }
         public JArray LocalPlans()
         {
-            lock(sync){Observe();return plan==null?new JArray():new JArray(new JObject{["plan_id"]=plan.Id,["digest"]=plan.Digest,["client_id"]=plan.Client,["task_id"]=plan.Task,["approved"]=plan.Approved,["manifest"]=plan.Manifest.DeepClone()});}
+            lock(sync){Observe();return plan==null?new JArray():new JArray(new JObject{["plan_id"]=plan.Id,["digest"]=plan.Digest,["client_id"]=plan.Client,["task_id"]=plan.Task,["approved"]=plan.Approved,["paused"]=plan.Paused,["manifest"]=plan.Manifest.DeepClone()});}
         }
         public bool Approve(string id,string digest)
         {
-            lock(sync){if(plan==null || plan.Id!=id || plan.Digest!=digest || busy)return false;try{var p=plan;Current(p,false);Verify(p);p.Approved=true;return true;}catch{StopAll("证据变化，重新批准");return false;}}
+            lock(sync){if(plan==null || plan.Id!=id || plan.Digest!=digest || plan.Paused || busy)return false;try{var p=plan;Current(p,false);Verify(p);p.Approved=true;return true;}catch{StopAll("证据变化，重新批准");return false;}}
+        }
+        // Local-only continuation; keep exact plan/postimage and never renew expiry.
+        public bool Pause(string id,string digest) => SetPaused(id,digest,true);
+        public bool Resume(string id,string digest) => SetPaused(id,digest,false);
+        bool SetPaused(string id,string digest,bool paused)
+        {
+            lock(sync)
+            {
+                Observe();var p=plan;
+                if(busy || p==null || p.Id!=id || p.Digest!=digest || !p.Approved || p.Paused==paused)return false;
+                busy=true;
+                try
+                {
+                    Current(p,true);if(!paused)Verify(p);Current(p,true);p.Paused=paused;
+                    LastReason=paused?"本地已暂停；保留候选及原清单期限":"定点证据复核通过；原材质任务继续";
+                    return true;
+                }
+                catch{StopAll("继续核验失败，保留候选，撤销清单");return false;}
+                finally{busy=false;}
+            }
         }
         public JArray LocalTransactions() { lock(sync)return new JArray(journal.Select(j=>new JObject{["transaction"]=j.Report.DeepClone(),["task_id"]=j.Plan.Task,["manifest"]=j.Plan.Manifest.DeepClone(),["withdrawn"]=j.Withdrawn})); }
         // Local-human action only. Stop/remote requests never call this method.
@@ -136,7 +156,7 @@ namespace Yukino.VRChatAgent
                     {
                         Keys(body);Need(r["plan_id"].Type==JTokenType.String,"invalid_string");string id=(string)r["plan_id"];
                         var entries=journal.Where(j=>j.Plan.Client==client && j.Plan.Task==task && j.Plan.Project==project() && j.Plan.Connection==connection() && j.Plan.Id==id);
-                        return Ok(new JObject{["grant_active"]=plan!=null && plan.Id==id && plan.Client==client && plan.Task==task && plan.Approved,["transactions"]=new JArray(entries.Select(j=>j.Report.DeepClone())),["capabilities"]=new JArray(capabilities)});
+                        return Ok(new JObject{["grant_active"]=plan!=null && plan.Id==id && plan.Client==client && plan.Task==task && plan.Approved && !plan.Paused,["transactions"]=new JArray(entries.Select(j=>j.Report.DeepClone())),["capabilities"]=new JArray(capabilities)});
                     }
                     if(kind=="prepare")
                     {
@@ -172,7 +192,9 @@ namespace Yukino.VRChatAgent
                     if(action=="copy"){Keys(args);Need(!active.Copied,"already_copied");}
                     else if(action=="reference"){Keys(args,"renderer","slot");Need(active.Copied,"copy_required");Need(((JArray)active.Manifest["references"]).Any(h=>JToken.DeepEquals(h,args)),"reference_not_approved");}
                     else{Keys(args,"property","value");Text(args["property"]);Need(active.Copied,"copy_required");}
-                    var command=(JObject)args.DeepClone();command["action"]=action;Current(active,true);Verify(active);Current(active,true);
+                    var command=(JObject)args.DeepClone();command["action"]=action;Current(active,true);
+                    if(active.Paused)return Fail("plan_paused",new JObject{["status"]="paused",["reason"]="plan_paused",["plan_id"]=active.Id});
+                    Verify(active);Current(active,true);
                     Need(journal.Count<128,"journal_capacity");var before=Capture(active,command);var checkpoint=backend.Checkpoint(active.Manifest,command);
                     Need(JToken.DeepEquals(before,Capture(active,command)),"checkpoint_evidence_changed");Current(active,true);
                     string error=null;JObject after=null,readback=null,nextEvidence=null;

@@ -43,7 +43,7 @@ namespace Yukino.VRChatAgent
             foreach (JObject plan in displayed)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("客户端会话", (string)plan["client_id"]);
+                EditorGUILayout.LabelField("认证主体 / MCP会话", (string)plan["client_id"]);
                 EditorGUILayout.LabelField("连接", (string)plan["connection_id"]);
                 EditorGUILayout.LabelField("任务", (string)plan["task_id"]);
                 EditorGUILayout.LabelField("清单ID", (string)plan["plan_id"]);

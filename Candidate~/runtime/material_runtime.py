@@ -98,6 +98,7 @@ class MaterialPlan:
     expires_at: float
     manifest: dict
     plan_id: str = ''
+    approval_client: str = ''
 
 
 class MaterialRuntime:
@@ -132,10 +133,11 @@ class MaterialRuntime:
         ctx = context.fastmcp_context
         if ctx is None or not ctx.session_id:
             raise ToolError('request_not_bound')
-        self.runtime.bind_session(ctx)
+        identity = self.runtime.bind_session(ctx)
         from candidate_runtime import snapshot
         args = snapshot(context.message.arguments or {})
-        invocation = Invocation(self.runtime, ctx.session_id, context.message.name, args)
+        invocation = Invocation(self.runtime, ctx.session_id, context.message.name, args,
+                                approval_client=identity)
         token = _CURRENT.set(invocation)
         completed = False
         try:
@@ -185,7 +187,7 @@ class MaterialRuntime:
         if params != expected:
             raise ToolError('unexpected_arguments')
         return ROUTE, {'protocol': 1, 'kind': kind, 'project_id': self.runtime.project_id,
-            'client_id': invocation.client_id, 'connection_id': session_id,
+            'client_id': self.runtime.wire_client(invocation), 'connection_id': session_id,
             'task_id': plan.task_id, 'plan_id': plan.plan_id, 'body': params}
 
     async def prepare(self, task_id, source, candidate, operations, references, ttl_seconds):
@@ -207,13 +209,15 @@ class MaterialRuntime:
                 raise ToolError('prepare_cancelled')
             manifest = {'source': source, 'candidate': candidate, 'operations': operations,
                 'references': references, 'ttl_seconds': ttl_seconds}
-            pending = MaterialPlan(task_id, connection, time.monotonic() + ttl_seconds, manifest)
+            pending = MaterialPlan(task_id, connection, time.monotonic() + ttl_seconds, manifest,
+                                   approval_client=invocation.approval_client)
             invocation.plan = pending
             result = await PluginHub.send_command(connection, 'material_prepare', manifest)
             data = result.get('data') or {}
             if result.get('success') is not True:
                 return result  # Native failures may include actual transaction evidence.
-            returned = MaterialPlan(task_id, connection, pending.expires_at, manifest, exact_id(data.get('plan_id')))
+            returned = MaterialPlan(task_id, connection, pending.expires_at, manifest,
+                                    exact_id(data.get('plan_id')), pending.approval_client)
             if data.get('status') != 'pending':
                 raise ToolError('prepare_not_pending')
             current_connection = await self.runtime.connection()
@@ -248,7 +252,8 @@ class MaterialRuntime:
         else:
             invocation = self.runtime.current()
             exact_id(task_id)
-            plan = MaterialPlan(task_id, await self.runtime.connection(), 0, {})
+            plan = MaterialPlan(task_id, await self.runtime.connection(), 0, {},
+                                approval_client=invocation.approval_client)
         invocation.plan = plan
         return await PluginHub.send_command(plan.connection_id, 'material_status', {})
 

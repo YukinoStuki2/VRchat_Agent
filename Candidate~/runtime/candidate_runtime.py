@@ -64,6 +64,7 @@ class Plan:
     operations: frozenset
     targets: frozenset
     plan_id: str = ''
+    approval_client: str = ''
 
 
 @dataclass
@@ -76,42 +77,68 @@ class Invocation:
     active: bool = True
     cancelled: bool = False
     revoked_plan: Plan | None = None
+    approval_client: str = ''
 
 
 class Runtime(Middleware):
-    def __init__(self, project_id):
+    def __init__(self, project_id, *, authenticated=False):
         self.project_id = project_id
+        self.authenticated = authenticated
         self.unity_required = False
         self.unity_ingress = None
         self.plans = {}
         self.preparing = {}
         self.sessions = {}
+        self.session_identities = {}
         self.closed_sessions = weakref.WeakSet()
         self.lifecycle_results = deque(maxlen=128)
         from material_runtime import MaterialRuntime
         self.material = MaterialRuntime(self)
 
+    def client_identity(self, ctx):
+        if not self.authenticated:
+            return ctx.session_id  # Explicit synthetic fixture mode only.
+        from fastmcp.server.dependencies import get_access_token
+        access = get_access_token()
+        if access is None:
+            raise ToolError('authenticated_client_required')
+        # Canonical tuple: never infer a client brand from a bearer or self-report.
+        identity = json.dumps([exact_id(access.client_id), exact_id(ctx.session_id)],
+                              ensure_ascii=True, separators=(',', ':'))
+        if len(identity) > 512:
+            raise ToolError('invalid_identity')
+        return identity
+
+    def wire_client(self, invocation):
+        if self.authenticated and not invocation.approval_client:
+            raise ToolError('authenticated_client_required')
+        return invocation.approval_client or invocation.client_id
+
     def bind_session(self, ctx):
+        identity = self.client_identity(ctx)  # Authenticate before retaining SDK state.
         # Same SDK exit-stack mechanism used by FastMCP's stateful proxy.
         # Private SDK seam: pinned/tested, never substitute a caller identity.
         session, client = ctx.session, ctx.session_id
         if session in self.closed_sessions:
             raise ToolError('session_closed')
         if client in self.sessions:
-            if self.sessions[client] is not session:
+            if self.sessions[client] is not session or self.session_identities.get(client) != identity:
                 raise ToolError('session_identity_changed')
-            return
+            return identity
         stack = getattr(session, '_exit_stack', None)
         if stack is None or not callable(getattr(stack, 'push_async_callback', None)):
             raise ToolError('session_lifecycle_unavailable')
         self.sessions[client] = session
+        self.session_identities[client] = identity
         stack.push_async_callback(self.close_session, client, session)
+        return identity
 
     async def close_session(self, client, session):
         if self.sessions.get(client) is not session:
             return
         self.closed_sessions.add(session)
         self.sessions.pop(client, None)
+        self.session_identities.pop(client, None)
         self.material.history.pop(client, None)
         material_plan = self.material.plans.pop(client, None)
         material_pending = self.material.preparing.pop(client, None)
@@ -132,7 +159,7 @@ class Runtime(Middleware):
                    'command': command, 'task_id': plan.task_id, 'plan_id': plan.plan_id,
                    'connection_id': plan.connection_id}
         if plan.plan_id:
-            invocation = Invocation(self, client, command, {}, plan)
+            invocation = Invocation(self, client, command, {}, plan, approval_client=plan.approval_client)
             token = _CURRENT.set(invocation)
             try:
                 # A cancelled SDK session must not cancel its own revocation.
@@ -199,8 +226,8 @@ class Runtime(Middleware):
         ctx = context.fastmcp_context
         if ctx is None or not ctx.session_id:
             raise ToolError('request_not_bound')
-        self.bind_session(ctx)
-        invocation = Invocation(self, ctx.session_id, name, args)
+        identity = self.bind_session(ctx)
+        invocation = Invocation(self, ctx.session_id, name, args, approval_client=identity)
         token = _CURRENT.set(invocation)
         read_succeeded = False
         try:
@@ -322,7 +349,7 @@ class Runtime(Middleware):
                 raise ToolError('plan_replaced')
         return 'vrchat_agent_dispatch', {
             'protocol': 1, 'kind': kind, 'project_id': self.project_id,
-            'client_id': invocation.client_id, 'connection_id': session_id,
+            'client_id': self.wire_client(invocation), 'connection_id': session_id,
             'task_id': plan.task_id if plan else '',
             'plan_id': plan.plan_id if plan else '', 'body': body,
         }
@@ -358,7 +385,7 @@ class Runtime(Middleware):
         if invocation.cancelled or self.preparing.get(invocation.client_id) is not invocation:
             raise ToolError('prepare_cancelled')
         plan = Plan(task_id, connection, time.monotonic() + ttl_seconds,
-                    frozenset(pairs), frozenset(targets))
+                    frozenset(pairs), frozenset(targets), approval_client=invocation.approval_client)
         invocation.plan = plan
         self.plans[invocation.client_id] = plan
         returned_plan = None
@@ -370,7 +397,7 @@ class Runtime(Middleware):
                 raise ToolError('prepare_not_pending')
             plan_id = exact_id(data.get('plan_id'))
             returned_plan = Plan(plan.task_id, connection, plan.expires_at,
-                                 plan.operations, plan.targets, plan_id)
+                                 plan.operations, plan.targets, plan_id, plan.approval_client)
             current_connection = await self.connection()
             if (self.plans.get(invocation.client_id) is not plan or current_connection != connection
                     or time.monotonic() >= plan.expires_at or not invocation.active or invocation.cancelled):
@@ -410,7 +437,7 @@ def create_server(project_id, *, mcp_auth=None):
     # None preserves synthetic fixture mode, not an authenticated installed entry.
     server = FastMCP('vrchat-agent-candidate', auth=mcp_auth,
                      instructions='权限默认关闭；须在Unity本地核对并批准清单。')
-    runtime = Runtime(project_id)
+    runtime = Runtime(project_id, authenticated=server.auth is not None)
     server._candidate_runtime = runtime
     PluginHub.configure(PluginRegistry(), asyncio.get_running_loop(), mcp=server)
     PluginHub.command_envelope = runtime.envelope

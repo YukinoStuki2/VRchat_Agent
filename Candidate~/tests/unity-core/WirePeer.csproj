@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation></PropertyGroup>
+ <PropertyGroup><OutputType>Exe</OutputType><StartupObject>WirePeer</StartupObject><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation><CandidateResponseSource Condition="'$(CandidateResponseSource)' == ''">/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor/Helpers/Response.cs</CandidateResponseSource></PropertyGroup>
  <ItemGroup>
-  <Compile Include="../../package/Editor/Core/*.cs"/><Compile Include="WirePeer.cs"/>
-  <Compile Include="/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor/Helpers/Response.cs" Link="NativeResponse.cs"/>
+  <Compile Include="../../package/Editor/Core/*.cs"/><Compile Include="WirePeer.cs"/><Compile Include="WriteCases.cs"/>
+  <Compile Include="$(CandidateResponseSource)" Link="NativeResponse.cs"/>
   <Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference>
  </ItemGroup>
 </Project>

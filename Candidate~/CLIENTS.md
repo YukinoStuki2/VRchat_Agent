@@ -92,3 +92,32 @@ References inspected:
 - https://developers.openai.com/codex/mcp
 - https://github.com/openai/codex/tree/rust-v0.159.2/codex-rs/app-server-protocol
 - https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/http-client/src/client_tls.rs
+
+## Authenticated approval identity (development slice)
+
+Authenticated calls now bind Unity's existing `client_id` field to the canonical
+JSON tuple `[verified access-token client_id, exact SDK session_id]`. It is built
+from the pinned verifier's request context, not tool arguments, MCP `_meta`, a
+client name or a claim supplied by the model. The tuple is only an opaque identity
+key on the existing protocol: task, connection, plan/digest, target and capability
+checks remain in place. No additional approval button or field-level grant is added.
+
+The runtime refuses missing authentication and a different principal in an already
+bound SDK session. Native-read and material plans retain that identity when the
+SDK request context disappears, so DELETE/cancellation cleanup revokes the exact
+approved plan. Canonical tuple encoding avoids delimiter ambiguity. The explicit
+anonymous test-fixture mode retains its old session-only keys; installed startup
+remains authenticated-only.
+
+`tests/test_client_binding.py` separates real signed-token/MCP/websocket tests,
+small request-context unit tests, and a freshly compiled net8 gate/file-backend
+fixture. The compiled case approves separate clients locally, changes only its
+synthetic material candidate, checks cross-client stop rejection, and proves one
+session exit removes its two plans without undoing candidate bytes or another
+client's native-read approval. It is **not** a real Unity or human approval test.
+
+This closes the missing authenticated-principal propagation into a plan, **not**
+the operator-to-client credential handoff or client-software authentication gap.
+A signed role (including a `hermes:` or `codex:` role) does not prove the program
+holding it is Hermes/Codex. End-user handoff, real native-client approved task
+stop/resume, Windows Unity and final independent review remain separate gates.

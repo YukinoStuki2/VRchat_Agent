@@ -28,7 +28,7 @@ namespace Yukino.VRChatAgent
             Capability("reference","明确宿主与槽位切换（manage_material/assign_material_to_renderer）");
             foreach(JObject plan in Gate.LocalPlans())
             {
-                EditorGUILayout.LabelField("客户端会话",(string)plan["client_id"]);EditorGUILayout.LabelField("任务",(string)plan["task_id"]);
+                EditorGUILayout.LabelField("认证主体 / MCP会话",(string)plan["client_id"]);EditorGUILayout.LabelField("任务",(string)plan["task_id"]);
                 EditorGUILayout.LabelField("材质清单ID",(string)plan["plan_id"]);EditorGUILayout.LabelField("材质清单摘要",(string)plan["digest"]);
                 EditorGUILayout.LabelField("材质完整清单",plan["manifest"].ToString());
                 EditorGUI.BeginDisabledGroup((bool)plan["approved"]);

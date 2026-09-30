@@ -29,13 +29,15 @@ class UnityAuthTests(unittest.IsolatedAsyncioTestCase):
         def verifier(audience, principal, scope):
             return CandidateJWTVerifier(public_key=keys.public_key,
                 issuer='fixture-run', audience=audience, principals=(principal,), required_scope=scope)
-        mcp_auth = verifier('fixture-mcp', 'fixture-client', 'candidate:mcp')
+        mcp_auth = CandidateJWTVerifier(public_key=keys.public_key, issuer='fixture-run',
+            audience='fixture-mcp', principals=('fixture-client', 'fixture-client-b'), required_scope='candidate:mcp')
         unity_auth = verifier('fixture-unity', 'fixture-editor', 'candidate:unity')
         def issue(audience, principal, scope):
             return keys.create_token(subject=principal, issuer='fixture-run', audience=audience,
                 scopes=[scope], expires_in_seconds=ttl, additional_claims={'client_id': principal})
         tokens = {'unity': issue('fixture-unity', 'fixture-editor', 'candidate:unity'),
                   'mcp': issue('fixture-mcp', 'fixture-client', 'candidate:mcp'),
+                  'mcp-b': issue('fixture-mcp', 'fixture-client-b', 'candidate:mcp'),
                   'wrong-project-principal': issue('fixture-unity', 'other-editor', 'candidate:unity')}
         mcp = create_server('fixture-project', mcp_auth=mcp_auth)
         app = create_app(mcp, unity_auth=unity_auth)

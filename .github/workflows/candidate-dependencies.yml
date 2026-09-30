@@ -2,7 +2,7 @@ name: Candidate locked dependencies and run identities
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/tests/test_runtime_auth.py', 'Candidate~/experiments/windows_tls_pipe.py', 'Candidate~/runtime/tls*.py', 'Candidate~/tests/test_tls*.py', 'Candidate~/runtime/**', 'Candidate~/launcher/**', 'Candidate~/native/**', 'Candidate~/dependencies/mcp-1.29.1/**', 'Candidate~/tests/test_bootstrap_runtime.py', 'Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs', '.gitattributes', '.github/workflows/candidate-dependencies.yml']
+    paths: ['Candidate~/distribution/requirements.*', 'Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py', 'Candidate~/runtime/candidate_auth.py', 'Candidate~/runtime/run_identity.py', 'Candidate~/tests/test_run_identity.py', 'Candidate~/tests/test_runtime_auth.py','Candidate~/tests/test_client_binding.py','Candidate~/tests/test_runtime_unity_auth.py','Candidate~/tests/test_runtime_lifecycle.py','Candidate~/tests/test_runtime_material.py','Candidate~/tests/unity-core/WirePeer.cs','Candidate~/tests/unity-core/WirePeer.csproj','Candidate~/tests/unity-core/WriteCases.cs','Candidate~/package/Editor/Core/CandidateGate.cs','Candidate~/package/Editor/Core/MaterialCandidateGate.cs', 'Candidate~/experiments/windows_tls_pipe.py', 'Candidate~/runtime/tls*.py', 'Candidate~/tests/test_tls*.py', 'Candidate~/runtime/**', 'Candidate~/launcher/**', 'Candidate~/native/**', 'Candidate~/dependencies/mcp-1.29.1/**', 'Candidate~/tests/test_bootstrap_runtime.py', 'Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs', '.gitattributes', '.github/workflows/candidate-dependencies.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path dependency-evidence -Force | Out-Null
           git rev-parse HEAD | Set-Content dependency-evidence/commit.txt
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/tests/test_runtime_auth.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/tests/test_runtime_auth.py','Candidate~/tests/test_client_binding.py','Candidate~/tests/test_runtime_unity_auth.py','Candidate~/tests/test_runtime_lifecycle.py','Candidate~/tests/test_runtime_material.py','Candidate~/tests/unity-core/WirePeer.cs','Candidate~/tests/unity-core/WirePeer.csproj','Candidate~/tests/unity-core/WriteCases.cs','Candidate~/package/Editor/Core/CandidateGate.cs','Candidate~/package/Editor/Core/MaterialCandidateGate.cs','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1','Candidate~/package/Editor/Core' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-before.json
           python -m venv "$env:RUNNER_TEMP/candidate-locked-env"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -64,7 +64,7 @@ jobs:
           assert len(methods)==7 and len(set(methods))==7
           rows=[]
           for method in methods:
-              code="import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');sys.argv=['Candidate~/tests/test_runtime_auth.py',sys.argv[1]];runpy.run_path(sys.argv[0],run_name='__main__')"
+              code="import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');sys.argv=['Candidate~/tests/test_runtime_auth.py','Candidate~/tests/test_client_binding.py','Candidate~/tests/test_runtime_unity_auth.py','Candidate~/tests/test_runtime_lifecycle.py','Candidate~/tests/test_runtime_material.py','Candidate~/tests/unity-core/WirePeer.cs','Candidate~/tests/unity-core/WirePeer.csproj','Candidate~/tests/unity-core/WriteCases.cs','Candidate~/package/Editor/Core/CandidateGate.cs','Candidate~/package/Editor/Core/MaterialCandidateGate.cs',sys.argv[1]];runpy.run_path(sys.argv[0],run_name='__main__')"
               try:
                   result=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning','-c',code,method],capture_output=True,text=True,timeout=45)
                   row={'method':method,'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'timed_out':False}
@@ -76,6 +76,56 @@ jobs:
               pathlib.Path('dependency-evidence/auth-role-results.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
               print(json.dumps({k:v for k,v in row.items() if k not in ('stdout','stderr')}),flush=True)
           assert all(x['passed'] for x in rows)
+      - name: Signed client approval identity and compiled gates (not Unity)
+        shell: python
+        run: |
+          import ast, hashlib, json, os, pathlib, shutil, subprocess, tempfile, urllib.request
+          root=pathlib.Path('Candidate~').resolve()
+          python=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-locked-env/Scripts/python.exe'
+          methods=[node.name+'.'+method.name for node in ast.parse((root/'tests/test_client_binding.py').read_text(encoding='utf-8')).body
+              if isinstance(node,ast.ClassDef) for method in node.body
+              if isinstance(method,(ast.FunctionDef,ast.AsyncFunctionDef)) and method.name.startswith('test_CB')]
+          assert len(methods)==7 and {m.split('.test_')[1].split('_')[0] for m in methods}=={f'CB{i:03d}' for i in range(1,8)}
+          report={'scope':'Signed SDK clients and net8 production gates; fixture backend, not native clients/Unity/human approval','rows':[]}
+          target=pathlib.Path('dependency-evidence/client-binding-results.json')
+          dotnet=shutil.which('dotnet');assert dotnet
+          try:
+              with tempfile.TemporaryDirectory(prefix='candidate-client-binding-') as td:
+                  work=pathlib.Path(td).resolve()
+                  source=work/'Response.cs'
+                  with urllib.request.urlopen('https://raw.githubusercontent.com/CoplayDev/unity-mcp/30d22075093d1d35dfb0091c1c7550e9ad948577/MCPForUnity/Editor/Helpers/Response.cs',timeout=30) as response:
+                      payload=response.read()
+                  assert hashlib.sha256(payload).hexdigest()=='a1769de32b9c6824841c070f0590ae7e9f44485d2a6c44a0bce3ed3f68e17391'
+                  source.write_bytes(payload)
+                  build=subprocess.run([dotnet,'build',str(root/'tests/unity-core/WirePeer.csproj'),'--configuration','Release',
+                      '--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false',
+                      '-p:BaseIntermediateOutputPath='+str(work/'obj')+'/', '-p:BaseOutputPath='+str(work/'bin')+'/',
+                      '-p:CandidateResponseSource='+str(source)],capture_output=True,text=True,timeout=90)
+                  report['build']={'exit_code':build.returncode,'stdout':build.stdout,'stderr':build.stderr}
+                  assert build.returncode==0
+                  dll=work/'bin/Release/net8.0/WirePeer.dll';assert dll.is_file()
+                  report['fresh_dll_sha256']=hashlib.sha256(dll.read_bytes()).hexdigest()
+                  for method in methods:
+                      code=('import sys,unittest;from pathlib import Path;sys.path[:0]='+repr([str(root/'dependencies/mcp-1.29.1'),str(root/'tests')])+';'
+                          'import test_client_binding as m;m.WIRE_DLL=Path('+repr(str(dll))+');m.DOTNET=Path('+repr(dotnet)+');'
+                          's=unittest.defaultTestLoader.loadTestsFromName('+repr(method)+',m);assert s.countTestCases()==1;'
+                          'r=unittest.TextTestRunner(verbosity=2).run(s);raise SystemExit(not r.wasSuccessful() or bool(r.skipped))')
+                      try:
+                          result=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning','-c',code],capture_output=True,text=True,timeout=45)
+                          row={'method':method,'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'timed_out':False}
+                          row['passed']=result.returncode==0 and 'Ran 1 test' in result.stderr and not any(x in result.stderr for x in ('ResourceWarning','skipped','FAILED'))
+                      except subprocess.TimeoutExpired as exc:
+                          decode=lambda x:x.decode('utf-8',errors='replace') if isinstance(x,bytes) else x or ''
+                          row={'method':method,'passed':False,'timed_out':True,'stdout':decode(exc.stdout),'stderr':decode(exc.stderr)}
+                      report['rows'].append(row)
+                      target.write_text(json.dumps(report,indent=2),encoding='utf-8')
+                      print(json.dumps({k:v for k,v in row.items() if k not in ('stdout','stderr')}),flush=True)
+                  assert hashlib.sha256(source.read_bytes()).hexdigest()=='a1769de32b9c6824841c070f0590ae7e9f44485d2a6c44a0bce3ed3f68e17391'
+          finally:
+              report['owned_build_directory_absent']='td' in globals() and not pathlib.Path(td).exists()
+              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows'])
+              target.write_text(json.dumps(report,indent=2),encoding='utf-8')
+          assert report['passed']
       - name: Collect actual locked Windows LICENSE and NOTICE files
         shell: pwsh
         run: |
@@ -138,7 +188,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/tests/test_runtime_auth.py','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
+          $files = @('Candidate~/distribution/requirements.in','Candidate~/distribution/requirements.lock','Candidate~/distribution/verify_dependency_install.py','Candidate~/distribution/license_inventory.py','Candidate~/distribution/license-supplements.json','Candidate~/distribution/license-supplements/fastmcp-slim-3.4.7/LICENSE','Candidate~/tests/test_license_inventory.py','Candidate~/tests/test_run_identity.py','Candidate~/tests/test_runtime_auth.py','Candidate~/tests/test_client_binding.py','Candidate~/tests/test_runtime_unity_auth.py','Candidate~/tests/test_runtime_lifecycle.py','Candidate~/tests/test_runtime_material.py','Candidate~/tests/unity-core/WirePeer.cs','Candidate~/tests/unity-core/WirePeer.csproj','Candidate~/tests/unity-core/WriteCases.cs','Candidate~/package/Editor/Core/CandidateGate.cs','Candidate~/package/Editor/Core/MaterialCandidateGate.cs','Candidate~/experiments/windows_tls_pipe.py','Candidate~/tests/test_tls_context.py','Candidate~/tests/test_tls_windows.py','Candidate~/tests/test_bootstrap_runtime.py','Candidate~/tests/test_owned_launcher.py', 'Candidate~/tests/test_editor_owner.py', 'Candidate~/package/Editor/EditorOwnerProcess.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.cs', 'Candidate~/tests/unity-core/EditorBootstrapCases.csproj', 'Candidate~/tests/unity-core/PortableSelectionCases.cs','.gitattributes', '.github/workflows/candidate-dependencies.yml') + @(Get-ChildItem 'Candidate~/runtime','Candidate~/launcher','Candidate~/native','Candidate~/dependencies/mcp-1.29.1','Candidate~/package/Editor/Core' -Recurse -File | Where-Object { $_.FullName -notmatch '[\/]__pycache__[\/]' } | ForEach-Object {$_.FullName})
           Get-FileHash $files -Algorithm SHA256 | ConvertTo-Json | Set-Content dependency-evidence/source-after.json
           if (Test-Path "$env:RUNNER_TEMP/candidate-locked-env") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/candidate-locked-env" }
           if (Test-Path "$env:RUNNER_TEMP/editor-csharp") { Remove-Item -Recurse -Force "$env:RUNNER_TEMP/editor-csharp" }

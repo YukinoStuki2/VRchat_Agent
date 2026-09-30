@@ -64,7 +64,7 @@ jobs:
           assert len(methods)==7 and len(set(methods))==7
           rows=[]
           for method in methods:
-              code="import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');sys.argv=['Candidate~/tests/test_runtime_auth.py','Candidate~/tests/test_client_binding.py','Candidate~/tests/test_runtime_unity_auth.py','Candidate~/tests/test_runtime_lifecycle.py','Candidate~/tests/test_runtime_material.py','Candidate~/tests/unity-core/WirePeer.cs','Candidate~/tests/unity-core/WirePeer.csproj','Candidate~/tests/unity-core/WriteCases.cs','Candidate~/package/Editor/Core/CandidateGate.cs','Candidate~/package/Editor/Core/MaterialCandidateGate.cs',sys.argv[1]];runpy.run_path(sys.argv[0],run_name='__main__')"
+              code="import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');sys.argv=['Candidate~/tests/test_runtime_auth.py',sys.argv[1]];assert len(sys.argv)==2;runpy.run_path(sys.argv[0],run_name='__main__')"
               try:
                   result=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning','-c',code,method],capture_output=True,text=True,timeout=45)
                   row={'method':method,'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'timed_out':False}

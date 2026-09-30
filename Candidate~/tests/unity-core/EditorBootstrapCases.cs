@@ -20,7 +20,7 @@ internal static class EditorBootstrapCases
   string entry=portable?Path.Combine(args[0],"Runtime~","launcher","editor_owner.py"):args[1];
   foreach(bool dispose in new[]{false,true})
   {
-   ClientWebSocket ws=null;Task peer=null;int port=0;
+   ClientWebSocket ws=null;Task peer=null;int port=0;bool closing=false;
    using(var owner=new EditorOwnerProcess())
    {
     async Task<bool> Connect(Uri endpoint,string token,byte[] pin)
@@ -42,10 +42,11 @@ internal static class EditorBootstrapCases
          ["result"]=new JObject{["status"]="success",["result"]=new JObject{["success"]=true,["data"]=new JObject{["read_only"]=true}}}});
        }
       } catch(WebSocketException){} catch(ObjectDisposedException){} catch(IOException){}
+       catch(OperationCanceledException) when(closing){}
      });
      return true;
     }
-    async Task Close(){if(ws!=null){ws.Abort();if(peer!=null)await peer;ws.Dispose();}}
+    async Task Close(){closing=true;if(ws!=null){ws.Abort();if(peer!=null)await peer;ws.Dispose();}}
     try
     {
      if(!await owner.StartAsync(python,entry,"fixture-project",Connect,Close)){Console.WriteLine("FAIL ECP001 owner_start_refused");return 3;}

@@ -128,7 +128,7 @@ Add `--approved-tasks` to the reproduction command to run both installed native
 clients concurrently against authenticated TLS and a **freshly compiled net8**
 `WirePeer` containing the production read and material gates. Optional `--dotnet`
 selects the separately provisioned compiler/runtime. The verifier records the
-compiler, upstream Response.cs, native client inputs and complete Candidate source
+compiler, upstream Response.cs, native client inputs and runtime/gate/test source
 hashes before/after; it never accepts an old DLL supplied by the caller.
 
 `tests/native_approved_tasks.py` reuses the existing owner, TLS, session recorder,

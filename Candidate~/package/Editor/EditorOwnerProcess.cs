@@ -82,16 +82,16 @@ namespace Yukino.VRChatAgent
         public int OwnerPid { get; private set; }
 
         internal Task<bool> StartAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close)
+            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false)
         {
             if (used || disposed) throw new InvalidOperationException("owner_single_use");
             used = true; disconnect = close;
-            var task = StartCoreAsync(python, entry, project, connect);
+            var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex);
             starting = task;
             return task;
         }
         async Task<bool> StartCoreAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect)
+            Func<Uri, string, byte[], Task<bool>> connect, bool allowHermes, bool allowCodex)
         {
             try
             {
@@ -100,7 +100,8 @@ namespace Yukino.VRChatAgent
                     throw new InvalidOperationException("owner_path_invalid");
                 var info = new ProcessStartInfo(python) {
                     Arguments = "-I -B " + Quote(entry) + " --project " + Quote(project) +
-                        " --parent-pid " + Process.GetCurrentProcess().Id,
+                        " --parent-pid " + Process.GetCurrentProcess().Id +
+                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : ""),
                     UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8,
@@ -154,14 +155,19 @@ namespace Yukino.VRChatAgent
                 stderrDrain = DrainAsync(process.StandardError); // Discard, never persist child logs/secrets.
                 await process.StandardInput.WriteAsync("start\n"); await process.StandardInput.FlushAsync();
                 JObject bundle = Parse(await ReadLineAsync(process.StandardOutput, 12));
-                var expected = new[] {"kind","version","owner_pid","project","endpoint","pin","unity_bearer","expires_at"};
+                var expected = new[] {"kind","version","owner_pid","project","endpoint","pin","unity_bearer","expires_at","clients"};
                 if (!bundle.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(expected.OrderBy(x=>x)) ||
-                    bundle["version"].Type != JTokenType.Integer || (int)bundle["version"] != 1 ||
+                    bundle["version"].Type != JTokenType.Integer || (int)bundle["version"] != 2 ||
                     bundle["owner_pid"].Type != JTokenType.Integer || (int)bundle["owner_pid"] != OwnerPid ||
                     bundle["kind"].Type != JTokenType.String || (string)bundle["kind"] != "unity_binding" ||
                     bundle["project"].Type != JTokenType.String || (string)bundle["project"] != project ||
                     bundle["expires_at"].Type != JTokenType.Integer)
                     throw new InvalidOperationException("owner_bundle_invalid");
+                var clients = new JArray();
+                if (allowHermes) clients.Add("hermes");
+                if (allowCodex) clients.Add("codex");
+                if (!JToken.DeepEquals(bundle["clients"], clients))
+                    throw new InvalidOperationException("owner_client_selection_mismatch");
                 long remaining = (long)bundle["expires_at"] - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 if (remaining <= 0 || remaining > 3600) throw new InvalidOperationException("owner_expired");
                 foreach (string key in new[] {"endpoint","pin","unity_bearer"})

@@ -36,7 +36,10 @@ namespace UnityEditor {
  public static class EditorGUILayout {
   public static string NextText; public static string TextField(string label,string value) {var result=NextText??value;NextText=null;return result;}
   public static readonly List<string> Labels = new List<string>();
-  public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v)=>v;
+  public static string NextToggle;
+  public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v){
+   if(EditorGUI.Disabled || NextToggle!=s)return v;NextToggle=null;return !v;
+  }
   public static void LabelField(string a, string b=""){Labels.Add(a+":"+b);} public static void Space(){}
   public static UnityEngine.Vector2 BeginScrollView(UnityEngine.Vector2 v)=>v; public static void EndScrollView(){}
  }

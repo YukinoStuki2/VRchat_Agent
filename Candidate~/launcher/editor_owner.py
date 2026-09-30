@@ -66,7 +66,7 @@ async def run(args):
     with socket.socket() as reserved:
         reserved.bind(('127.0.0.1',0));port=reserved.getsockname()[1]
     raw={'project':args.project,'parent_pid':args.parent_pid,'local_port':port}
-    owned=create_owned_run(raw)
+    owned=create_owned_run(raw,clients=tuple(args.client))
     task=asyncio.create_task(asyncio.to_thread(supervise_owned,raw,owned=owned,stop=stop))
     control=asyncio.create_task(read_control(stop))
     binding_sent=ready_sent=False
@@ -75,7 +75,7 @@ async def run(args):
             if control.done() or os.getppid()!=args.parent_pid:
                 stop.set()
             if not stop.is_set() and owned.transport_ready.is_set() and not binding_sent:
-                emit({'kind':'unity_binding','version':1,'owner_pid':os.getpid(),'project':args.project,
+                emit({'kind':'unity_binding','version':2,'clients':owned.owner.identity.clients,'owner_pid':os.getpid(),'project':args.project,
                     'endpoint':f'wss://127.0.0.1:{port}/hub/plugin','pin':owned.owner.tls.pin,
                     'unity_bearer':owned.owner.identity.credentials['unity'].token,
                     'expires_at':owned.owner.identity.expires_at})
@@ -95,6 +95,7 @@ def main():
     parser=Parser(description='Editor-owned private-pipe entry',allow_abbrev=False)
     parser.add_argument('--project',required=True)
     parser.add_argument('--parent-pid',required=True,type=int)
+    parser.add_argument('--client',choices=('hermes','codex'),action='append',default=[])
     try:
         args=parser.parse_args()
         if args.parent_pid!=os.getppid() or args.parent_pid<=1 or not private_pipes():return 2

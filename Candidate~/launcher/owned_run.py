@@ -26,13 +26,13 @@ class OwnedRun:
     _lock: Any = field(default_factory=threading.Lock,init=False,repr=False)
 
 
-def create_owned_run(raw, *, lifetime=600):
+def create_owned_run(raw, *, lifetime=600, clients=()):
     c=validate_config(raw)
     # Fixed, packaged modules, never caller-selected paths or installed SDK edits.
     for path in (ROOT/'runtime',ROOT/'dependencies/mcp-1.29.1'):
         if str(path) not in sys.path:sys.path.insert(0,str(path))
     from owner_bootstrap import new_local_run
-    owner=new_local_run(c['project'],c['local_port'],lifetime=lifetime)
+    owner=new_local_run(c['project'],c['local_port'],lifetime=lifetime,clients=clients)
     return OwnedRun(c,owner,RuntimeBinding(owner.take_environment(),threading.Event()))
 
 

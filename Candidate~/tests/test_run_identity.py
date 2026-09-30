@@ -19,12 +19,12 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
         return importlib.import_module('run_identity')
 
     async def test_RI005_internal_probe_has_its_own_nonclient_credential(self):
-        identity = self.implementation().issue_run_identity()
+        identity = self.implementation().issue_run_identity(clients=('hermes','codex'))
         self.assertIn('probe', identity.credentials, 'readiness must not impersonate Hermes')
         self.assertTrue(identity.credentials['probe'].principal.startswith('probe:'))
         self.assertNotEqual(identity.credentials['probe'].token, identity.credentials['hermes'].token)
         from owner_bootstrap import new_local_run, consume_environment
-        owner = new_local_run('fixture-project', 18081)
+        owner = new_local_run('fixture-project', 18081,clients=('hermes','codex'))
         mcp_auth, unity_auth = consume_environment(owner.project, owner.port,
             environment=owner.take_environment()).verifiers()
         self.assertIsNotNone(await mcp_auth.verify_token(owner.identity.credentials['probe'].token))
@@ -32,8 +32,8 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RI003_new_run_and_expiry_do_not_reuse_authority(self):
         # Characterization of the already implemented randomness and verifier.
-        first = self.implementation().issue_run_identity(lifetime=30)
-        second = self.implementation().issue_run_identity(lifetime=30)
+        first = self.implementation().issue_run_identity(clients=('hermes','codex'),lifetime=30)
+        second = self.implementation().issue_run_identity(clients=('hermes','codex'),lifetime=30)
         self.assertNotEqual(first.issuer, second.issuer)
         self.assertNotEqual(first.public_key, second.public_key)
         for role in first.credentials:
@@ -60,7 +60,7 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
              patch.object(os, 'open', side_effect=AssertionError('OS file open')), \
              patch.object(socket, 'socket', side_effect=AssertionError('network')), \
              patch.object(subprocess, 'Popen', side_effect=AssertionError('process')):
-            identity = module.issue_run_identity(lifetime=60)
+            identity = module.issue_run_identity(clients=('hermes','codex'),lifetime=60)
         self.assertEqual(len(identity.credentials), 4)
 
     def test_RI002_lifetime_is_bounded_before_key_generation(self):
@@ -68,11 +68,11 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(module.rsa, 'generate_private_key', side_effect=AssertionError('key generation reached')) as generate:
             for lifetime in (None, True, 0, -1, 29, 3601, 3.5, '60'):
                 with self.subTest(lifetime=lifetime), self.assertRaisesRegex(ValueError, 'invalid_run_lifetime'):
-                    module.issue_run_identity(lifetime=lifetime)
+                    module.issue_run_identity(clients=('hermes','codex'),lifetime=lifetime)
             generate.assert_not_called()
 
     async def test_RI001_finite_disjoint_principals_verified_by_real_auth(self):
-        identity = self.implementation().issue_run_identity(lifetime=120)
+        identity = self.implementation().issue_run_identity(clients=('hermes','codex'),lifetime=120)
         self.assertEqual(set(identity.credentials), {'hermes', 'codex', 'unity', 'probe'})
         self.assertEqual(len({v.principal for v in identity.credentials.values()}), 4)
         self.assertGreater(identity.expires_at, time.time())

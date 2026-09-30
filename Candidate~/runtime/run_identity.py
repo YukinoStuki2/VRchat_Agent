@@ -30,12 +30,21 @@ class RunIdentity:
     public_key: str
     expires_at: int
     credentials: Mapping[str, Credential] = field(repr=False)
+    clients: tuple[str, ...]
 
 
-def issue_run_identity(*, lifetime=600):
+def client_selection(clients):
+    if (type(clients) is not tuple or any(type(r) is not str or r not in ('hermes','codex') for r in clients)
+            or len(clients) != len(set(clients))):
+        raise ValueError('invalid_client_selection')
+    return tuple(r for r in ('hermes','codex') if r in clients)
+
+
+def issue_run_identity(*, lifetime=600, clients=()):
     """Return distinct signed run roles; discard the signing-key reference."""
     if type(lifetime) is not int or not 30 <= lifetime <= 3600:
         raise ValueError('invalid_run_lifetime')
+    clients = client_selection(clients)
     run = secrets.token_hex(24)
     issuer = 'urn:vrchat-agent:run:' + run
     now = int(time.time())
@@ -45,7 +54,7 @@ def issue_run_identity(*, lifetime=600):
         serialization.PublicFormat.SubjectPublicKeyInfo).decode('ascii')
     key = RSAKey.import_key(private)
     credentials = {}
-    for role in ('hermes', 'codex', 'unity', 'probe'):
+    for role in (*clients, 'unity', 'probe'):
         principal = role + ':' + run
         scope = 'candidate:unity' if role == 'unity' else 'candidate:mcp'
         audience = issuer + (':unity' if role == 'unity' else ':mcp')
@@ -55,4 +64,4 @@ def issue_run_identity(*, lifetime=600):
         token = jwt.encode({'alg': 'RS256', 'typ': 'JWT'}, claims, key,
                            algorithms=['RS256'])
         credentials[role] = Credential(principal, audience, scope, token)
-    return RunIdentity(issuer, public, expiry, MappingProxyType(credentials))
+    return RunIdentity(issuer, public, expiry, MappingProxyType(credentials), clients)

@@ -15,6 +15,7 @@ internal static class EditorBootstrapCases
  static async Task<int> Main(string[] args)
  {
   if(args.Length==1 && args[0]=="--selection-tests"){PortableSelectionCases.Run();return 0;}
+  if(args.Length==3 && args[0]=="--client-admission-tests"){await ClientAdmissionCases.Run(args[1],args[2]);return 0;}
   bool portable=args.Length==1;
   string python=portable?EditorOwnerProcess.ResolvePortablePython(args[0]):args[0];
   string entry=portable?Path.Combine(args[0],"Runtime~","launcher","editor_owner.py"):args[1];

@@ -53,7 +53,7 @@ class BootstrapTests(unittest.IsolatedAsyncioTestCase):
         from fastmcp.client.transports import StreamableHttpTransport
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0)); port = reservation.getsockname()[1]
-        owner = bootstrap.new_local_run('fixture-project', port)
+        owner = bootstrap.new_local_run('fixture-project', port,clients=('hermes','codex'))
         env = owner.take_environment()
         self.assertNotIn(owner.identity.credentials['hermes'].token, json.dumps(env))
         self.assertNotIn(owner.identity.credentials['codex'].token, json.dumps(env))

@@ -71,6 +71,29 @@ PINNED_CANDIDATE_PYTHON -I -B -W always::ResourceWarning tests/verify_native_cli
 The test does not install those clients or register them in an existing profile.
 It is Linux-specific, not Windows native-client acceptance.
 
+## Explicit local client admission (development slice)
+
+The local Unity window has independent Hermes/Codex role toggles, both off by
+default and disabled while an owner exists. Starting snapshots those booleans;
+it does not connect either client, deliver credentials, attest executable brands,
+or grant a task. To change the selection, stop the current owner and create a
+new run; that does not restore stopped grants. The choices are not persisted.
+
+The issuer creates only selected client credentials plus the internal unity/probe
+roles. The child verifier admits only that same selected set plus the read-only
+probe, even if an unselected role somehow presents an otherwise valid signed
+same-run token. Child configuration and the private Unity receipt are version 2;
+legacy/missing/malformed selections fail closed, never default to both clients.
+The private receipt carries only public selection labels and Unity's credential,
+not client credentials. Existing protocol-only fixtures opt in to both explicitly.
+
+CS001–CS006/CS008–CS010 exercise issuer/policy boundaries, actual TLS/HTTP and
+owned private subprocesses. CS007 freshly compiles the C# receipt consumer with a
+synthetic owner pipe, checking every selection against missing/wrong/legacy/type
+mismatches before connect. The existing UA006 UI-double case checks default-off,
+independent toggles and disabled changes during an owner run. These are not a
+real Unity UI test, trusted client handoff or the full client model loop.
+
 ## Same-connection local pause (development slice)
 
 The existing Unity windows now expose exact-plan Pause and evidence-revalidated

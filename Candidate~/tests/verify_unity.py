@@ -91,13 +91,15 @@ def main(label):
             if build('ReviewUpstreamApi'):
                 build('ReviewExternalAssembly')
             for name in ('CoreTests', 'AdapterTests', 'FixOutputCases', 'ReviewLeakCases',
-                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'WirePeer'):
+                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'EditorBootstrapCases', 'WirePeer'):
                 if not build(name):
                     continue
                 if name == 'FixIdentityCases':
                     for i, path in enumerate(('/tmp/fixture-only-A/Assets', 'C:/Fixture Only 中文/Assets',
                                              '/tmp/fixture-only-A/Assets/')):
                         run(name + '-' + str(i), [DOTNET, dll(name), path])
+                elif name == 'EditorBootstrapCases':
+                    run('CS007',[DOTNET,dll(name),'--client-admission-tests',PYTHON,ROOT/'launcher/direct_python.py'])
                 elif name == 'WirePeer':
                     loader = ('import importlib.util,unittest; from pathlib import Path; '
                         's=importlib.util.spec_from_file_location("wire_parent",' + repr(str(ROOT/'tests/test_wire_integration.py')) + '); '
@@ -140,6 +142,8 @@ def main(label):
     report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
         '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
     assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,6)]
+    report['client_selection_csharp_ids'] = re.findall(r'^PASS (CS007) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)
+    assert report['client_selection_csharp_ids'] == ['CS007']
     report['all_commands_succeeded'] = bool(report['runs']) and all(
         r['exit_code'] == 0 and not r['timeout'] and r['process_group_absent'] and r['pid_absent']
         for r in report['runs'])

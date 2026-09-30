@@ -52,6 +52,17 @@ internal static class AdapterCases
    var windowType=Assembly.GetExecutingAssembly().GetType("Yukino.VRChatAgent.CandidateWindow");
    Check(windowType!=null,"UA006 Chinese local approval window missing");
    var window=Activator.CreateInstance(windowType);var gui=windowType.GetMethod("OnGUI",BindingFlags.NonPublic|BindingFlags.Instance);
+   var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+   Check(!(bool)windowType.GetField("allowHermes",flags).GetValue(window) && !(bool)windowType.GetField("allowCodex",flags).GetValue(window),"new window client roles default closed");
+   EditorGUILayout.NextToggle="允许本轮 Hermes 角色";gui.Invoke(window,null);
+   Check((bool)windowType.GetField("allowHermes",flags).GetValue(window) && !(bool)windowType.GetField("allowCodex",flags).GetValue(window),"independent local client checkbox");
+   var localOwner=host.GetField("localOwner",BindingFlags.Static|BindingFlags.NonPublic);
+   using(var pending=new EditorOwnerProcess()) {
+    localOwner.SetValue(null,pending);
+    try {EditorGUILayout.NextToggle="允许本轮 Codex 角色";gui.Invoke(window,null);
+     Check(!(bool)windowType.GetField("allowCodex",flags).GetValue(window),"running owner selection is immutable");
+    } finally {localOwner.SetValue(null,null);EditorGUILayout.NextToggle=null;}
+   }
    AdapterOwnedFixture.Begin();
    p=prepare();GUILayout.NextButton="批准此清单";gui.Invoke(window,null);
    Check((bool)gate.LocalPlans()[0]["approved"],"button must approve");

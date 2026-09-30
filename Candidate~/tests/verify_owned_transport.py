@@ -146,7 +146,7 @@ async def main(label):
    from fastmcp.client.transports import StreamableHttpTransport
    from transport.plugin_hub import PluginHub
    import uvicorn,socket
-   identity=issue_run_identity(lifetime=120)
+   identity=issue_run_identity(lifetime=120,clients=('hermes','codex'))
    def verifier(roles):
     credentials=[identity.credentials[role] for role in roles]
     return CandidateJWTVerifier(public_key=identity.public_key,issuer=identity.issuer,

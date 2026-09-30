@@ -33,7 +33,7 @@ async def run(args, report):
             with socket.socket() as listener:
                 listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
                 watcher.ports.add(port)
-                owner = new_local_run('fixture-project' if args.approved_tasks else 'native-client-fixture',port)
+                owner = new_local_run('fixture-project' if args.approved_tasks else 'native-client-fixture',port,clients=('hermes','codex'))
                 child = consume_environment(owner.project,port,environment=owner.take_environment())
                 mcp_auth,unity_auth = child.verifiers()
                 mcp = create_server(owner.project,mcp_auth=mcp_auth)

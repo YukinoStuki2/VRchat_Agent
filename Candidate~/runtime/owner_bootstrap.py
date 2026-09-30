@@ -14,7 +14,7 @@ import threading
 from typing import Any
 import time
 
-from run_identity import RunIdentity, issue_run_identity
+from run_identity import RunIdentity, issue_run_identity, client_selection
 from tls_context import TlsMaterial, issue_tls_material
 
 ENVIRONMENT_KEY = 'VRCHAT_AGENT_BOOTSTRAP'
@@ -40,7 +40,7 @@ class LocalRun:
             if self._used:
                 raise ValueError('bootstrap_already_consumed')
             self._used = True
-        doc = {'version': 1, 'project': self.project, 'port': self.port,
+        doc = {'version': 2, 'project': self.project, 'port': self.port, 'clients': self.identity.clients,
                'issuer': self.identity.issuer, 'expires_at': self.identity.expires_at,
                'public_key': self.identity.public_key,
                'certificate': self.tls.certificate.decode('ascii'),
@@ -48,9 +48,9 @@ class LocalRun:
         return {ENVIRONMENT_KEY: json.dumps(doc, separators=(',', ':'))}
 
 
-def new_local_run(project, port, *, lifetime=600):
+def new_local_run(project, port, *, lifetime=600, clients=()):
     target(project, port)
-    identity = issue_run_identity(lifetime=lifetime)
+    identity = issue_run_identity(lifetime=lifetime, clients=clients)
     tls = issue_tls_material(lifetime=lifetime)
     return LocalRun(project, port, identity, tls)
 
@@ -63,13 +63,14 @@ class ChildConfiguration:
     expires_at: int
     public_key: str = field(repr=False)
     tls: TlsMaterial = field(repr=False)
+    clients: tuple[str, ...]
 
     def verifiers(self):
         from candidate_auth import CandidateJWTVerifier
         run = self.issuer.removeprefix('urn:vrchat-agent:run:')
         common = {'public_key': self.public_key, 'issuer': self.issuer}
         return (CandidateJWTVerifier(**common, audience=self.issuer+':mcp',
-                    principals=['hermes:'+run, 'codex:'+run, 'probe:'+run], required_scope='candidate:mcp'),
+                    principals=[role+':'+run for role in (*self.clients,'probe')], required_scope='candidate:mcp'),
                 CandidateJWTVerifier(**common, audience=self.issuer+':unity',
                     principals=['unity:'+run], required_scope='candidate:unity'))
 
@@ -91,10 +92,10 @@ def consume_environment(project, port, *, environment=None):
                 doc[key] = value
             return doc
         doc = json.loads(raw, object_pairs_hook=unique)
-        if type(doc) is not dict or set(doc) != {'version','project','port','issuer',
+        if type(doc) is not dict or set(doc) != {'version','project','port','issuer','clients',
                 'expires_at','public_key','certificate','tls_private_key','pin'}:
             raise ValueError()
-        if (type(doc['version']) is not int or doc['version'] != 1
+        if (type(doc['version']) is not int or doc['version'] != 2
                 or doc['project'] != project or type(doc['port']) is not int or doc['port'] != port
                 or type(doc['expires_at']) is not int or not time.time() < doc['expires_at'] <= time.time()+3600
                 or type(doc['issuer']) is not str
@@ -102,7 +103,12 @@ def consume_environment(project, port, *, environment=None):
                 or any(type(doc[k]) is not str or not doc[k] for k in
                        ('public_key','certificate','tls_private_key','pin'))):
             raise ValueError()
+        if type(doc['clients']) is not list:
+            raise ValueError()
+        clients = client_selection(tuple(doc['clients']))
+        if list(clients) != doc['clients']:
+            raise ValueError()
         tls = TlsMaterial(doc['certificate'].encode('ascii'), doc['tls_private_key'].encode('ascii'),doc['pin'])
-        return ChildConfiguration(project,port,doc['issuer'],doc['expires_at'],doc['public_key'],tls)
+        return ChildConfiguration(project,port,doc['issuer'],doc['expires_at'],doc['public_key'],tls,clients)
     except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
         raise ValueError('BINDING_INVALID') from None

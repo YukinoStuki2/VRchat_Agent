@@ -28,11 +28,11 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
         from candidate_auth import CandidateJWTVerifier
         verifier = CandidateJWTVerifier(public_key=keys.public_key,
             issuer=issuer, audience=audience, required_scope='candidate:mcp',
-            principals=('fixture-client-a', 'fixture-client-b'))
+            principals=('fixture-client-a', 'fixture-client-b', 'probe:fixture'))
         tokens = {name: keys.create_token(subject=name, issuer=issuer, audience=audience,
                   scopes=['candidate:mcp'], expires_in_seconds=60,
                   additional_claims={'client_id': name})
-                  for name in ('fixture-client-a', 'fixture-client-b')}
+                  for name in ('fixture-client-a', 'fixture-client-b', 'probe:fixture')}
         tokens['wrong-audience'] = keys.create_token(subject='fixture-client-a', issuer=issuer,
             audience='not-this-sidecar', scopes=['candidate:mcp'], expires_in_seconds=60)
         tokens['expired'] = keys.create_token(subject='fixture-client-a', issuer=issuer,
@@ -73,6 +73,23 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(check.connect_ex(('127.0.0.1', port)), 0)
         self.assertTrue(task.done())
         self.assertEqual(mcp._candidate_runtime.sessions, {})
+
+    async def test_AU007_probe_discovers_only_status(self):
+        async with self.fixture() as (url,tokens,server,verifier):
+            async with Client(url,auth=tokens['probe:fixture']) as probe:
+                self.assertEqual([t.name for t in await probe.list_tools()],['agent_status'])
+
+    async def test_AU006_probe_role_cannot_prepare_stop_or_reach_native_handlers(self):
+        from fastmcp.exceptions import ToolError
+        async with self.fixture() as (url, tokens, server, verifier):
+            async with Client(url, auth=tokens['probe:fixture']) as probe:
+                for name,args in [('agent_prepare',{}),('agent_stop',{'task_id':'x'}),
+                        ('manage_material',{'action':'get_material_info','material_path':'Assets/x.mat'}),
+                        ('material_prepare',{}),('material_execute',{}),('material_apply',{}),('material_stop',{})]:
+                    with self.subTest(tool=name), self.assertRaisesRegex(ToolError,'probe_read_only'):
+                        await probe.call_tool(name,args)
+            self.assertEqual(server._candidate_runtime.plans,{})
+            self.assertEqual(server._candidate_runtime.material.plans,{})
 
     async def test_AU005_authenticated_mcp_must_not_leave_unity_socket_unauthenticated(self):
         import websockets

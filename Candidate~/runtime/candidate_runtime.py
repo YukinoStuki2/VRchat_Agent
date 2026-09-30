@@ -175,8 +175,21 @@ class Runtime(Middleware):
             raise ToolError('request_not_bound')
         return invocation
 
+    async def on_list_tools(self, context, call_next):
+        from fastmcp.server.dependencies import get_access_token
+        access = get_access_token()
+        tools = await call_next(context)
+        if access is not None and access.client_id.startswith('probe:'):
+            return [tool for tool in tools if tool.name == 'agent_status']
+        return tools
+
     async def on_call_tool(self, context, call_next):
         name = context.message.name
+        from fastmcp.server.dependencies import get_access_token
+        access = get_access_token()
+        # Signed issuer policy admits the probe; it is never a user client.
+        if access is not None and access.client_id.startswith('probe:') and name != 'agent_status':
+            raise ToolError('probe_read_only')
         from material_runtime import TOOLS
         if name in TOOLS:
             return await self.material.on_call_tool(context, call_next)

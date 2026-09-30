@@ -59,7 +59,7 @@ async def observe_runtime(owner, binding, *, stop=None, receipt=None, transport_
         kwargs.update(verify=context,trust_env=False,follow_redirects=False,timeout=httpx.Timeout(3),event_hooks={"response":[record_response]})
         return httpx.AsyncClient(**kwargs)
     transport = StreamableHttpTransport(f'https://127.0.0.1:{owner.port}/mcp',
-        headers={'Authorization':'Bearer '+owner.identity.credentials['hermes'].token},
+        headers={'Authorization':'Bearer '+owner.identity.credentials['probe'].token},
         httpx_client_factory=factory)
     async with Client(transport, timeout=3) as client:
         while not cancelled():

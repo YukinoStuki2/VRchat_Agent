@@ -18,6 +18,18 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
                              'owner-only per-run credential issuer is missing')
         return importlib.import_module('run_identity')
 
+    async def test_RI005_internal_probe_has_its_own_nonclient_credential(self):
+        identity = self.implementation().issue_run_identity()
+        self.assertIn('probe', identity.credentials, 'readiness must not impersonate Hermes')
+        self.assertTrue(identity.credentials['probe'].principal.startswith('probe:'))
+        self.assertNotEqual(identity.credentials['probe'].token, identity.credentials['hermes'].token)
+        from owner_bootstrap import new_local_run, consume_environment
+        owner = new_local_run('fixture-project', 18081)
+        mcp_auth, unity_auth = consume_environment(owner.project, owner.port,
+            environment=owner.take_environment()).verifiers()
+        self.assertIsNotNone(await mcp_auth.verify_token(owner.identity.credentials['probe'].token))
+        self.assertIsNone(await unity_auth.verify_token(owner.identity.credentials['probe'].token))
+
     async def test_RI003_new_run_and_expiry_do_not_reuse_authority(self):
         # Characterization of the already implemented randomness and verifier.
         first = self.implementation().issue_run_identity(lifetime=30)
@@ -49,7 +61,7 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
              patch.object(socket, 'socket', side_effect=AssertionError('network')), \
              patch.object(subprocess, 'Popen', side_effect=AssertionError('process')):
             identity = module.issue_run_identity(lifetime=60)
-        self.assertEqual(len(identity.credentials), 3)
+        self.assertEqual(len(identity.credentials), 4)
 
     def test_RI002_lifetime_is_bounded_before_key_generation(self):
         module = self.implementation()
@@ -61,8 +73,8 @@ class RunIdentityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RI001_finite_disjoint_principals_verified_by_real_auth(self):
         identity = self.implementation().issue_run_identity(lifetime=120)
-        self.assertEqual(set(identity.credentials), {'hermes', 'codex', 'unity'})
-        self.assertEqual(len({v.principal for v in identity.credentials.values()}), 3)
+        self.assertEqual(set(identity.credentials), {'hermes', 'codex', 'unity', 'probe'})
+        self.assertEqual(len({v.principal for v in identity.credentials.values()}), 4)
         self.assertGreater(identity.expires_at, time.time())
         self.assertLessEqual(identity.expires_at, time.time() + 120)
         for role, credential in identity.credentials.items():

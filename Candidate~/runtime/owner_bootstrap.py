@@ -69,7 +69,7 @@ class ChildConfiguration:
         run = self.issuer.removeprefix('urn:vrchat-agent:run:')
         common = {'public_key': self.public_key, 'issuer': self.issuer}
         return (CandidateJWTVerifier(**common, audience=self.issuer+':mcp',
-                    principals=['hermes:'+run, 'codex:'+run], required_scope='candidate:mcp'),
+                    principals=['hermes:'+run, 'codex:'+run, 'probe:'+run], required_scope='candidate:mcp'),
                 CandidateJWTVerifier(**common, audience=self.issuer+':unity',
                     principals=['unity:'+run], required_scope='candidate:unity'))
 

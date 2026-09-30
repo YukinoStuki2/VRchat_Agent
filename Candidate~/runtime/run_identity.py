@@ -45,7 +45,7 @@ def issue_run_identity(*, lifetime=600):
         serialization.PublicFormat.SubjectPublicKeyInfo).decode('ascii')
     key = RSAKey.import_key(private)
     credentials = {}
-    for role in ('hermes', 'codex', 'unity'):
+    for role in ('hermes', 'codex', 'unity', 'probe'):
         principal = role + ':' + run
         scope = 'candidate:unity' if role == 'unity' else 'candidate:mcp'
         audience = issuer + (':unity' if role == 'unity' else ':mcp')

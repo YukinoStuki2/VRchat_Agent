@@ -28,6 +28,19 @@ def compile_environment(runtime_environment):
     return result
 
 
+def compile_fixture(command, runtime_environment, report, timeout=90):
+    try:
+        result = subprocess.run(command, env=compile_environment(runtime_environment),
+            capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        text = lambda value: value.decode('utf-8', errors='backslashreplace') if isinstance(value, bytes) else (value or '')
+        report['csharp_build'] = {'code': None, 'timed_out': True, 'timeout_seconds': timeout,
+            'stdout': text(exc.stdout), 'stderr': text(exc.stderr)}
+        raise
+    report['csharp_build'] = {'code': result.returncode, 'stdout': result.stdout, 'stderr': result.stderr}
+    return result
+
+
 @contextmanager
 def recorded_directory(report, output):
     work = None
@@ -74,8 +87,7 @@ def main():
         env=module.clean_environment(work)
         out=work/'dotnet';csproj=ROOT/'tests/unity-core/EditorBootstrapCases.csproj'
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
-        build=subprocess.run(command,env=compile_environment(env),capture_output=True,text=True,timeout=90)
-        report['csharp_build']={'code':build.returncode,'stdout':build.stdout,'stderr':build.stderr}
+        build=compile_fixture(command,env,report)
         assert build.returncode==0,build.stdout+build.stderr
         async def execute_csharp():
             tracker=None

@@ -19,6 +19,20 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP004_compile_timeout_preserves_partial_output_and_error(self):
+        m = driver()
+        self.assertTrue(hasattr(m, 'compile_fixture'), 'bounded build evidence missing')
+        report = {'passed': False}
+        import subprocess
+        with self.assertRaises(subprocess.TimeoutExpired):
+            m.compile_fixture([m.sys.executable, '-I', '-B', '-c',
+                'import time; print("fixture-build-started", flush=True); time.sleep(10)'],
+                dict(os.environ), report, timeout=0.5)
+        self.assertFalse(report['passed'])
+        self.assertTrue(report['csharp_build']['timed_out'])
+        self.assertIn('fixture-build-started', report['csharp_build']['stdout'])
+        self.assertIsNone(report['csharp_build']['code'])
+
     def test_VP001_nuget_system_paths_are_build_only(self):
         m = driver()
         self.assertTrue(hasattr(m, 'compile_environment'), 'NuGet environment helper missing')

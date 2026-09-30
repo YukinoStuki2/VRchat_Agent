@@ -185,6 +185,7 @@ jobs:
           $raw = Get-Content dependency-evidence/editor-csharp-tests.txt -Raw
           if ($raw -notmatch 'PASS ECP001' -or $raw -notmatch 'PASS ECP002') { throw 'CSharp ownership checks incomplete' }
       - name: Exact local pause and evidence-revalidated continuation
+        if: always()
         shell: pwsh
         run: |
           dotnet build 'Candidate~/tests/unity-core/ContinuityCases.csproj' --configuration Release --disable-build-servers -p:UseSharedCompilation=false -p:BaseIntermediateOutputPath="$env:RUNNER_TEMP/continuity-csharp/obj/" -p:BaseOutputPath="$env:RUNNER_TEMP/continuity-csharp/bin/" 2>&1 | Tee-Object dependency-evidence/continuity-core-build.txt

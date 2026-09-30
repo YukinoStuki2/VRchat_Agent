@@ -64,7 +64,7 @@ class PauseResponseTests(unittest.TestCase):
 
     def test_PR005_local_window_has_pause_and_exact_revalidation_controls(self):
         for path,prefix in [('package/Editor/CandidateWindow.cs','gate'),('package/Editor/MaterialCandidateSession.cs','Gate')]:
-            source=(ROOT/path).read_text()
+            source=(ROOT/path).read_text(encoding='utf-8')
             self.assertIn(prefix+'.Pause((string)plan["plan_id"], (string)plan["digest"])',source)
             self.assertIn(prefix+'.Resume((string)plan["plan_id"], (string)plan["digest"])',source)
             self.assertIn('暂停',source);self.assertIn('核验后继续',source)

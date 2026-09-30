@@ -11,7 +11,7 @@
 - 固定上游：`/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity`，commit `30d22075093d1d35dfb0091c1c7550e9ad948577`。来源、补丁与输出哈希见 `dependencies/coplay-10.2.0-owned/PROVENANCE.json`。
 - Linux 的 `patch`、pidfd、`/proc` 以及受支持的文件租约内核功能。Windows 特有行为由授权候选分支的真实 Windows Actions 验证，不能以 Linux skip 代替。
 
-这些路径是开发验证脚本当前的显式配置，不是最终用户前置要求。便携运行时与通用复现入口仍需完成。
+这些路径是历史开发验证脚本的显式配置，不是最终用户前置要求。便携运行目录现已由独立锁定的PBS CPython在Linux/Windows实际构建、搬迁与运行验证，见 `PORTABLE.md`；仍需最终安装包整合、真实客户端与Unity验收。
 
 ## 在新的开发快照中运行
 

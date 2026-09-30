@@ -2,7 +2,18 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
-## 源码载荷与许可证增量（2026-09-30，优先于下方历史）
+## 便携运行时增量（实现 `87a0b1d`，当前）
+
+- 已实现并实际运行**便携开发运行目录**：固定 Astral PBS `20260929` / CPython `3.11.16`，Linux GNU x64 / Windows x64，归档hash、对应完整发行的元数据与每平台19份许可证原字节绑定。不是空白操作系统/所有Unity版本保证；Linux glibc、Windows vcruntime前置与最终分发合规仍需产品层审查。细节见 `PORTABLE.md`。
+- 同一实现提交 `87a0b1d5d84cb403cd22b88eef250b6ea5171b64`：从独立Git树构建并搬迁后，Linux **28/28**、Windows **27/27**实际Python身份/引导/所有者/TLS回归通过；每端实际C#私有管道/TLS/MCP启停和Dispose **ECP001/ECP002**通过。Unity wire仍为synthetic fixture，不是Unity Editor/Mono或客户端品牌身份验收。各测试组不相加。
+- Windows Actions `36731626511`成功；471份完整受检文件前后及提交字节一致。Linux434份冻结输入对同一提交一致；载荷分别9419/9094份前后不变。Linux外层跟踪6个后代/2个监听，均消失；Windows子进程/监听用既有C#回读断言，不能冒称有Linux相同外层pidfd证据。任务临时目录及本地检出目录已实际清理。
+- 每端74个实际wheel的版本/hash逐项匹配活动锁。Linux因在线600秒下载超时，改为经过官方URL/hash校验的wheelhouse，通过pip原生`--no-index --find-links --require-hashes`离线安装；报告必须是该精确目录的非软链接wheel并再次核对字节。Windows在线官方PyPI安装通过。缓存公共wheel留作构建复用，不给运行时继承代理或凭据。
+- 当前解释器内实际wheel许可证正文Linux85份、Windows99份已再次回读hash核对，每端额外19份Python发行许可证保留。收集器的“未独立验证最终再分发”标志不被父级清单改写。
+- 修正Windows NuGet编译夹具环境：只给编译步骤必要系统路径，把APPDATA/LOCALAPPDATA限定在任务临时profile，不改变runtime环境白名单。失败后先执行TemporaryDirectory退出再记录实际清理，原异常继续上抛。编译超时保留部分日志，不放宽90秒门槛。7+1便携边界、4个driver、6个布局、5个许可、4个原打包器检查分别通过。
+- 先前Windows短路径fixture错误、NuGet缺路径、90秒编译超时与Linux在线超时均保留。编译重跑通过不证明已解释原超时原因；不把历史失败覆写成绿色。接受记录 `evidence/portable-final-parent-acceptance.json`，只属父级分层验证，未获新增独立批准。
+- **仍未完成**：把便携目录整合为最终可安装Candidate及默认选择入口、真实Hermes/Codex各自绑定/停止闭环、任务暂停续接与完整约定能力、最终独立复核、真实Candidate VPM操作与Unity/ALCOM验收。没有生成安装ZIP，main/历史发布/公网VPM索引及真实客户端配置未改。
+
+## 源码载荷与许可证增量（2026-09-30，历史）
 
 - `package/package.json`、候选Editor程序集定义、README/LICENSE/第三方说明已创建；此前“manifest尚不存在”的描述是旧阶段。`distribution/assemble_source.py`按309份固定输入哈希在内存组装658份源码/meta文件：真实Editor、`Runtime~/launcher`、runtime、diagnostics、固定native和修订SDK；原有GUID不改，新GUID确定性生成。不包含测试/日志/凭据，不联网安装、不生成ZIP、不签发批准。
 - 5项源码布局检查通过：实际入口路径/许可证存在、重复GUID拒绝、大小写别名拒绝、确定性meta及独立批准门槛、源码漂移/软链接拒绝。沿用打包器4项回归通过。源码布局不等于完整运行时发行或Unity importer验收。

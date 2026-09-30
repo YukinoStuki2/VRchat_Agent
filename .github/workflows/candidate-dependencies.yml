@@ -52,12 +52,30 @@ jobs:
           if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Identity tests incomplete or warning' }
           if ((Get-Content dependency-evidence/imports.txt -Raw) -match 'ResourceWarning') { throw 'Import ResourceWarning' }
       - name: Actual authenticated probe and client separation
-        shell: pwsh
+        shell: python
         run: |
-          & "$env:RUNNER_TEMP/candidate-locked-env/Scripts/python.exe" -I -B -W always::ResourceWarning -c "import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');runpy.run_path('Candidate~/tests/test_runtime_auth.py',run_name='__main__')" 2>&1 | Tee-Object dependency-evidence/auth-role-tests.txt
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $raw = Get-Content dependency-evidence/auth-role-tests.txt -Raw
-          if ($raw -notmatch 'Ran 7 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Auth role checks incomplete' }
+          import ast, json, os, pathlib, subprocess, sys
+          root=pathlib.Path('Candidate~')
+          python=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-locked-env/Scripts/python.exe'
+          source=root/'tests/test_runtime_auth.py'
+          methods=[node.name+'.'+method.name for node in ast.parse(source.read_text(encoding='utf-8')).body
+              if isinstance(node,ast.ClassDef) for method in node.body
+              if isinstance(method,(ast.FunctionDef,ast.AsyncFunctionDef)) and method.name.startswith('test_')]
+          assert len(methods)==7 and len(set(methods))==7
+          rows=[]
+          for method in methods:
+              code="import sys,runpy;sys.path.insert(0,'Candidate~/dependencies/mcp-1.29.1');sys.argv=['Candidate~/tests/test_runtime_auth.py',sys.argv[1]];runpy.run_path(sys.argv[0],run_name='__main__')"
+              try:
+                  result=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning','-c',code,method],capture_output=True,text=True,timeout=45)
+                  row={'method':method,'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'timed_out':False}
+                  row['passed']=result.returncode==0 and 'Ran 1 test' in result.stderr and not any(x in result.stderr for x in ('ResourceWarning','skipped','FAILED'))
+              except subprocess.TimeoutExpired as exc:
+                  decode=lambda x: x.decode('utf-8',errors='replace') if isinstance(x,bytes) else x or ''
+                  row={'method':method,'passed':False,'timed_out':True,'stdout':decode(exc.stdout),'stderr':decode(exc.stderr)}
+              rows.append(row)
+              pathlib.Path('dependency-evidence/auth-role-results.json').write_text(json.dumps(rows,indent=2),encoding='utf-8')
+              print(json.dumps({k:v for k,v in row.items() if k not in ('stdout','stderr')}),flush=True)
+          assert all(x['passed'] for x in rows)
       - name: Collect actual locked Windows LICENSE and NOTICE files
         shell: pwsh
         run: |

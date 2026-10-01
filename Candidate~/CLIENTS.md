@@ -8,8 +8,18 @@ refusal and owned-call cancellation. It reuses the native connection and registr
 it does not accept credentials or start a client. `clients/README.md` defines the
 host contract and HA/HB checks. Prior HS/HR sections below describe the narrower
 characterizations; their "not implemented" statements about those test paths do
-not describe this new module. Trusted delivery, live conversation construction,
-shared-gateway installation and real Unity acceptance are still absent.
+not describe these candidate modules.
+
+`clients/hermes_conversation.py` now constructs a new native AIAgent with a fresh
+runtime identity and only the binding's unique toolset. Native progressive
+search/describe/call scope is preserved, schemas are detached before the first
+turn, and partial/late constructors are cleaned without adopting a foreign
+session identity. HC11/HN5 cover deterministic failure/cancellation contracts and
+real Linux AIAgent construction/executor with fixture tool messages over TLS.
+No model request is made. This candidate entry is not installed into a gateway;
+trusted delivery, user-facing binding, shared-gateway activation and real Unity
+acceptance are still absent. Full host prerequisites/limits and reproduction
+commands are in `clients/README.md`.
 
 
 ## Independently owned Hermes connection shutdown (Linux characterization)

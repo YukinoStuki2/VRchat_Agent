@@ -8,7 +8,8 @@
 - 构造失败仍关闭部分实例；取消时先撤绑定，再等待迟到构造结果和原生close；连续取消不能丢弃清理。close使用本入口生成的精确身份，不因构造异常误清理其他会话。宿主仍须提供已认证独占peer与可信模型配置、协调在途turn；本模块不解决可信凭据交付/网关安装，也不能强杀卡死线程。
 - 新HC001–HC011合同以真实registry/原生schema装配加确定性agent/peer替身验证；HN001–HN005以真实AIAgent构造和执行器/TLS验证双会话搜索/描述/调用隔离、旁置observer与精确关闭。工具消息由fixture直接提供，没有model turn。源模块不打入Unity Runtime~。
 - RED/诊断保留：连续取消提前返回、异常构造close身份及其他构造合同已复现后修正；搜索首轮错误用原始工具名而非实际description，改用现存Unity描述词，未放宽目录/调用隔离。初始原生构造尝试4次模型上下文元数据探测，测试守卫在DNS前拦截；隔离HOME显式非秘密context_length后实际0次外连尝试，现用配置未动。
-- 当前本地通过不替代冻结归档/Windows产物读回或最终独立批准；实现提交/最终证据另补。仍无安装ZIP/发布、真实Unity/VPM/ALCOM验收或共享网关激活。
+- 实现 `bec0aa235029b0aaa5b6e9f44ca843314d6fd1bb` 已推送读回；615份冻结输入与提交原字节一致。HC11/HN5、原HA15/HB5/HR6/HS4/NA6/NP4与直接兼容、打包4/源码布局6分别通过，非跨组求总数。Windows CI `36827276510` success，artifact `11146016332` 先匹配官方digest再读回：488源码与提交/运行前后一致，便携28回归及PS4/ECP2通过，74份wheel报告对应锁、99份许可证正文匹配清单hash；新增两个宿主模块仅做Windows语法编译，不是Windows Hermes。
+- 证据 `evidence/hermes-construction-parent-acceptance.json` 与 `hermes-construction-frozen-source/`；13份冻结报告逐字节归档，冻结树、临时HOME及跟踪进程/端口/会话清理通过。公开artifact官方下载401后使用公开镜像，仅接受与GitHub官方digest完全一致的原ZIP。不修改现用Hermes/QQ/Unity，父级静态审阅不等于独立批准；仍无安装ZIP/发布、真实Unity/VPM/ALCOM验收或共享网关激活。
 
 ## Hermes 会话绑定适配器（上一切片，未安装）
 

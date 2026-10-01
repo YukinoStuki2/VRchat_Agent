@@ -189,7 +189,7 @@ jobs:
               try:
                   run=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning',script,'-v'],capture_output=True,text=True,timeout=45)
                   ids=re.findall(r'(?m)^test_((?:PP|ED|CX|OC)\d{3})_.* \.\.\. ',run.stderr)
-                  passed=run.returncode==0 and sorted(ids)==expected and f'Ran {len(expected)} tests' in run.stderr and not any(x in run.stdout+run.stderr for x in ('ResourceWarning','skipped','FAILED'))
+                  passed=run.returncode==0 and sorted(ids)==expected and re.search(rf'Ran {len(expected)} tests?\b',run.stderr) is not None and not any(x in run.stdout+run.stderr for x in ('ResourceWarning','skipped','FAILED'))
                   row={'script':script,'expected_ids':expected,'passed_ids':ids,'exit_code':run.returncode,'passed':passed,'stdout':run.stdout,'stderr':run.stderr,'timed_out':False}
               except subprocess.TimeoutExpired as exc:
                   decode=lambda x:x.decode('utf-8',errors='replace') if isinstance(x,bytes) else x or ''

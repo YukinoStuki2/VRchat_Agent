@@ -41,6 +41,21 @@ class PortableVerifierTests(unittest.TestCase):
         for number in ('WU011','WU012'):self.assertIn(number,workflow)
         self.assertIn("range(1,11)",unity)
 
+    def test_VP011_ci_accepts_one_executed_catalog_test_not_zero(self):
+        import ast,re,textwrap
+        from types import SimpleNamespace
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        step=workflow.split('      - name: Real Windows owned handoff pipes and editor delivery contracts\n',1)[1].split('      - name:',1)[0]
+        code=textwrap.dedent(step.split('        run: |\n',1)[1])
+        assignments=[node for node in ast.walk(ast.parse(code)) if isinstance(node,ast.Assign)
+            and any(isinstance(t,ast.Name) and t.id=='passed' for t in node.targets)]
+        self.assertEqual(len(assignments),1)
+        for count in (0,1,2):
+            env={'re':re,'ids':['OC001'],'expected':['OC001'],
+                'run':SimpleNamespace(returncode=0,stdout='',stderr=f'Ran {count} test'+('s' if count!=1 else '')+' in 0.1s\nOK\n')}
+            exec(compile(ast.Module(body=assignments,type_ignores=[]),'exact-ci-result-check','exec'),env)
+            self.assertEqual(bool(env['passed']),count==1)
+
     def test_VP010_ci_executes_catalog_and_freezes_inventory(self):
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
         self.assertGreaterEqual(workflow.count('tests/test_operation_catalog.py'),3)

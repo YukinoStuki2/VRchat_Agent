@@ -21,6 +21,7 @@ internal static class WirePeer
   gate.SetCapability("manage_material","get_material_info",true);
   gate.SetCapability("manage_animation","controller_get_info",true);
   Trace("ready");
+  if(Environment.GetEnvironmentVariable("VRC_FIXTURE_TRACE")=="1"){Console.WriteLine("{\"fixture_started\":true}");Console.Out.Flush();}
   string line;
   while((line=Console.ReadLine())!=null)
   {

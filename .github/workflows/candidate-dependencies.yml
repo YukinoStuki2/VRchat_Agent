@@ -180,7 +180,7 @@ jobs:
           import json,os,pathlib,re,subprocess
           python=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-locked-env/Scripts/python.exe'
           rows=[];target=pathlib.Path('dependency-evidence/handoff-pipes-results.json')
-          suites=[('Candidate~/tests/test_private_process_pipes.py',['PP001','PP002']),
+          suites=[('Candidate~/tests/test_private_process_pipes.py',['PP001','PP002','PP003','PP004']),
                   ('Candidate~/tests/test_editor_delivery.py',['ED001','ED002','ED003'])]
           for script,expected in suites:
               try:

@@ -82,6 +82,10 @@ class ClientBindingTests(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue(raw, 'compiled gate exited')
                     return json.loads(raw)
             try:
+                sys.path.insert(0,str(ROOT))
+                from launcher.candidate_launch import START_TIMEOUT
+                started_message=await asyncio.wait_for(process.stdout.readline(), START_TIMEOUT)
+                self.assertEqual(json.loads(started_message),{'fixture_started':True})
                 self.assertTrue((await exchange({'fixture_connection':connection}))['fixture_ready'])
                 yield exchange
             finally:

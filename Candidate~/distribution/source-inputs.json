@@ -139,7 +139,7 @@
     "launcher/hermes_delivery.py": "993b928b9e2b7c1bf8d0758182955e2bb4751d78f860521d4fc3d7e6560e6f80",
     "launcher/linux_processes.py": "ff3c23ee15793259ac2f6c6f5c8d64e86f4131edd8be3efd0f2657bdfaa36855",
     "launcher/owned_run.py": "d90dc40072bc7b2882c116a76f0aec9f66f78f2c4e7644a49108597710c06506",
-    "launcher/windows_processes.py": "31426b50129275a1c97927ce93529b0088e0ce02a87559be81d968bcfd87c07e",
+    "launcher/windows_processes.py": "c2b0d16acc85465f1706e248d1a5ee9e42fda4df7387cd7b2a2478f938c77231",
     "native/LICENSE": "6efe650c965012ac418238dcd6b9116e4130a5220717ef0dfb539dd159c4245c",
     "native/PROVENANCE.json": "142617c84d217a759b74d0ee3b52ce806a52b3d3470052906de43a175a00a442",
     "native/candidate-runtime.patch": "0551b13fa1626adf0fd34f83ba10c9ede64ce547f7453cd25a19e98b96744184",

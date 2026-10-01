@@ -23,8 +23,15 @@ class PortableVerifierTests(unittest.TestCase):
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
         self.assertTrue(workflow.count('tests/test_private_process_pipes.py') >= 3, 'pipe suite must run and be hash-frozen before/after')
         self.assertTrue(workflow.count('tests/test_editor_delivery.py') >= 3, 'delivery suite must run and be hash-frozen before/after')
-        self.assertIn("['PP001','PP002']",workflow)
+        self.assertIn("['PP001','PP002','PP003','PP004']",workflow)
         self.assertIn("['ED001','ED002','ED003']",workflow)
+
+    def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
+        source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')
+        self.assertTrue('fixture_started' in source,'peer startup handshake missing')
+        python=(ROOT/'tests/test_client_binding.py').read_text(encoding='utf-8')
+        self.assertTrue("process.stdout.readline(), START_TIMEOUT" in python,'startup must use bounded owner startup budget')
+        self.assertTrue("process.stdout.readline(), 3" in python,'per-request 3s bound must stay unchanged')
 
     def test_VP005_ci_auth_count_tracks_actual_frozen_methods(self):
         import ast, textwrap

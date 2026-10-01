@@ -87,7 +87,9 @@ class WinAPI:
     def job_empty(self,job):
         info=ACCOUNTING();self.checked(self.k.QueryInformationJobObject(job,1,C.byref(info),C.sizeof(info),None))
         return info.ActiveProcesses==0
-    def create_suspended(self,args,env,callback,job,*,stdio=None):
+    def create_suspended(self,args,env,callback,job,*,stdio=None,new_console=False):
+        if type(new_console) is not bool or (new_console and (stdio is not None or callback is not None)):
+            raise ValueError("Console cannot inherit redirected private streams")
         # Explicit handle_list prevents leaking parent's unrelated inheritable handles.
         nullfd=os.open(os.devnull,os.O_RDWR);readfd=writefd=None;process=thread=None
         stdio_fds=[]
@@ -105,7 +107,7 @@ class WinAPI:
                     '=' in k or '\0' in k or '\0' in v for k,v in env.items()):
                 raise ValueError('Invalid child environment')
             startup=STARTUPINFOEX();startup.StartupInfo.cb=C.sizeof(startup)
-            startup.StartupInfo.dwFlags=subprocess.STARTF_USESTDHANDLES
+            startup.StartupInfo.dwFlags=0 if new_console else subprocess.STARTF_USESTDHANDLES
             stdin,stdout=[self.m.get_osfhandle(fd) for fd in stdio_fds] if stdio_fds else (null,null)
             startup.StartupInfo.hStdInput=stdin;startup.StartupInfo.hStdOutput=stdout;startup.StartupInfo.hStdError=err
             size=SIZE_T()
@@ -122,7 +124,8 @@ class WinAPI:
                 environment=C.create_unicode_buffer('\0'.join(k+'='+env[k] for k in sorted(env,key=str.upper))+'\0')
                 command=C.create_unicode_buffer(subprocess.list2cmdline(args))
                 info=PROCESS_INFORMATION()
-                flags=CREATE_SUSPENDED|subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.CREATE_NO_WINDOW|0x00000400|0x00080000
+                flags=CREATE_SUSPENDED|0x00000400|0x00080000
+                flags |= subprocess.CREATE_NEW_CONSOLE if new_console else subprocess.CREATE_NEW_PROCESS_GROUP|subprocess.CREATE_NO_WINDOW
                 self.checked(self.k.CreateProcessW(args[0],command,None,None,True,flags,environment,None,C.byref(startup),C.byref(info)))
                 process,thread=info.hProcess,info.hThread
             finally:
@@ -193,9 +196,9 @@ class OwnedProcesses:
         try:self.job=self.api.create_job()
         except BaseException:self.api.close_handle(self.parent);raise
     def alive(self):return not self.closed and self.api.parent_alive(self.parent)
-    def spawn(self,args,env,stderr_line_callback=None,*,stdio=None):
+    def spawn(self,args,env,stderr_line_callback=None,*,stdio=None,new_console=False):
         if self.closed or not self.alive():raise OSError('Parent unavailable')
-        child=self.api.create_suspended(args,env,stderr_line_callback,self.job,**({"stdio":stdio} if stdio is not None else {}))
+        child=self.api.create_suspended(args,env,stderr_line_callback,self.job,**({"stdio":stdio} if stdio is not None else {}),**({"new_console":True} if new_console else {}))
         try:
             self.api.assign(self.job,child.handle)
             self.api.resume(child.thread)

@@ -54,4 +54,30 @@ class PrivatePipes(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(.02);stop.set();self.assertEqual(await task,b'')
         finally:os.close(r);os.close(w)
 
+    async def test_PP003_visible_console_is_explicit_and_never_mixed_with_stdio(self):
+        import inspect
+        from launcher.windows_processes import OwnedProcesses,WinAPI
+        self.assertIn('new_console',inspect.signature(OwnedProcesses.spawn).parameters)
+        self.assertIn('new_console',inspect.signature(WinAPI.create_suspended).parameters)
+        with self.assertRaises(ValueError):
+            WinAPI.create_suspended(None,[],{},None,1,stdio=(0,1),new_console=True)
+
+    async def test_PP004_real_windows_console_is_owned_and_stops(self):
+        if os.name!='nt':self.skipTest('actual Windows console required')
+        import json,tempfile,time
+        owner=make_owner(os.getpid())
+        with tempfile.TemporaryDirectory(prefix='vrc-console-fixture-') as td:
+            target=Path(td)/'result.json'
+            code="import ctypes,json,sys,time;from pathlib import Path;k=ctypes.WinDLL('kernel32');k.GetConsoleWindow.restype=ctypes.c_void_p;Path(sys.argv[1]).write_text(json.dumps({'console':bool(k.GetConsoleWindow()),'stdin':sys.stdin.isatty(),'stdout':sys.stdout.isatty()}));time.sleep(60)"
+            try:
+                child=owner.spawn([current()['executable'],'-I','-B','-c',code,str(target)],{**child_environment(),**environment_hint()},new_console=True)
+                deadline=time.monotonic()+5
+                while not target.exists() and time.monotonic()<deadline:await asyncio.sleep(.02)
+                self.assertTrue(target.exists(),'visible console child not started')
+                result=json.loads(target.read_text())
+                self.assertEqual(result,{'console':True,'stdin':True,'stdout':True})
+                self.assertTrue(owner.close());self.assertIsNotNone(child.poll())
+            finally:owner.close()
+        self.assertFalse(Path(td).exists())
+
 if __name__=='__main__':unittest.main()

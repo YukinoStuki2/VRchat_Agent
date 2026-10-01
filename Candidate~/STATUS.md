@@ -7,7 +7,10 @@
 - `clients/hermes_connection.py` 接收可信宿主已交付的内存凭据，固定 `127.0.0.1` HTTPS `/mcp`，独占单叶证书信任并核对输入pin，禁CA授权/环境代理/重定向/SDK流重试与续传。复用安装Hermes的MCP SDK与HTTP库，而非修改原生MCPServerTask的全局行为；原binding/conversation直接复用它的peer接口。
 - 单任务持有SDK生命周期，初始化与目录回合完成后才准入；HTTP会话ID固定，空会话/换ID拒绝。到期主动关闭，重复取消等待精确清理，DELETE失败不再按SDK静默返回冒称清理成功。旧绑定会因peer.session清空而拒绝调用，不自动注销仍由宿主持有的agent快照，不自动停止模型turn。
 - HE001–HE014真实SDK＋HTTP替身通过；HT001–HT008真实TLS/原生AIAgent执行器＋fixture消息通过，含错证书、错bearer、污染代理环境与闲置到期。修复前RED保留：输入准入、到期、路由/重试、会话替换、DELETE失败、初始化未完成即ready、连续取消、HTTP构造异常、无状态会话、307携合法MCP正文和CA授权。HE011/HE012首次通过的characterization单列。
-- 不改变现用Hermes/QQ、Unity工程或权限门控，不发送模型请求。可信跨机交付、用户绑定/网关激活、真实项目身份/人审、重载续接、独立复核与完整VPM/ALCOM仍未实现/验收。实现冻结、回归和CI读回在本轮结项证据另记，未提前声称完成。
+- 实现 `19800be5c0864420c788df9dc8fd078884b8dfba` 已推送候选分支并读回。617份冻结输入与提交原字节一致；HE14/HT8、HC11/HA15/HN5/HB5/HS4/HR6/NA6/NP4、直接兼容和打包4/布局6分组通过，不跨组累计。12份冻结报告归档，测试临时HOME、源码导出树、跟踪进程/端口/会话均核验清理。
+- Windows CI `36832384400` success；artifact `11147721439` 原ZIP匹配官方digest后读回：490源码与提交及运行前后一致，便携28回归、PS4/ECP2通过，74份wheel报告对应锁、99份许可证正文匹配清单hash，下载归档及运行临时根清理通过。三个宿主模块仅Windows语法编译，HE/HT仍为Linux证据，不冒称Windows Hermes。
+- 本轮总证据 `evidence/hermes-connection-parent-acceptance.json` 与 `hermes-connection-frozen-source/`。保留首次RED和测试清单误用MCP1模块名的失败；按实际MCP2模块改正清单后原生复测通过，没有因此修改生产连接逻辑或放宽断言。官方下载401后仅用公开镜像，须与官方digest严格相同；父级读回曾漏写许可证texts/层级，核对实际目录后完成校验。
+- 不改变现用Hermes/QQ、Unity工程或权限门控，不发送模型请求。可信跨机交付、用户绑定/网关激活、真实项目身份/人审、重载续接、独立复核与完整VPM/ALCOM仍未实现/验收。父级审阅不是独立批准；没有安装ZIP或发布。
 
 ## Hermes 新会话构造（候选源码，未安装）
 

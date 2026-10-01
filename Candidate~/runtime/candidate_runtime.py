@@ -30,7 +30,7 @@ SPECS = {
     'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
     'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
 }
-CONTROLS = {'agent_status', 'agent_prepare', 'agent_stop'}
+CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
 SESSION_IDLE_TIMEOUT = 60.0
@@ -251,6 +251,10 @@ class Runtime(Middleware):
                 self.check_plan(invocation)
                 if (name, action) not in invocation.plan.operations or args[key] not in invocation.plan.targets:
                     raise ToolError('outside_plan')
+            elif name == 'agent_catalog':
+                if (set(args) - {'offset','limit'} or
+                        any(type(value) is not int for value in args.values())):
+                    raise ToolError('invalid_catalog_page')
             elif name == 'agent_status' and args:
                 raise ToolError('unexpected_arguments')
             elif name == 'agent_stop' and set(args) != {'task_id'}:
@@ -469,6 +473,12 @@ def create_server(project_id, *, mcp_auth=None):
         if type(result) is dict and result.get('success') is True and type(result.get('data')) is dict:
             result = {**result, 'data': {**result['data'], 'project_id': runtime.project_id}}
         return result
+
+    @server.tool
+    async def agent_catalog(offset: int = 0, limit: int = 12) -> dict:
+        """分页列出固定版本的中文原生能力目录，不接触Unity、不授予权限。"""
+        from operation_catalog import page
+        return page(offset, limit)
 
     @server.tool
     async def agent_prepare(task_id: str, operations: list[dict], targets: list[str],

@@ -23,6 +23,17 @@ def assembler():
 
 
 class SourcePayloadTests(unittest.TestCase):
+    def test_SP009_relocated_payload_has_executable_catalog(self):
+        files=assembler().collect(ROOT)
+        self.assertTrue('Runtime~/runtime/operation_catalog.py' in files, 'catalog runtime missing from copied payload')
+        with tempfile.TemporaryDirectory(prefix='candidate-catalog-layout-') as td:
+            for name, data in files.items():
+                if name.startswith('Runtime~/') and not name.endswith('.meta'):
+                    output=Path(td)/name;output.parent.mkdir(parents=True,exist_ok=True);output.write_bytes(data)
+            spec=importlib.util.spec_from_file_location('relocated_catalog',Path(td)/'Runtime~/runtime/operation_catalog.py')
+            module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+            self.assertEqual(module.page()['total'],json.loads(files['Runtime~/catalog/native-inventory.json'])['count'])
+
     def test_SP008_local_codex_is_in_actual_runtime_payload(self):
         files=assembler().collect(ROOT)
         self.assertTrue('Runtime~/launcher/codex_local.py' in files,'local Codex absent from payload')

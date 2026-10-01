@@ -43,6 +43,7 @@ class CodexLocal(unittest.TestCase):
             self.assertIn(m.TOKEN_ENV,doc['shell_environment_policy']['exclude'])
             self.assertEqual(set(doc['mcp_servers']),{'candidate'})
             self.assertIn('manage_animation',doc['mcp_servers']['candidate']['enabled_tools'])
+            self.assertIn('agent_catalog',doc['mcp_servers']['candidate']['enabled_tools'])
             self.assertEqual(doc['mcp_servers']['candidate']['url'],'https://127.0.0.1:32198/mcp')
             self.assertEqual(doc['mcp_servers']['candidate']['bearer_token_env_var'],m.TOKEN_ENV)
             self.assertFalse((profile/'auth.json').exists())

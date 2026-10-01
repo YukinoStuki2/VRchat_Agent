@@ -24,7 +24,7 @@ def hashes():
             for p in sorted([*(ROOT / 'package/Editor').rglob('*.cs'),
                 *(ROOT / 'runtime').glob('*.py'), *(ROOT / 'tests/unity-core').glob('*.cs'),
                 *(ROOT / 'dependencies/mcp-1.29.1/mcp').rglob('*.py'),
-                ROOT / 'tests/test_runtime_lifecycle.py', ROOT / 'tests/test_client_binding.py',
+                ROOT / 'catalog/native-inventory.json', ROOT / 'tests/test_runtime_lifecycle.py', ROOT / 'tests/test_client_binding.py',
                 ROOT / 'tests/test_runtime_unity_auth.py', ROOT / 'tests/test_runtime_material.py',
                 *(ROOT / 'tests/unity-core').glob('*.csproj'), ROOT / 'tests/verify_unity.py'])}
 
@@ -160,7 +160,7 @@ def main(label):
     report['unique_pass_count'] = len(set(report['pass_ids']))
     report['client_binding_pass_ids'] = sorted(r['name'] for r in report['runs'] if re.fullmatch(r'CB00[1-7]',r['name']) and r['exit_code']==0)
     report['client_binding_ids_match'] = report['client_binding_pass_ids'] == [f'CB{i:03d}' for i in range(1,8)]
-    expected = ({f'UC{i:03d}' for i in range(1, 15)} | {f'UA{i:03d}' for i in range(1, 8)} |
+    expected = ({f'UC{i:03d}' for i in range(1, 15)} | {f'UA{i:03d}' for i in range(1, 9)} |
                 {f'UF{i:03d}' for i in range(1, 25)} | {'UR002', 'UR003', 'WI001', 'CLC001', 'CLC002'} |
                 {f'LC{i:03d}' for i in range(1, 8)} | {f'OI{i:03d}' for i in range(1, 11)})
     report['expected_ids_match'] = set(report['pass_ids']) == expected

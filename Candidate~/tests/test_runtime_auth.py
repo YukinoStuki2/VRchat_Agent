@@ -155,7 +155,7 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
     async def test_AU001_different_signed_principal_cannot_use_or_delete_owner_session(self):
         async with self.fixture() as (url, tokens, server, verifier):
             async with Client(url, auth=tokens['fixture-client-a']) as owner:
-                self.assertEqual(len(await owner.list_tools()), 9)
+                self.assertEqual(len(await owner.list_tools()), 10)
                 headers = {'accept': 'application/json, text/event-stream',
                     'authorization': 'Bearer ' + tokens['fixture-client-b'],
                     'mcp-session-id': owner.transport.get_session_id(),
@@ -169,7 +169,7 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
                             self.assertEqual(response.status_code, 404)
                 self.assertTrue(await owner.ping(), 'foreign DELETE must not close owner session')
             async with Client(url, auth=tokens['fixture-client-b']) as other:
-                self.assertEqual(len(await other.list_tools()), 9)
+                self.assertEqual(len(await other.list_tools()), 10)
             self.assertEqual(server._candidate_runtime.plans, {})
             self.assertEqual(server._candidate_runtime.material.plans, {})
 

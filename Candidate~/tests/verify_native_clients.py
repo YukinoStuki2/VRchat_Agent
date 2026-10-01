@@ -274,7 +274,7 @@ def main():
     report={'passed':False,'independent_approval':False,'trusted_delivery_verified':False,
         'unity_editor_verified':False,'codex_scope':'native MCP call in ephemeral thread; no model turn',
         'codex_ca_scope':'custom CA is additional trust, not exclusive certificate pinning'}
-    paths=sorted(p for folder in ('runtime','launcher','native','dependencies','tests','package','clients')
+    paths=sorted(p for folder in ('runtime','launcher','native','dependencies','tests','package','clients','catalog')
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}

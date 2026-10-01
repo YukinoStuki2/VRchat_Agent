@@ -15,7 +15,7 @@ import test_client_binding as binding
 import websockets
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = ['agent_status','agent_prepare','agent_stop','manage_material',
+TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material',
          'material_prepare','material_execute','material_stop']
 
 class NativePeer:
@@ -182,6 +182,22 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     async def approve(plan,material=False):
                         assert (await exchange({'fixture_approve_exact':plan,
                             'route':'vrchat_agent_material_dispatch' if material else 'vrchat_agent_dispatch'}))['fixture_approved']
+                    report['native_catalog_pass_ids']=[]
+                    expected_catalog=json.loads((ROOT/'catalog/native-inventory.json').read_text(encoding='utf-8'))
+                    for role in ('hermes','codex'):
+                        rows=[];offset=0
+                        while True:
+                            value=await peers[role].call('agent_catalog',{'offset':offset,'limit':12})
+                            assert not value.get('isError'),'native_catalog_not_exposed'
+                            page=value['structuredContent']
+                            assert page['permission_grant'] is False and page['returned']==len(page['tools'])
+                            rows.extend(page['tools'])
+                            if page['next_offset'] is None:break
+                            assert page['next_offset']==offset+len(page['tools'])
+                            offset=page['next_offset']
+                        assert [row['name'] for row in rows]==[row['name'] for row in expected_catalog['tools']]
+                        assert page['total']==len(rows) and await plans()==[] and await plans(True)==[]
+                        report['native_catalog_pass_ids'].append('NC001' if role=='hermes' else 'NC002')
                     report['native_pause_pass_ids']=[]
                     async def pause_resume(role,plan,tool,arguments,material=False):
                         route='vrchat_agent_material_dispatch' if material else 'vrchat_agent_dispatch'

@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -7,6 +9,8 @@ namespace Yukino.VRChatAgent
     public sealed class CandidateWindow : EditorWindow
     {
         Vector2 scroll;
+        JArray catalog;
+        string catalogTool = "", catalogError = "";
         bool allowHermes, allowCodex; // Local per-run selection; default closed, no persistence.
         bool externalPython; // Explicit development opt-in; default never searches host Python.
         string codexExecutable = "";
@@ -59,6 +63,7 @@ namespace Yukino.VRChatAgent
             }
             EditorGUILayout.LabelField("状态", gate.LastReason);
             scroll = EditorGUILayout.BeginScrollView(scroll);
+            DrawCatalog();
             JArray displayed = gate.LocalPlans();
             foreach (JObject plan in displayed)
             {
@@ -92,6 +97,65 @@ namespace Yukino.VRChatAgent
             MaterialCandidateSession.Draw();
 #endif
             EditorGUILayout.EndScrollView();
+        }
+        void DrawCatalog()
+        {
+            if (GUILayout.Button(catalog == null ? "展开原生操作目录" : "收起原生操作目录"))
+            {
+                if (catalog != null) catalog = null;
+                else
+                {
+                    try
+                    {
+                        var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CandidateSession).Assembly);
+                        string path = Path.Combine(package.resolvedPath, "Runtime~", "catalog", "native-inventory.json");
+                        if (new FileInfo(path).Length > 1024 * 1024) throw new InvalidDataException();
+                        var doc = JObject.Parse(File.ReadAllText(path));
+                        var rows = doc["tools"] as JArray;
+                        if ((int?)doc["schema_version"] != 1 || (bool?)doc["permission_grant"] != false ||
+                            (bool?)doc["product_ready"] != false || rows == null || rows.Count == 0 ||
+                            rows.Count > 256 || (int?)doc["count"] != rows.Count) throw new InvalidDataException();
+                        foreach (JObject row in rows)
+                            if ((bool?)row["enabled_by_catalog"] != false || (string)row["default_decision"] != "deny" ||
+                                row["declared_actions"] is not JArray) throw new InvalidDataException();
+                        catalog = rows; catalogError = "";
+                    }
+                    catch { catalog = null; catalogError = "随包能力目录缺失或无效，未更改任何权限。"; }
+                }
+            }
+            if (catalogError != "") EditorGUILayout.HelpBox(catalogError, MessageType.Warning);
+            if (catalog == null) return;
+            EditorGUILayout.HelpBox("固定候选版本的能力目录，不是工程资产扫描，也不代表全部已接通。未知操作保持禁用；勾选仅改变本地能力上限，具体任务仍需核对清单批准。运行时另校验目录对应源码。", MessageType.Info);
+            foreach (JObject row in catalog)
+            {
+                string command = (string)row["name"];
+                string category = (string)row["group"];
+                string chinese = category switch {
+                    "core" => "核心", "animation" => "动画", "asset_gen" => "外部资产生成",
+                    "docs" => "文档", "probuilder" => "几何建模", "profiling" => "性能分析",
+                    "scripting_ext" => "脚本", "testing" => "测试", "ui" => "用户界面",
+                    "vfx" => "特效", _ => "其他"
+                };
+                EditorGUILayout.LabelField("原生工具", chinese + " / " + (string)row["name_zh"] + "  " + command);
+                if (GUILayout.Button("展开操作：" + command)) catalogTool = catalogTool == command ? "" : command;
+                if (catalogTool != command) continue;
+                var actions = (JArray)row["declared_actions"];
+                if (actions.Count == 0) EditorGUILayout.LabelField("操作", "无封闭动作清单；尚未接通，拒绝");
+                foreach (JToken item in actions)
+                {
+                    string action = (string)item;
+                    bool supported = true;
+                    try { CandidateSession.Gate.Allows(command, action); } catch { supported = false; }
+                    if (supported) Capability((string)row["name_zh"], command, action);
+                    else
+                    {
+                        EditorGUI.BeginDisabledGroup(true);
+                        EditorGUILayout.ToggleLeft(command + "/" + action + "  尚未接通，拒绝", false);
+                        EditorGUI.EndDisabledGroup();
+                        EditorGUILayout.LabelField("未支持操作", command + "/" + action + "  尚未接通，拒绝");
+                    }
+                }
+            }
         }
         async void StartLocal()
         {

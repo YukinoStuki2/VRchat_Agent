@@ -76,6 +76,19 @@ internal static class AdapterCases
    p=prepare();GUILayout.BeforeClick=()=> { prepare(); };GUILayout.NextButton="批准此清单";gui.Invoke(window,null);GUILayout.BeforeClick=null;
    Check(!(bool)gate.LocalPlans()[0]["approved"],"stale displayed plan must not approve replacement");
    Console.WriteLine("PASS UA007 stale display cannot approve replacement");
+   string catalogDir=Path.Combine(directory,"Runtime~","catalog");Directory.CreateDirectory(catalogDir);
+   string catalogPath=Path.Combine(catalogDir,"native-inventory.json");
+   string catalogJson=File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),"catalog","native-inventory.json"));
+   File.WriteAllText(catalogPath,catalogJson);UnityEditor.PackageManager.PackageInfo.TestRoot=directory;
+   int callsBeforeCatalog=CommandRegistry.Calls;gate.SetCapability("manage_material","get_material_info",false);
+   EditorGUILayout.Labels.Clear();GUILayout.NextButton="展开原生操作目录";gui.Invoke(window,null);
+   var catalogDoc=JObject.Parse(catalogJson);
+   foreach(JObject tool in (JArray)catalogDoc["tools"])
+    Check(EditorGUILayout.Labels.Exists(s=>s.Contains((string)tool["name_zh"])&&s.Contains((string)tool["name"])),"catalog row not visible: "+(string)tool["name"]);
+   Check(!gate.Allows("manage_material","get_material_info")&&gate.LocalPlans().Count==0&&CommandRegistry.Calls==callsBeforeCatalog,"catalog granted/dispatched");
+   GUILayout.NextButton="展开操作：manage_material";gui.Invoke(window,null);
+   Check(EditorGUILayout.Labels.Exists(s=>s.Contains("set_material_shader_property")&&s.Contains("尚未接通")),"unsupported operation not marked");
+   Console.WriteLine("PASS UA008 full shipped catalog shown without authority or native execution");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

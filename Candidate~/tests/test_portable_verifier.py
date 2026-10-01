@@ -41,6 +41,14 @@ class PortableVerifierTests(unittest.TestCase):
         for number in ('WU011','WU012'):self.assertIn(number,workflow)
         self.assertIn("range(1,11)",unity)
 
+    def test_VP010_ci_executes_catalog_and_freezes_inventory(self):
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        self.assertGreaterEqual(workflow.count('tests/test_operation_catalog.py'),3)
+        self.assertIn("['OC001']", workflow)
+        self.assertGreaterEqual(workflow.count("'Candidate~/catalog'"),2)
+        unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
+        self.assertIn("{f'UA{i:03d}' for i in range(1, 9)}", unity)
+
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')
         self.assertTrue('fixture_started' in source,'peer startup handshake missing')

@@ -110,6 +110,41 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await PluginHub._registry.list_sessions(), {})
         self.assertEqual(PluginHub._connections, {})
 
+    async def test_RT014_catalog_rejects_unbounded_or_coerced_arguments(self):
+        for args in ({'limit':0},{'limit':21},{'limit':True},{'limit':'2'},
+                     {'offset':-1},{'offset':1.5},{'offset':True},{'offset':'0'},
+                     {'offset':100000},{'path':'/etc/passwd'},{'action':'approve'}):
+            with self.subTest(args=args):
+                result=await self.client.call_tool('agent_catalog',args,raise_on_error=False)
+                self.assertTrue(result.is_error,'invalid paging accepted')
+        self.assertEqual(self.peer.events,[])
+
+    async def test_RT013_catalog_is_complete_paginated_and_inert(self):
+        await PluginHub._registry.unregister(CONNECTION)
+        PluginHub._connections.pop(CONNECTION)
+        rows=[]
+        offset=0
+        while True:
+            result=await self.client.call_tool('agent_catalog', {'offset':offset,'limit':11}, raise_on_error=False)
+            self.assertFalse(result.is_error, 'candidate catalog missing')
+            data=result.data
+            self.assertIs(data['permission_grant'], False)
+            self.assertIs(data['product_ready'], False)
+            self.assertEqual(data['offset'],offset)
+            self.assertEqual(data['returned'],len(data['tools']))
+            rows.extend(data['tools'])
+            if data['next_offset'] is None:break
+            self.assertEqual(data['next_offset'],offset+len(data['tools']))
+            offset=data['next_offset']
+        expected=json.loads((ROOT/'catalog/native-inventory.json').read_text(encoding='utf-8'))
+        self.assertEqual(data['total'],len(rows))
+        self.assertEqual([x['name'] for x in rows],[x['name'] for x in expected['tools']])
+        self.assertEqual(len(rows),len({x['name'] for x in rows}))
+        self.assertTrue(all(x['enabled_by_catalog'] is False and x['default_decision']=='deny' for x in rows))
+        self.assertEqual(self.peer.events,[])
+        self.assertEqual(self.server._candidate_runtime.plans,{})
+        self.assertEqual(self.server._candidate_runtime.material.plans,{})
+
     async def test_RT001_status_traverses_real_sdk_factory_hub(self):
         result = await self.client.call_tool("agent_status", {}, raise_on_error=False)
         self.assertFalse(result.is_error, "agent_status missing in real candidate")
@@ -219,7 +254,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RT007_surface_and_unmanaged_paths_are_closed(self):
         names = {t.name for t in await self.client.list_tools()}
-        self.assertEqual(names, {'agent_status', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material',
+        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material',
             'material_prepare', 'material_execute', 'material_status', 'material_stop'})
         for name, args in [('agent_approve', {}), ('execute_custom_tool', {}),
                            ('manage_animation', {**READ, 'client_id': 'fake'}),

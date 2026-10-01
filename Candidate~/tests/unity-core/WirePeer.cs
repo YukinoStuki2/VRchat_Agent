@@ -8,16 +8,19 @@ using Newtonsoft.Json.Linq;
 using Yukino.VRChatAgent;
 internal static class WirePeer
 {
+ static void Trace(string phase){if(Environment.GetEnvironmentVariable("VRC_FIXTURE_TRACE")=="1")Console.Error.WriteLine("VRC_WIRE_PHASE:"+phase);}
  static void Main()
  {
+  Trace("main");
   string connection=""; var timer=Stopwatch.StartNew(); int calls=0;
-  using var backend=new WriteFixture();
+  using var backend=new WriteFixture(); Trace("fixture");
   var material=new MaterialCandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,backend);
   material.SetCapability("copy",true); material.SetCapability("edit",true);
   var gate=new CandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,
    p=>"fixture-only-evidence-"+p,(c,p)=>JObject.FromObject(new SuccessResponse("fixture handler",new{fixture_only=true,call=++calls,command=c,path=(string)(p["materialPath"]??p["controllerPath"])})));
   gate.SetCapability("manage_material","get_material_info",true);
   gate.SetCapability("manage_animation","controller_get_info",true);
+  Trace("ready");
   string line;
   while((line=Console.ReadLine())!=null)
   {
@@ -36,7 +39,8 @@ internal static class WirePeer
     // Fixed upstream TransportCommandDispatcher success transport envelope.
     output=new JObject{["status"]="success",["result"]=JObject.FromObject(native)};
    }
-   Console.WriteLine(output.ToString(Formatting.None));Console.Out.Flush();
+   Console.WriteLine(output.ToString(Formatting.None));Console.Out.Flush(); Trace("reply");
   }
+  Trace("eof");
  }
 }

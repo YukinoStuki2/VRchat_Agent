@@ -59,11 +59,20 @@ class ClientBindingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(WIRE_DLL and Path(WIRE_DLL).is_file() and DOTNET,
                         'fresh-build verifier must supply the compiled production gates')
         from test_bootstrap_runtime import child_environment
+        import time
         with tempfile.TemporaryDirectory(prefix='candidate-client-core-') as home:
+            started=time.monotonic();trace=[]
             process = await asyncio.create_subprocess_exec(str(DOTNET), str(WIRE_DLL),
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                cwd=home, env={**child_environment(home),'TMPDIR':home,'TEMP':home,'TMP':home})
-            errors = asyncio.create_task(process.stderr.read())
+                cwd=home, env={**child_environment(home), 'TMPDIR':home,'TEMP':home,'TMP':home,'VRC_FIXTURE_TRACE':'1'})
+            async def capture_errors():
+                other=[]
+                async for line in process.stderr:
+                    if line.strip() in {b'VRC_WIRE_PHASE:'+phase for phase in (b'main',b'fixture',b'ready',b'reply',b'eof')}:
+                        trace.append({'phase':line.decode().strip().split(':')[1], 'elapsed_ms':round((time.monotonic()-started)*1000)})
+                    else:other.append(line)
+                return b''.join(other)
+            errors = asyncio.create_task(capture_errors())
             lock = asyncio.Lock()
             async def exchange(message):
                 async with lock:
@@ -85,6 +94,7 @@ class ClientBindingTests(unittest.IsolatedAsyncioTestCase):
                     self.fail('compiled gate required safety kill')
                 finally:
                     error = await errors
+                    print(json.dumps({'fixture_startup_trace':trace,'returncode':process.returncode}))
                 self.assertEqual(process.returncode,0,error.decode())
                 self.assertFalse(error)
                 self.assertEqual(list(Path(home).iterdir()),[], 'compiled fixture failed to remove owned files')

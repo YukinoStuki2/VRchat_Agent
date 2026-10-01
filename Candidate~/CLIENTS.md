@@ -1,5 +1,30 @@
 # Native-client compatibility — development evidence only
 
+## Independently owned Hermes connection shutdown (Linux characterization)
+
+`--hermes-owned` reuses the installed `MCPServerTask.start/shutdown` lifecycle
+beside a separately registered read-only probe service in one isolated Hermes
+process. The two owners use the same fixture endpoint with different signed
+roles and disjoint SDK sessions; this is not two real Unity projects.
+
+HS001–HS004 check concurrent service survival, exact owner shutdown, closed-session
+local refusal, and a late/repeated shutdown of generation 1 after generation 2
+starts. The observer's registered schema remains byte-identical and it continues
+using one session. Server traces require exactly two Hermes status calls and
+three observer status calls: the stale-session attempt must never reach the
+endpoint. Both owned sessions and the observer are deleted at final cleanup.
+On the tested installed MCP 2.0.0 SDK, post-close sends raise `MCPError` with the
+exact `CONNECTION_CLOSED` code, rather than leaking an underlying anyio exception.
+
+The owned tasks are deliberately NOT inserted into Hermes's global MCP registry.
+This proves the reusable per-object lifecycle, not a production receiver or an
+API for removing an arbitrary registered server. Global shutdown appears only
+in final cleanup of the test process that owns every connection. No installed
+Hermes files/configuration, active gateway, model turn, or real Unity project is
+changed. Exact tool registration ownership, conversation-snapshot integration,
+trusted delivery and shared-gateway activation remain unimplemented.
+
+
 The product still lacks a trusted operator-to-client credential handoff. These
 checks deliberately do not identify a brand from a bearer token, install a
 client configuration, run a model turn, or approve a Unity task.

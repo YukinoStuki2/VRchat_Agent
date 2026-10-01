@@ -87,12 +87,14 @@ async def run(args, report):
                         hermes_home=home/'hermes';hermes_home.mkdir()
                         env={**child_environment(hermes_home),'HERMES_HOME':str(hermes_home),
                              'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['hermes'].token}
+                        if args.hermes_owned:
+                            env['VRCHAT_AGENT_TEST_PROBE_TOKEN']=owner.identity.credentials['probe'].token
                         process=await asyncio.create_subprocess_exec(args.hermes_python,'-I','-B',
                             str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source,cwd=hermes_home,env=env,
                             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
                         processes.append(process)
                         doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode(),
-                             'registry':args.hermes_registry}
+                             'registry':args.hermes_registry,'owned':args.hermes_owned}
                         out,err=await asyncio.wait_for(process.communicate((json.dumps(doc)+'\n').encode()),25)
                         captured.extend((out,err))
                         for line in out.decode().splitlines():
@@ -109,7 +111,16 @@ async def run(args, report):
                             assert report['hermes']['pass_ids']==[f'HR{i:03d}' for i in range(1,7)]
                             assert tool_calls.get('hermes')==['agent_status','agent_stop']
                             report['hermes_wire_tools']=tool_calls['hermes']
-                        assert len(created.get('hermes',set()))==1
+                        if args.hermes_owned:
+                            assert report['hermes'].get('owned_shutdown_verified') is True
+                            assert report['hermes']['pass_ids']==[f'HS{i:03d}' for i in range(1,5)]
+                            assert len(created.get('probe',set()))==1
+                            assert deleted.get('probe')==created['probe']
+                            assert created['probe'].isdisjoint(created['hermes'])
+                            assert tool_calls.get('hermes')==['agent_status','agent_status']
+                            assert tool_calls.get('probe')==['agent_status']*3
+                            report['hermes_owned_wire_tools']={role:tool_calls[role] for role in ('hermes','probe')}
+                        assert len(created.get('hermes',set()))==(2 if args.hermes_owned else 1)
                         assert deleted.get('hermes')==created['hermes']
                         codex_home=home/'codex';codex_home.mkdir()
                         ca=codex_home/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
@@ -188,7 +199,7 @@ async def run(args, report):
                         assert deleted.get('codex')==created['codex']
                         assert created['hermes'].isdisjoint(created['codex'])
                         report['session_cleanup']={role:{'created':len(created[role]),'deleted':len(deleted[role])}
-                                                   for role in ('hermes','codex')}
+                                                   for role in (('hermes','codex','probe') if args.hermes_owned else ('hermes','codex'))}
                     report['requests']=request_counts
                 finally:
                     for process in processes:
@@ -219,6 +230,7 @@ def main():
     modes=p.add_mutually_exclusive_group()
     modes.add_argument('--approved-tasks',action='store_true',help='real clients, compiled gate/file fixture; not Unity')
     modes.add_argument('--hermes-registry',action='store_true',help='isolated native in-memory registry and dispatch; no model turn')
+    modes.add_argument('--hermes-owned',action='store_true',help='native owned-task close beside a separate registered service; no shared gateway changes')
     p.add_argument('--dotnet',default='/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
     args=p.parse_args()
     if Path(args.output).exists():raise FileExistsError(args.output)
@@ -229,7 +241,7 @@ def main():
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}
-    if args.hermes_registry:
+    if args.hermes_registry or args.hermes_owned:
         for name in ('registry','mcp_schema_cache'):
             external['hermes_'+name]=Path(args.hermes_source)/('tools/'+name+'.py')
     if args.approved_tasks:

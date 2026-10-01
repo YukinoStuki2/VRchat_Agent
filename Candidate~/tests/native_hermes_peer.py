@@ -71,6 +71,82 @@ async def registry_probe(config, allowed):
     result['registry_verified']=True;result['shutdown_complete']=True
     print(json.dumps(result),flush=True)
 
+async def owned_shutdown_probe(config):
+    """Two independent native owners in one isolated process; not an installed receiver."""
+    from tools import mcp_tool
+    from tools.registry import registry
+    from mcp.shared.exceptions import MCPError
+    from mcp_types import CONNECTION_CLOSED
+    import importlib.metadata
+    assert not mcp_tool.get_registered_mcp_server_names()
+    baseline=set(registry.get_all_tool_names())
+    observer_name='candidate-unrelated-probe'
+    observer_token=os.environ.pop('VRCHAT_AGENT_TEST_PROBE_TOKEN')
+    observer_config={**config,'headers':{'Authorization':'Bearer '+observer_token},
+        'tools':{'include':['agent_status'],'resources':False,'prompts':False},
+        'lazy':False,'trust':'full'}
+    observer_tool=mcp_tool.mcp_prefixed_tool_name(observer_name,'agent_status')
+    owned=mcp_tool.MCPServerTask('candidate-owned-generation-1')
+    replacement=mcp_tool.MCPServerTask('candidate-owned-generation-2')
+    result={'native':'hermes','mcp_version':importlib.metadata.version('mcp'),
+        'owned_shutdown_verified':False,'pass_ids':[],
+        'scope':'independently owned native task next to registered read-only service; same fixture endpoint, distinct sessions',
+        'global_registry_removal_implemented':False}
+    async def observer_ok():
+        answer=await asyncio.to_thread(registry.dispatch,observer_tool,{})
+        answer=json.loads(answer) if isinstance(answer,str) else answer
+        assert 'expected_project_not_connected' in answer.get('error','')
+        assert mcp_tool.get_registered_mcp_server_names()=={observer_name}
+        assert set(registry.get_all_tool_names())==baseline|{observer_tool}
+    async def owned_ok(peer):
+        response=await peer.session.call_tool('agent_status',{})
+        assert response.is_error and any('expected_project_not_connected' in getattr(x,'text','') for x in response.content)
+    try:
+        names=await asyncio.to_thread(mcp_tool.register_mcp_servers,{observer_name:observer_config})
+        assert names==[observer_tool]
+        schema_before=json.dumps(registry.get_schema(observer_tool),sort_keys=True)
+        await asyncio.wait_for(owned.start(config),12)
+        assert owned.session is not None
+        await owned_ok(owned);await observer_ok()
+        result['pass_ids'].append('HS001')
+        previous_session=owned.session
+        await owned.shutdown()
+        assert owned.session is None and owned._task.done()
+        await observer_ok()
+        assert json.dumps(registry.get_schema(observer_tool),sort_keys=True)==schema_before
+        result['pass_ids'].append('HS002')
+        try:
+            await asyncio.wait_for(previous_session.call_tool('agent_status',{}),3)
+        except MCPError as exc:
+            assert exc.code==CONNECTION_CLOSED
+            result['closed_session_error_type']=type(exc).__name__
+            result['closed_session_error_code']=exc.code
+        else:
+            raise AssertionError('closed_session_not_refused')
+        result['pass_ids'].append('HS003')
+        await asyncio.wait_for(replacement.start(config),12)
+        fresh=replacement.session
+        assert fresh is not None and fresh is not previous_session
+        await owned.shutdown()  # Late/repeated close must remain bound to generation 1.
+        assert replacement.session is fresh and not replacement._task.done()
+        await owned_ok(replacement);await observer_ok()
+        assert json.dumps(registry.get_schema(observer_tool),sort_keys=True)==schema_before
+        await replacement.shutdown()
+        assert replacement.session is None and replacement._task.done()
+        result['pass_ids'].append('HS004')
+    finally:
+        try:
+            await asyncio.gather(owned.shutdown(),replacement.shutdown())
+        finally:
+            # This is only final cleanup of this owned TEST process; never a
+            # candidate disconnect implementation inside a user's shared gateway.
+            await asyncio.to_thread(mcp_tool.shutdown_mcp_servers)
+            config['headers'].clear();observer_config['headers'].clear()
+    assert not mcp_tool.get_registered_mcp_server_names()
+    assert set(registry.get_all_tool_names())==baseline
+    result['owned_shutdown_verified']=True;result['shutdown_complete']=True
+    print(json.dumps(result),flush=True)
+
 async def main():
     # Source path is test-operator-selected, never exposed as a Candidate tool.
     source = Path(sys.argv[1]).resolve(strict=True)
@@ -92,6 +168,10 @@ async def main():
         'tools': {'include': allowed, 'resources': False, 'prompts': False},
         'sampling': {'enabled': False},
         'elicitation': {'enabled': False}}
+    if doc.get('owned') is True:
+        assert not interactive and not doc.get('registry')
+        await owned_shutdown_probe(config)
+        return
     if doc.get('registry') is True:
         assert not interactive
         await registry_probe(config,allowed)

@@ -19,6 +19,13 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP006_ci_exercises_new_private_pipe_and_delivery_contracts(self):
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        self.assertTrue(workflow.count('tests/test_private_process_pipes.py') >= 3, 'pipe suite must run and be hash-frozen before/after')
+        self.assertTrue(workflow.count('tests/test_editor_delivery.py') >= 3, 'delivery suite must run and be hash-frozen before/after')
+        self.assertIn("['PP001','PP002']",workflow)
+        self.assertIn("['ED001','ED002','ED003']",workflow)
+
     def test_VP005_ci_auth_count_tracks_actual_frozen_methods(self):
         import ast, textwrap
         source=ROOT/'tests/test_runtime_auth.py'

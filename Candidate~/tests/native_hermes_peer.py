@@ -230,6 +230,105 @@ async def binding_probe(config):
     result['binding_verified']=True;result['shutdown_complete']=True
     print(json.dumps(result),flush=True)
 
+async def conversation_probe(config):
+    """Real AIAgent construction/executor, fixture tool messages; never a model turn."""
+    from urllib.parse import urlsplit
+    from types import SimpleNamespace
+    from tools import mcp_tool
+    from tools.registry import registry
+    from model_tools import get_tool_definitions
+    import importlib.metadata
+    from run_agent import AIAgent
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'clients'))
+    from hermes_conversation import conversation
+    endpoint=urlsplit(config['url']);network={'allowed':0,'denied':0,'denied_locations':[]}
+    def blocked():
+        import traceback
+        network['denied']+=1
+        network['denied_locations'].append([{'file':Path(f.filename).name,'line':f.lineno,'function':f.name} for f in traceback.extract_stack(limit=36)])
+    def guard(event,args):
+        if event=='socket.getaddrinfo' and args[0] not in ('127.0.0.1',b'127.0.0.1'):
+            blocked();raise RuntimeError('test_external_network_forbidden')
+        if event=='socket.connect':
+            address=args[1]
+            if not isinstance(address,tuple) or address[:2]!=('127.0.0.1',endpoint.port):
+                blocked();raise RuntimeError('test_nonfixture_connection_forbidden')
+            network['allowed']+=1
+    sys.addaudithook(guard)
+    baseline=set(registry.get_all_tool_names());observer_name='candidate-conversation-observer'
+    observer_config={**config,'headers':{'Authorization':'Bearer '+os.environ.pop('VRCHAT_AGENT_TEST_PROBE_TOKEN')},
+        'tools':{'include':['agent_status'],'resources':False,'prompts':False},'lazy':False,'trust':'full'}
+    observer_tool=mcp_tool.mcp_prefixed_tool_name(observer_name,'agent_status')
+    first=mcp_tool.MCPServerTask('candidate-conversation-first');second=mcp_tool.MCPServerTask('candidate-conversation-second')
+    options={'provider':'openai','model':'gpt-4.1','api_mode':'chat_completions',
+        'base_url':'https://candidate-model.invalid/v1','api_key':'fixture-only-not-a-credential',
+        'quiet_mode':True,'skip_memory':True,'skip_background_review':True,
+        'skip_context_files':True,'save_trajectories':False,'max_iterations':1}
+    result={'native':'hermes','mcp_version':importlib.metadata.version('mcp'),
+        'conversation_verified':False,'pass_ids':[],'model_turn':False,'fixture_tool_messages':True}
+    async def observer_ok():
+        value=json.loads(await asyncio.to_thread(registry.dispatch,observer_tool,{}))
+        assert 'expected_project_not_connected' in value.get('error','')
+        assert mcp_tool.get_registered_mcp_server_names()=={observer_name}
+    async def execute(agent,raw,args,bridge=None):
+        call=SimpleNamespace(id='fixture-call',type='function',function=SimpleNamespace(
+            name=bridge or 'tool_call',arguments=json.dumps(args if bridge else {'name':raw,'arguments':args})))
+        message=SimpleNamespace(tool_calls=[call]);messages=[]
+        await asyncio.to_thread(agent._execute_tool_calls,message,messages,agent.session_id)
+        assert len(messages)==1 and messages[0]['role']=='tool'
+        return json.loads(messages[0]['content'])
+    try:
+        assert await asyncio.to_thread(mcp_tool.register_mcp_servers,{observer_name:observer_config})==[observer_tool]
+        await first.start(config);await second.start(config)
+        async with conversation(first,include=('agent_status','agent_stop'),options=options) as a:
+            assert isinstance(a,AIAgent)
+            assert a.valid_tool_names=={'tool_search','tool_describe','tool_call'}
+            raw_a=get_tool_definitions(enabled_toolsets=a.enabled_toolsets,quiet_mode=True,skip_tool_search_assembly=True)
+            names_a=[v['function']['name'] for v in raw_a];assert len(names_a)==2
+            original=json.dumps(a.tools,sort_keys=True);result['pass_ids'].append('HN001')
+            status=await execute(a,names_a[0],{})
+            assert status.get('error')=='candidate_remote_error' and status['mcp']['isError']
+            stop=await execute(a,names_a[1],{'task_id':'no-approved-plan'})
+            assert stop['mcp']['structuredContent']['data']=={'status':'locally_stopped','unity_confirmed':False}
+            await observer_ok();result['pass_ids'].append('HN002')
+            async with conversation(second,include=('agent_status',),options=options) as b:
+                assert b.session_id!=a.session_id
+                raw_b=get_tool_definitions(enabled_toolsets=b.enabled_toolsets,quiet_mode=True,skip_tool_search_assembly=True)
+                assert len(raw_b)==1;name_b=raw_b[0]['function']['name']
+                assert name_b not in names_a
+                found_a=await execute(a,None,{'queries':['Unity']},bridge='tool_search')
+                found_b=await execute(b,None,{'queries':['Unity']},bridge='tool_search')
+                assert found_a['total_available']==2 and names_a[0] in found_a['tools']
+                assert found_b['total_available']==1 and set(found_b['tools'])=={name_b}
+                assert name_b not in json.dumps(found_a) and not any(n in json.dumps(found_b) for n in names_a)
+                described=await execute(a,None,{'names':[names_a[0],name_b,observer_tool]},bridge='tool_describe')
+                assert set(described['tools'])=={names_a[0]} and set(described['not_found'])=={name_b,observer_tool}
+                denied_a=await execute(a,name_b,{})
+                denied_b=await execute(b,names_a[0],{})
+                assert denied_a.get('error') and denied_b.get('error')
+                result['pass_ids'].append('HN003')
+                status=await execute(b,name_b,{})
+                assert status.get('error')=='candidate_remote_error'
+                assert json.dumps(a.tools,sort_keys=True)==original
+                await observer_ok()
+            assert second.session is None and b.client is None
+            assert json.dumps(a.tools,sort_keys=True)==original
+            result['pass_ids'].append('HN004')
+        assert first.session is None and a.client is None
+        stale=await execute(a,names_a[0],{})
+        assert stale.get('error')
+        await observer_ok();result['pass_ids'].append('HN005')
+        assert set(registry.get_all_tool_names())==baseline|{observer_tool}
+    finally:
+        try:await asyncio.gather(first.shutdown(),second.shutdown())
+        finally:
+            await asyncio.to_thread(mcp_tool.shutdown_mcp_servers)
+            config['headers'].clear();observer_config['headers'].clear()
+    assert set(registry.get_all_tool_names())==baseline
+    assert network['denied']==0
+    result['conversation_verified']=True;result['shutdown_complete']=True;result['network_guard']=network
+    print(json.dumps(result),flush=True)
+
 async def main():
     # Source path is test-operator-selected, never exposed as a Candidate tool.
     source = Path(sys.argv[1]).resolve(strict=True)
@@ -251,6 +350,10 @@ async def main():
         'tools': {'include': allowed, 'resources': False, 'prompts': False},
         'sampling': {'enabled': False},
         'elicitation': {'enabled': False}}
+    if doc.get('conversation') is True:
+        assert not interactive and not doc.get('registry') and not doc.get('owned') and not doc.get('binding')
+        await conversation_probe(config)
+        return
     if doc.get('binding') is True:
         assert not interactive and not doc.get('registry') and not doc.get('owned')
         await binding_probe(config)

@@ -19,7 +19,7 @@ not copied into the Unity package's `Runtime~` source payload.
 3. Use `binding.snapshot()` only when constructing a **new** conversation. It
    returns a detached copy. It does not patch an existing agent's tool list,
    refresh a gateway or authorize a project task. Installation into a real
-   conversation builder is not implemented in this module.
+   conversation builder is provided separately below, not installed in a gateway.
 4. Hermes normal `handle_function_call` supplies `session_id` as trusted dispatch
    metadata. The handler does not use `task_id` or a model argument named
    `session_id` as identity. The schema contains the remote tool's original
@@ -84,7 +84,76 @@ Windows portable CI separately compiles adapter syntax and exercises the existin
 sidecar regression; it does not import Hermes or run HA/HB there.
 
 Still missing: trusted operator credential delivery, authenticated remote topology,
-user-facing separate client binding, live conversation snapshot installation and
-shared-gateway activation, real Unity tasks, reload continuation, final independent
+user-facing separate client binding and shared-gateway activation, real Unity tasks, reload continuation, final independent
 review and complete VPM/ALCOM acceptance. No plugin manifest, startup hook or MCP
 configuration is installed by this change.
+
+## New-conversation constructor (candidate, not installed)
+
+`hermes_conversation.conversation(peer, include=(...), options={...})` is an async
+context manager for one **new** native `AIAgent`. The trusted host first verifies
+and starts the exclusively owned peer on the same running loop. The context
+manager creates a fresh random runtime `session_id`, binds the peer, and passes
+only its unique registered toolset through native `enabled_toolsets`. It compares
+the resulting schemas, tool names, scope and identity to native assembly, then
+detaches the schema list **before any turn**. It neither hot-replaces an existing
+agent nor restores prior messages, session identity or task authorization.
+
+Native progressive disclosure is preserved: in the tested installation the model
+sees `tool_search`, `tool_describe` and `tool_call`; their searchable catalog and
+call scope contain only this binding's tools. The remote tool names are replaced
+by generation-specific opaque names. Search uses the original descriptions (the
+fixture's Chinese description contains `Unity`), not an assumed remote raw name.
+Scope controls protect this managed path, not arbitrary same-process code.
+
+Run blocking agent operations in a worker while the peer's event loop stays live.
+The trusted caller owns any model turn and must await it or coordinate its stop
+before leaving the context. **The constructor itself does not call a model.**
+It does not sanitize or override trusted provider options, suppress native hooks,
+isolate HOME, or make native initialization side-effect-free. The installed
+Hermes environment, provider configuration and plugins must be audited by the host.
+Ownership keys (`session_id`, toolsets, prefill history) cannot be overridden by
+options. No chat command, receiver, gateway hook or credential handoff is installed.
+
+Exit first closes/revokes the binding, then waits for a started constructor and
+closes its exact owned agent. A partial constructor is retained for native cleanup;
+constructor errors return a fixed category, and cleanup always uses the owned
+session ID. Repeated cancellation does not abandon cleanup. Cleanup errors are
+not success. This does **not** forcibly terminate a stuck native constructor or
+an in-process thread; the host must provide process-level supervision and must
+not interpret a hung/failed cleanup as completed. There is no automatic retry,
+reconnection, transfer to a new generation, permission restoration or rollback.
+
+### Verification added for construction
+
+```
+INSTALLED_HERMES_PYTHON -I -B -W always::ResourceWarning \
+  tests/hermes_conversation_contracts.py /absolute/installed-hermes
+
+PINNED_CANDIDATE_PYTHON -I -B -W always::ResourceWarning \
+  tests/verify_native_clients.py --hermes-conversation \
+  --hermes-python /absolute/installed-hermes/venv/bin/python \
+  --hermes-source /absolute/installed-hermes \
+  --codex /absolute/verified-codex-binary \
+  --output evidence/unique-construction-run.json
+```
+
+HC001–HC011 use the real registry/schema assembly and deterministic AIAgent/peer
+doubles for failure and cancellation. HN001–HN005 use real native `AIAgent`
+construction and its executor, real TLS/MCP, two simultaneous separately scoped
+agents and a registered observer. Tool messages are explicitly supplied fixtures,
+**not generated model responses**. Search/describe/call deny other bindings;
+closing one agent does not break the other or observer; stale calls cannot reach
+wire. Created sessions must match DELETE and the outer verifier checks secrets,
+process/listener absence and isolated HOME removal.
+
+A Python audit guard in this isolated native test permits only the exact fixture
+loopback endpoint. Initial diagnostic runs intercepted four native model-context
+metadata lookups (endpoint metadata/Ollama detection, not inference). The test
+now writes only a non-secret explicit `model.context_length` in its isolated HOME;
+final acceptance requires zero denied network attempts. This does not change
+production configuration or promise that native constructor defaults never network.
+Windows CI compiles both host modules; HC/HN execute in Linux's installed Hermes,
+not Windows Hermes. Final independent review, trusted credential delivery,
+user-facing binding/shared-gateway activation, real Unity/model end-to-end work,
+reload continuation and complete VPM/ALCOM remain separate incomplete gates.

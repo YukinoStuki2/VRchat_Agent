@@ -41,7 +41,7 @@ jobs:
       - name: Compile host adapter syntax only (not Windows Hermes)
         shell: pwsh
         run: |
-          python -I -B -c "from pathlib import Path; p=Path('Candidate~/clients/hermes_binding.py'); compile(p.read_text(encoding='utf-8'),str(p),'exec'); print('adapter_syntax_compiled_no_native_execution')" 2>&1 | Tee-Object artifacts/adapter-syntax.txt
+          python -I -B -c "from pathlib import Path; paths=[Path('Candidate~/clients')/n for n in ('hermes_binding.py','hermes_conversation.py')]; [compile(p.read_text(encoding='utf-8'),str(p),'exec') for p in paths]; print('adapter_and_construction_syntax_compiled_no_native_execution')" 2>&1 | Tee-Object artifacts/adapter-syntax.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify driver environment and cleanup boundaries
         shell: pwsh

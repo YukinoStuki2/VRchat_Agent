@@ -6,7 +6,8 @@
 
 - `clients/hermes_binding.py` 为新增宿主侧模块，不是只增加测试：复用原生MCP连接、schema转换与注册表CAS，提供按可信运行时 `session_id` 和随机连接代次隔离的工具快照；模型参数/任务ID不能代替会话身份。停止仅撤自己仍持有的条目，旧快照/旧回调不能转接到新连接。
 - 不接收凭据、不启动客户端、不改现用Hermes/QQ配置。宿主必须提供已认证的独占连接，并在新会话构造时安装快照；**可信凭据交付及实际网关会话构造仍未实现**。模块不混入Unity的Runtime~载荷。
-- 冻结源码HA合同15项、HB真实分发/TLS5场景、原HR6/HS4/NA6/NP4与直接兼容全部通过，分组不相加。打包门槛4/源码布局6通过；秘密扫描、各会话创建/DELETE、后代/端口/临时home清理通过。首轮原生发现Hermes的slotted对象不能被weakref，以HA014先RED后修正为弱Binding所有权表；HA015复现并修正注册清理异常时仍须停止对端。原失败保留。Windows便携CI待本提交远端读回，不把Linux HA/HB当作Windows覆盖。
+- 冻结源码HA合同15项、HB真实分发/TLS5场景、原HR6/HS4/NA6/NP4与直接兼容全部通过，分组不相加。打包门槛4/源码布局6通过；秘密扫描、各会话创建/DELETE、后代/端口/临时home清理通过。首轮原生发现Hermes的slotted对象不能被weakref，以HA014先RED后修正为弱Binding所有权表；HA015复现并修正注册清理异常时仍须停止对端。原失败保留。实现 `05d07300b2793812792a74969822b00928e070c9` 已推送读回；Windows便携CI `36822081110` success，artifact `11143479153`匹配官方digest；486份输入与提交/运行前后一致，便携28项、PS4/ECP2通过，74份wheel报告对应锁和99份许可证清单hash回读。Windows新增宿主模块只做语法编译，不把Linux HA/HB当作Windows覆盖。
+- 本阶段记录 `evidence/hermes-binding-parent-acceptance.json`；冻结证据已逐字节归档，冻结树/临时home及跟踪后代/监听/会话清理核验完成。下载官方artifact返回401后，仅对公开仓库使用镜像，原ZIP先核官方digest再解析；没有索取/保存新凭据。
 - 契约与复现见 `clients/README.md`；本阶段不自授独立批准，不等于真实Editor/模型turn/Windows Hermes/完整Candidate/VPM/ALCOM，不生成安装ZIP。
 
 ## 本地客户端角色选择（当前）

@@ -19,6 +19,21 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP005_ci_auth_count_tracks_actual_frozen_methods(self):
+        import ast, textwrap
+        source=ROOT/'tests/test_runtime_auth.py'
+        methods=[node.name+'.'+method.name for node in ast.parse(source.read_text(encoding='utf-8')).body
+            if isinstance(node,ast.ClassDef) for method in node.body
+            if isinstance(method,(ast.FunctionDef,ast.AsyncFunctionDef)) and method.name.startswith('test_')]
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        step=workflow.split('      - name: Actual authenticated probe and client separation\n',1)[1].split('      - name:',1)[0]
+        code=textwrap.dedent(step.split('        run: |\n',1)[1])
+        checks=[node for node in ast.parse(code).body if isinstance(node,ast.Assert)
+            and 'len(methods)' in ast.unparse(node.test)]
+        self.assertEqual(len(checks),1)
+        self.assertTrue(methods)
+        exec(compile(ast.Module(body=checks,type_ignores=[]),'ci-auth-count','exec'),{'methods':methods})
+
     def test_VP004_compile_timeout_preserves_partial_output_and_error(self):
         m = driver()
         self.assertTrue(hasattr(m, 'compile_fixture'), 'bounded build evidence missing')

@@ -147,6 +147,89 @@ async def owned_shutdown_probe(config):
     result['owned_shutdown_verified']=True;result['shutdown_complete']=True
     print(json.dumps(result),flush=True)
 
+async def binding_probe(config):
+    """Exercise the shipped adapter through native dispatch, without a model turn."""
+    from tools import mcp_tool
+    from tools.registry import registry
+    from model_tools import handle_function_call
+    import importlib.metadata
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'clients'))
+    from hermes_binding import bind
+    assert not mcp_tool.get_registered_mcp_server_names()
+    baseline=set(registry.get_all_tool_names())
+    observer_name='candidate-binding-probe'
+    observer_config={**config,'headers':{'Authorization':'Bearer '+os.environ.pop('VRCHAT_AGENT_TEST_PROBE_TOKEN')},
+        'tools':{'include':['agent_status'],'resources':False,'prompts':False},'lazy':False,'trust':'full'}
+    observer_tool=mcp_tool.mcp_prefixed_tool_name(observer_name,'agent_status')
+    first=mcp_tool.MCPServerTask('candidate-binding-first')
+    second=mcp_tool.MCPServerTask('candidate-binding-second')
+    bindings=[]
+    result={'native':'hermes','mcp_version':importlib.metadata.version('mcp'),
+        'binding_verified':False,'pass_ids':[], 'model_turn':False}
+    async def observer_ok():
+        value=json.loads(await asyncio.to_thread(registry.dispatch,observer_tool,{}))
+        assert 'expected_project_not_connected' in value.get('error','')
+        assert mcp_tool.get_registered_mcp_server_names()=={observer_name}
+    async def dispatch(name,args,session,names):
+        # Installed normal dispatcher propagates runtime session_id separately
+        # from model tool arguments; no hooks/middleware bypass flags are used.
+        value=await asyncio.to_thread(handle_function_call,name,args,
+            session_id=session,task_id='test-turn',enabled_tools=names)
+        return json.loads(value)
+    try:
+        assert await asyncio.to_thread(mcp_tool.register_mcp_servers,{observer_name:observer_config})==[observer_tool]
+        observer_schema=json.dumps(registry.get_schema(observer_tool),sort_keys=True)
+        await first.start(config)
+        one=await bind(first,registry,conversation_id='candidate-chat-a',include=('agent_status','agent_stop'))
+        bindings.append(one)
+        snapshot=one.snapshot();names=[t['function']['name'] for t in snapshot]
+        assert len(names)==2 and set(registry.get_all_tool_names())==baseline|set(names)|{observer_tool}
+        snapshot[0]['function']['description']='test mutation'
+        assert one.snapshot()[0]['function']['description']!='test mutation'
+        stale_entry=registry.get_entry(names[0]);result['pass_ids'].append('HB001')
+        for session in (None,'candidate-chat-b'):
+            denied=await dispatch(names[0],{'session_id':'candidate-chat-a'},session,names)
+            assert denied.get('error')=='candidate_wrong_conversation'
+        result['pass_ids'].append('HB002')
+        status=await dispatch(names[0],{},'candidate-chat-a',names)
+        assert status['error']=='candidate_remote_error' and status['mcp']['isError']
+        assert 'expected_project_not_connected' in json.dumps(status['mcp'])
+        stopped=await dispatch(names[1],{'task_id':'no-approved-plan'},'candidate-chat-a',names)
+        assert not stopped['mcp']['isError'] and stopped['mcp']['structuredContent']['data']=={'status':'locally_stopped','unity_confirmed':False}
+        await observer_ok();result['pass_ids'].append('HB003')
+        await one.close()
+        assert not set(names)&set(registry.get_all_tool_names())
+        stale=json.loads(await asyncio.to_thread(stale_entry.handler,{},session_id='candidate-chat-a'))
+        assert stale['error']=='candidate_binding_closed'
+        absent=json.loads(await asyncio.to_thread(registry.dispatch,names[0],{},session_id='candidate-chat-a'))
+        assert 'Unknown tool:' in absent['error']
+        await observer_ok();result['pass_ids'].append('HB004')
+        await second.start(config)
+        two=await bind(second,registry,conversation_id='candidate-chat-b',include=('agent_status',))
+        bindings.append(two);new_names=[t['function']['name'] for t in two.snapshot()]
+        assert set(names).isdisjoint(new_names)
+        await one.close()
+        denied=await dispatch(new_names[0],{},'candidate-chat-a',new_names)
+        assert denied.get('error')=='candidate_wrong_conversation'
+        status=await dispatch(new_names[0],{},'candidate-chat-b',new_names)
+        assert status['error']=='candidate_remote_error'
+        await observer_ok()
+        assert json.dumps(registry.get_schema(observer_tool),sort_keys=True)==observer_schema
+        await two.close();result['pass_ids'].append('HB005')
+        assert set(registry.get_all_tool_names())==baseline|{observer_tool}
+    finally:
+        try:
+            for binding in bindings:await binding.close()
+            await asyncio.gather(first.shutdown(),second.shutdown())
+        finally:
+            # Test process owns this observer; production adapter never uses global shutdown.
+            await asyncio.to_thread(mcp_tool.shutdown_mcp_servers)
+            config['headers'].clear();observer_config['headers'].clear()
+    assert set(registry.get_all_tool_names())==baseline
+    assert not mcp_tool.get_registered_mcp_server_names()
+    result['binding_verified']=True;result['shutdown_complete']=True
+    print(json.dumps(result),flush=True)
+
 async def main():
     # Source path is test-operator-selected, never exposed as a Candidate tool.
     source = Path(sys.argv[1]).resolve(strict=True)
@@ -168,6 +251,10 @@ async def main():
         'tools': {'include': allowed, 'resources': False, 'prompts': False},
         'sampling': {'enabled': False},
         'elicitation': {'enabled': False}}
+    if doc.get('binding') is True:
+        assert not interactive and not doc.get('registry') and not doc.get('owned')
+        await binding_probe(config)
+        return
     if doc.get('owned') is True:
         assert not interactive and not doc.get('registry')
         await owned_shutdown_probe(config)

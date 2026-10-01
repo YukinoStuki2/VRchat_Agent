@@ -1,5 +1,17 @@
 # Native-client compatibility — development evidence only
 
+## Candidate host-side conversation binding (not installed)
+
+`clients/hermes_binding.py` now implements per-conversation/per-generation tool
+registration, detached snapshots, exact-owner CAS removal, local stale/cross-chat
+refusal and owned-call cancellation. It reuses the native connection and registry;
+it does not accept credentials or start a client. `clients/README.md` defines the
+host contract and HA/HB checks. Prior HS/HR sections below describe the narrower
+characterizations; their "not implemented" statements about those test paths do
+not describe this new module. Trusted delivery, live conversation construction,
+shared-gateway installation and real Unity acceptance are still absent.
+
+
 ## Independently owned Hermes connection shutdown (Linux characterization)
 
 `--hermes-owned` reuses the installed `MCPServerTask.start/shutdown` lifecycle

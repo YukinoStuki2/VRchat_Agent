@@ -8,6 +8,7 @@ on:
       - 'Candidate~/launcher/**'
       - 'Candidate~/package/**'
       - 'Candidate~/tests/**'
+      - 'Candidate~/clients/**'
       - '.github/workflows/candidate-portable.yml'
       - '.gitattributes'
   workflow_dispatch:
@@ -36,6 +37,11 @@ jobs:
           foreach ($file in $files) { $hashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower() }
           $hashes | ConvertTo-Json | Set-Content artifacts/source-before.json
           python -I -B -W always::ResourceWarning Candidate~/tests/test_portable_python.py 2>&1 | Tee-Object artifacts/unit-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile host adapter syntax only (not Windows Hermes)
+        shell: pwsh
+        run: |
+          python -I -B -c "from pathlib import Path; p=Path('Candidate~/clients/hermes_binding.py'); compile(p.read_text(encoding='utf-8'),str(p),'exec'); print('adapter_syntax_compiled_no_native_execution')" 2>&1 | Tee-Object artifacts/adapter-syntax.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify driver environment and cleanup boundaries
         shell: pwsh

@@ -54,5 +54,78 @@ static class ContinuityCases
  var b=g.Dispatch(Request("prepare",WriteManifest(),client:"client-B"));Check((string)b["error"]=="project_write_busy" && g.LocalPlans().Count==1,"pause_released_project_writer");
  var own=g.Dispatch(Request("resume",plan:(string)p["plan_id"]));Check((string)own["error"]=="unknown_kind","remote_resume_enabled");Check(!Local(g,"Resume",p),"invalid_remote_request_did_not_revoke");
  }
- public static int Main(string[] args){try{ReadContinuity();Console.WriteLine("PASS PC001 read_plan_identity_survives_pause");MaterialContinuity();Console.WriteLine("PASS PC002 material_plan_and_postimage_survive_pause");ReadBoundaries();Console.WriteLine("PASS PC003 read_revalidation_lifecycle_boundaries");MaterialBoundaries();Console.WriteLine("PASS PC004 material_revalidation_lifecycle_boundaries");LocalOnlyAndSerialWriter();Console.WriteLine("PASS PC005 local_only_and_single_writer");return 0;}catch(Exception e){Console.WriteLine("FAIL "+e.GetBaseException().Message);return 1;}}
+ static object Invoke(object target,string method,params object[] args){var m=target.GetType().GetMethod(method);Check(m!=null,"missing_"+method);return m.Invoke(target,args);}
+ static void MaterialRecordsAreNotGrants()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];Check(g.Approve((string)p["plan_id"],(string)p["digest"]),"record_approve");Write(g,p,"copy");Write(g,p,"edit","0.4");
+  var records=(JArray)Invoke(g,"ExportTaskRecords");Check(records.Count==1,"record_count");
+  Check(!records.ToString().Contains("approved") && !records.ToString().Contains("expires"),"record_contains_grant");
+  var reloaded=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);
+  Check((bool)Invoke(reloaded,"ImportTaskRecords",records),"record_import");
+  Check(reloaded.LocalPlans().Count==0 && !reloaded.Allows("edit") && reloaded.LocalTransactions().Count==0,"import_restored_authority_or_undo");
+  Check((bool?)Write(reloaded,p,"edit","0.9")["success"]==false && f.Value("Assets/candidate.mat")=="0.4","import_allowed_stale_write");
+  records[0]["task_id"]="tampered";Check((string)((JArray)Invoke(reloaded,"ExportTaskRecords"))[0]["task_id"]=="task-A","record_alias");
+ }
+ static JObject RequestAt(string kind,JObject body=null,string plan="",string client="client-B",string conn="connection-B") {var r=Request(kind,body,plan,client);r["connection_id"]=conn;return r;}
+ static void RecoverMaterialInNewBinding()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];Check(g.Approve((string)p["plan_id"],(string)p["digest"]),"recover_approve");Write(g,p,"copy");Write(g,p,"edit","0.4");
+  var records=(JArray)Invoke(g,"ExportTaskRecords");var old=(JObject)records[0];g.StopAll("disconnect");
+  var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Check((bool)Invoke(n,"ImportTaskRecords",records),"recover_import");n.SetCapability("edit",true);
+  var m=WriteManifest();m["operations"]=new JArray("edit");var response=n.Dispatch(RequestAt("prepare",m));
+  Check((bool?)response["success"]==true,"recover_prepare_"+(string)response["error"]);var pending=(JObject)response["data"];
+  Check((string)pending["recovery_record_id"]==(string)old["record_id"],"provenance_not_visible");
+  Check(!n.Approve((string)pending["plan_id"],(string)pending["digest"]),"ordinary_approve_bypassed_recovery");
+  var edit=new JObject{["action"]="edit",["arguments"]=new JObject{["property"]="_Value",["value"]="0.6"}};
+  // Check denial on a separate imported instance: invalid use revokes its pending plan.
+  var denied=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Invoke(denied,"ImportTaskRecords",records);denied.SetCapability("edit",true);
+  var dp=denied.Dispatch(RequestAt("prepare",m));Check((bool?)denied.Dispatch(RequestAt("execute",edit,(string)dp["data"]?["plan_id"]))["success"]==false && f.Writes==2,"record_granted_remote_write");
+  Check((bool)Invoke(n,"RecoverPending",(string)pending["plan_id"],(string)pending["digest"],(string)old["record_id"],(string)old["digest"]),"local_recovery");
+  Check((bool?)n.Dispatch(RequestAt("execute",edit,(string)pending["plan_id"]))["success"]==true && f.Value("Assets/candidate.mat")=="0.6","recovered_write");
+  Check((string)pending["plan_id"]!=(string)p["plan_id"],"old_grant_reused");
+ }
+ static void RecoveryRevalidates()
+ {
+  foreach(string change in new[]{"candidate","source","dependency","project","connection","stop","capability","expiry","new_scope","bad_digest","remote"})
+  {
+   using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+   var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");Write(g,p,"edit","0.4");var records=(JArray)Invoke(g,"ExportTaskRecords");var old=(JObject)records[0];
+   double now=120;string project="project-A",conn="connection-B";var n=new MaterialCandidateGate(()=>now,()=>project,()=>conn,f);Invoke(n,"ImportTaskRecords",records);n.SetCapability("edit",true);n.SetCapability("reference",true);
+   var m=WriteManifest();m["operations"]=new JArray("edit");
+   if(change=="new_scope"){m["operations"]=new JArray("edit","reference");m["references"]=new JArray(new JObject{["renderer"]="new-host",["slot"]=0});}
+   var response=n.Dispatch(RequestAt("prepare",m));if(change=="new_scope"){Check((bool?)response["success"]==false,"expanded_recovery_scope");continue;}
+   var pending=(JObject)response["data"];Check(pending!=null,"boundary_recovery_prepare");
+   if(change=="candidate")f.Put("Assets/candidate.mat","user");if(change=="source")f.Put("Assets/source.mat","user");if(change=="dependency")f.Put("texture","user");
+   if(change=="project")project="other";if(change=="connection")conn="other";if(change=="stop")n.StopAll("local stop");if(change=="capability")n.SetCapability("edit",false);if(change=="expiry")now=500;
+   if(change=="remote")Check((bool?)n.Dispatch(RequestAt("recover",plan:(string)pending["plan_id"]))["success"]==false,"remote_recovery");
+   Check(!(bool)Invoke(n,"RecoverPending",(string)pending["plan_id"],(string)pending["digest"],(string)old["record_id"],change=="bad_digest"?"bad":(string)old["digest"]),"recovered_changed_"+change);
+   Check(f.Writes==2 && f.Value("Assets/candidate.mat")== (change=="candidate"?"user":"0.4"),"recovery_changed_files");
+  }
+ }
+ static void InvalidRecoveryRecords()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");
+  var saved=(JArray)Invoke(g,"ExportTaskRecords");
+  foreach(string bad in new[]{"project","extra","digest","duplicate","type","null"})
+  {
+   var records=(JArray)saved.DeepClone();if(bad=="project")records[0]["project_id"]="other";if(bad=="extra")records[0]["approved"]=true;if(bad=="digest")records[0]["digest"]="wrong";
+   if(bad=="duplicate")records.Add(records[0].DeepClone());if(bad=="type")records[0]["copied"]="true";if(bad=="null")records=null;
+   var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Check(!(bool)Invoke(n,"ImportTaskRecords",new object[]{records}),"invalid_import_"+bad);
+   Check(((JArray)Invoke(n,"ExportTaskRecords")).Count==0 && n.LocalPlans().Count==0,"partial_import");
+  }
+  f.ThrowAfterWrite=true;Write(g,p,"edit","0.7");var failed=(JArray)Invoke(g,"ExportTaskRecords");Check((bool?)failed[0]["recoverable"]==false,"failure_recoverable");
+ }
+ static void SupersededRecordsCannotCompete()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");
+  var m=WriteManifest();m["operations"]=new JArray("edit");var next=(JObject)g.Dispatch(Request("prepare",m))["data"];Check(g.Approve((string)next["plan_id"],(string)next["digest"]),"reapproval");
+  var records=(JArray)Invoke(g,"ExportTaskRecords");Check(records.Count==2 && records.Count(r=>(bool?)r["recoverable"]==true)==1,"superseded_record_still_recoverable");
+  var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Invoke(n,"ImportTaskRecords",records);n.SetCapability("edit",true);
+  Check((bool?)n.Dispatch(RequestAt("prepare",m))["success"]==true,"superseded_record_caused_ambiguity");
+ }
+ public static int Main(string[] args){try{SupersededRecordsCannotCompete();Console.WriteLine("PASS PC010 superseded_records_not_recoverable");RecoveryRevalidates();Console.WriteLine("PASS PC008 recovery_revalidates_scope_and_live_evidence");InvalidRecoveryRecords();Console.WriteLine("PASS PC009 invalid_and_failed_records_denied");RecoverMaterialInNewBinding();Console.WriteLine("PASS PC007 explicit_local_new_binding_recovery");MaterialRecordsAreNotGrants();Console.WriteLine("PASS PC006 reload_records_are_not_grants");ReadContinuity();Console.WriteLine("PASS PC001 read_plan_identity_survives_pause");MaterialContinuity();Console.WriteLine("PASS PC002 material_plan_and_postimage_survive_pause");ReadBoundaries();Console.WriteLine("PASS PC003 read_revalidation_lifecycle_boundaries");MaterialBoundaries();Console.WriteLine("PASS PC004 material_revalidation_lifecycle_boundaries");LocalOnlyAndSerialWriter();Console.WriteLine("PASS PC005 local_only_and_single_writer");return 0;}catch(Exception e){Console.WriteLine("FAIL "+e.GetBaseException().Message);return 1;}}
 }

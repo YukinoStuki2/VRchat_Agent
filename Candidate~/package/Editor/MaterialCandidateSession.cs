@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using System.IO;
+using Newtonsoft.Json;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Tools;
 using Newtonsoft.Json.Linq;
@@ -13,10 +15,35 @@ namespace Yukino.VRChatAgent
             ()=>EditorApplication.timeSinceStartup,CoplayProjectIdentity.GetProjectHash,CandidateSession.LiveConnection,new UnityMaterialCandidateBackend());
         static MaterialCandidateSession()
         {
+            LoadTaskRecords(Gate);
             EditorApplication.update+=Gate.Observe;
-            EditorApplication.quitting+=Revoke;
-            AssemblyReloadEvents.beforeAssemblyReload+=Revoke;
+            EditorApplication.quitting+=()=>{Revoke();SessionState.EraseString(RecordKey);};
+            AssemblyReloadEvents.beforeAssemblyReload+=SaveTaskRecords;
             EditorApplication.playModeStateChanged+=_=>Revoke();
+        }
+        static string RecordKey=>"Yukino.VRChatAgent.material-tasks.v1."+CoplayProjectIdentity.GetProjectHash();
+        // Unity SessionState survives a domain reload, not an Editor restart. It stores
+        // only task metadata/postimages; never credentials, live grants or Undo objects.
+        static void LoadTaskRecords(MaterialCandidateGate target)
+        {
+            string raw=SessionState.GetString(RecordKey,"");SessionState.EraseString(RecordKey);
+            if(raw.Length==0)return;
+            try
+            {
+                if(raw.Length>4*1024*1024)throw new InvalidDataException();
+                using(var text=new StringReader(raw))using(var reader=new JsonTextReader(text){MaxDepth=16})
+                {
+                    var records=JArray.Load(reader,new JsonLoadSettings{DuplicatePropertyNameHandling=DuplicatePropertyNameHandling.Error});
+                    if(reader.Read() || !target.ImportTaskRecords(records))throw new InvalidDataException();
+                }
+            }
+            catch{target.StopAll("任务记录无效；未恢复任何授权");}
+        }
+        static void SaveTaskRecords()
+        {
+            Revoke();SessionState.EraseString(RecordKey);
+            try{SessionState.SetString(RecordKey,Gate.ExportTaskRecords().ToString(Formatting.None));}
+            catch{Gate.StopAll("任务记录未保存；授权已撤销");}
         }
         static void Revoke()=>Gate.StopAll("编辑器生命周期已撤权，不回退");
         internal static void Draw()
@@ -31,9 +58,20 @@ namespace Yukino.VRChatAgent
                 EditorGUILayout.LabelField("认证主体 / MCP会话",(string)plan["client_id"]);EditorGUILayout.LabelField("任务",(string)plan["task_id"]);
                 EditorGUILayout.LabelField("材质清单ID",(string)plan["plan_id"]);EditorGUILayout.LabelField("材质清单摘要",(string)plan["digest"]);
                 EditorGUILayout.LabelField("材质完整清单",plan["manifest"].ToString());
-                EditorGUI.BeginDisabledGroup((bool)plan["approved"]);
+                bool recovery=plan["recovery_record_id"]?.Type==JTokenType.String;
+                EditorGUI.BeginDisabledGroup((bool)plan["approved"] || recovery);
                 if(GUILayout.Button("批准此材质清单"))Gate.Approve((string)plan["plan_id"],(string)plan["digest"]);
                 EditorGUI.EndDisabledGroup();
+                if(recovery)
+                {
+                    EditorGUILayout.HelpBox("历史记录只证明候选来源，不是权限。请核对上方新认证主体/会话及本任务范围；此按钮重新批准新绑定，不沿用旧授权、不重放旧步骤。证据变化拒绝恢复。",MessageType.Warning);
+                    EditorGUILayout.LabelField("待核验任务记录",(string)plan["recovery_record_id"]);
+                    foreach(JObject record in Gate.ExportTaskRecords())
+                        if((string)record["record_id"]==(string)plan["recovery_record_id"])
+                            EditorGUILayout.LabelField("记录的原认证主体 / 会话",(string)record["client_id"]);
+                    if(GUILayout.Button("核验记录并重新批准此绑定 "+(string)plan["plan_id"]))
+                        Gate.RecoverPending((string)plan["plan_id"],(string)plan["digest"],(string)plan["recovery_record_id"],(string)plan["recovery_digest"]);
+                }
                 EditorGUILayout.LabelField("暂停状态", (bool)plan["paused"] ? "已暂停；期限不延长" : "未暂停");
                 EditorGUI.BeginDisabledGroup(!(bool)plan["approved"]);
                 if ((bool)plan["paused"])

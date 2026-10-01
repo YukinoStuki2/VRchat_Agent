@@ -26,7 +26,7 @@ namespace Yukino.VRChatAgent
     {
         sealed class Plan
         {
-            internal string Id, Digest, Project, Client, Connection, Task;
+            internal string Id, Digest, Project, Client, Connection, Task, RecoveryRecord, RecoveryDigest;
             internal double Expires;
             internal bool Approved, Copied, Paused;
             internal JObject Manifest, Evidence;
@@ -80,11 +80,80 @@ namespace Yukino.VRChatAgent
         static string Hash(JObject o) { using(var h=SHA256.Create()) return BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(o.ToString(Formatting.None)))).Replace("-","").ToLowerInvariant(); }
         public JArray LocalPlans()
         {
-            lock(sync){Observe();return plan==null?new JArray():new JArray(new JObject{["plan_id"]=plan.Id,["digest"]=plan.Digest,["client_id"]=plan.Client,["task_id"]=plan.Task,["approved"]=plan.Approved,["paused"]=plan.Paused,["manifest"]=plan.Manifest.DeepClone()});}
+            lock(sync){Observe();return plan==null?new JArray():new JArray(new JObject{["plan_id"]=plan.Id,["digest"]=plan.Digest,["client_id"]=plan.Client,["task_id"]=plan.Task,["approved"]=plan.Approved,["paused"]=plan.Paused,["recovery_record_id"]=plan.RecoveryRecord,["recovery_digest"]=plan.RecoveryDigest,["manifest"]=plan.Manifest.DeepClone()});}
+        }
+        // Local task history is NOT an authorization or an undo checkpoint. No remote import/export.
+        readonly Dictionary<string,JObject> taskRecords=new Dictionary<string,JObject>(StringComparer.Ordinal);
+        public JArray ExportTaskRecords() { lock(sync)return new JArray(taskRecords.Values.Select(r=>r.DeepClone())); }
+        static string RecordDigest(JObject record) { var copy=(JObject)record.DeepClone();copy.Remove("digest");return Hash(copy); }
+        void Remember(Plan p,bool recoverable=true)
+        {
+            Need(taskRecords.ContainsKey(p.Id) || taskRecords.Count<128,"task_record_capacity");
+            var record=new JObject{["record_id"]=p.Id,["project_id"]=p.Project,["client_id"]=p.Client,["task_id"]=p.Task,
+                ["manifest"]=p.Manifest.DeepClone(),["evidence"]=p.Evidence.DeepClone(),["copied"]=p.Copied,["recoverable"]=recoverable};
+            record["digest"]=RecordDigest(record);
+            foreach(var prior in taskRecords.Values.Where(r=>(string)r["record_id"]!=p.Id && (string)r["project_id"]==p.Project && (string)r["task_id"]==p.Task && JToken.DeepEquals(r["manifest"]?["source"],p.Manifest["source"]) && JToken.DeepEquals(r["manifest"]?["candidate"],p.Manifest["candidate"])))
+            {prior["recoverable"]=false;prior["digest"]=RecordDigest(prior);}
+            taskRecords[p.Id]=record;
+        }
+        public bool ImportTaskRecords(JArray input)
+        {
+            lock(sync)
+            {
+                if(busy || plan!=null || journal.Count!=0 || taskRecords.Count!=0)return false;
+                try
+                {
+                    Need(input!=null && input.Count<=128 && input.ToString(Formatting.None).Length<=4*1024*1024,"invalid_task_records");
+                    var checkedRecords=new Dictionary<string,JObject>(StringComparer.Ordinal);
+                    foreach(var token in input)
+                    {
+                        var r=token as JObject;Keys(r,"record_id","project_id","client_id","task_id","manifest","evidence","copied","recoverable","digest");
+                        string id=Text(r["record_id"]);Need(Guid.TryParseExact(id,"N",out _) && Text(r["project_id"])==project(),"record_identity_mismatch");
+                        Text(r["client_id"]);Text(r["task_id"]);Text(r["digest"]);
+                        Need(r["copied"]?.Type==JTokenType.Boolean && r["recoverable"]?.Type==JTokenType.Boolean && r["manifest"] is JObject && r["evidence"] is JObject,"invalid_task_record");
+                        Need((string)r["digest"]==RecordDigest(r) && r.ToString(Formatting.None).Length<=65536,"task_record_mismatch");
+                        checkedRecords.Add(id,(JObject)r.DeepClone());
+                    }
+                    foreach(var pair in checkedRecords)taskRecords.Add(pair.Key,pair.Value);
+                    return true;
+                }
+                catch{return false;}
+            }
+        }
+        static bool SameRecoveryScope(JObject record,Plan p)
+        {
+            var previous=record["manifest"] as JObject;
+            return (bool?)record["recoverable"]==true && (bool?)record["copied"]==true &&
+                (string)record["project_id"]==p.Project && (string)record["task_id"]==p.Task && previous!=null &&
+                JToken.DeepEquals(previous["source"],p.Manifest["source"]) && JToken.DeepEquals(previous["candidate"],p.Manifest["candidate"]) &&
+                JToken.DeepEquals(previous["references"],p.Manifest["references"]) && previous["operations"] is JArray ops &&
+                ((JArray)p.Manifest["operations"]).All(op=>(string)op!="copy" && ops.Any(old=>JToken.DeepEquals(old,op))) &&
+                JToken.DeepEquals(record["evidence"],p.Evidence);
+        }
+        // A fresh, explicit local approval of the displayed NEW principal/session and scope.
+        // No remote resume, identity inference, old expiry restoration or replay of commands.
+        public bool RecoverPending(string id,string digest,string recordId,string recordDigest)
+        {
+            lock(sync)
+            {
+                var p=plan;
+                if(busy || p==null || p.Approved || p.Id!=id || p.Digest!=digest || p.RecoveryRecord!=recordId || p.RecoveryDigest!=recordDigest)return false;
+                busy=true;
+                try
+                {
+                    Current(p,false);Verify(p);
+                    Need(taskRecords.TryGetValue(recordId,out var record) && (string)record["digest"]==recordDigest && SameRecoveryScope(record,p),"recovery_record_changed");
+                    Current(p,false);Remember(p);record["recoverable"]=false;record["digest"]=RecordDigest(record);
+                    p.RecoveryRecord=null;p.RecoveryDigest=null;p.Approved=true;
+                    LastReason="本地已重新批准新绑定；定点证据一致，旧授权未复用";return true;
+                }
+                catch{StopAll("恢复核验失败；保留现场，未授权");return false;}
+                finally{busy=false;}
+            }
         }
         public bool Approve(string id,string digest)
         {
-            lock(sync){if(plan==null || plan.Id!=id || plan.Digest!=digest || plan.Paused || busy)return false;try{var p=plan;Current(p,false);Verify(p);p.Approved=true;return true;}catch{StopAll("证据变化，重新批准");return false;}}
+            lock(sync){if(plan==null || plan.Id!=id || plan.Digest!=digest || plan.Paused || plan.RecoveryRecord!=null || busy)return false;try{var p=plan;Current(p,false);Verify(p);Remember(p);p.Approved=true;return true;}catch{StopAll("证据变化，重新批准");return false;}}
         }
         // Local-only continuation; keep exact plan/postimage and never renew expiry.
         public bool Pause(string id,string digest) => SetPaused(id,digest,true);
@@ -179,11 +248,19 @@ namespace Yukino.VRChatAgent
                         {
                             Need(!seen.Contains("copy"),"candidate_exists");
                             var prior=journal.LastOrDefault(j=>j.Plan.Project==p.Project && j.Plan.Client==client && j.Plan.Task==task && (string)j.Plan.Manifest["source"]==source && (string)j.Plan.Manifest["candidate"]==candidate);
-                            Need(prior!=null && prior.Report["after"] is JObject && JToken.DeepEquals(prior.Report["after"]["asset:"+candidate],p.Evidence["asset:"+candidate]) && JToken.DeepEquals(prior.Report["after"]["asset:"+source],p.Evidence["asset:"+source]),"candidate_provenance_conflict");
+                            bool own=prior!=null && prior.Report["after"] is JObject && JToken.DeepEquals(prior.Report["after"]["asset:"+candidate],p.Evidence["asset:"+candidate]) && JToken.DeepEquals(prior.Report["after"]["asset:"+source],p.Evidence["asset:"+source]);
+                            if(!own)
+                            {
+                                var matches=taskRecords.Values.Where(record=>SameRecoveryScope(record,p)).ToArray();
+                                Need(matches.Length==1,"candidate_provenance_conflict");
+                                p.RecoveryRecord=(string)matches[0]["record_id"];p.RecoveryDigest=(string)matches[0]["digest"];
+                            }
                             p.Copied=true;
                         }
                         p.Digest=Hash(new JObject{["id"]=p.Id,["project"]=p.Project,["connection"]=p.Connection,["client"]=client,["task"]=task,["manifest"]=p.Manifest.DeepClone(),["evidence"]=p.Evidence.DeepClone()});plan=p;
-                        return Ok(new JObject{["status"]="pending",["plan_id"]=p.Id,["digest"]=p.Digest});
+                        var pending=new JObject{["status"]="pending",["plan_id"]=p.Id,["digest"]=p.Digest};
+                        if(p.RecoveryRecord!=null)pending["recovery_record_id"]=p.RecoveryRecord;
+                        return Ok(pending);
                     }
                     var active=plan;Need(active!=null && active.Client==client && active.Task==task,"plan_not_current");Need((string)r["plan_id"]==active.Id,"plan_mismatch");
                     if(kind=="stop"){Keys(body);StopAll("已停止，不回退");return Ok(new JObject{["status"]="stopped"});}
@@ -209,8 +286,8 @@ namespace Yukino.VRChatAgent
                     journal.Add(new Journal{Plan=active,Command=(JObject)command.DeepClone(),Report=(JObject)transaction.DeepClone(),Checkpoint=checkpoint});
                     Observe();bool stillActive=ReferenceEquals(plan,active) && active.Approved;
                     var data=new JObject{["transaction"]=transaction,["readback"]=readback,["grant_active"]=stillActive && error==null,["status"]=error!=null?"failed_preserved":stillActive?"completed":"stopped_after_safe_point"};
-                    if(error!=null){StopAll("失败，保留现场，不自动回退");return Fail(error,data);}
-                    active.Copied=true;active.Evidence=nextEvidence;return Ok(data);
+                    if(error!=null){Remember(active,false);StopAll("失败，保留现场，不自动回退");return Fail(error,data);}
+                    active.Copied=true;active.Evidence=nextEvidence;Remember(active);return Ok(data);
                 }
                 catch(Exception ex){if(!stop && plan!=null && plan.Client==requestingClient)StopAll("失败，保留现场，不自动回退");return Fail(ex is Denied || ex is CandidateWriteDenied?ex.Message:"local_validation_failed");}
                 finally{busy=false;}

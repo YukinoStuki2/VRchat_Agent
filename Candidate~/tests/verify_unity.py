@@ -141,7 +141,7 @@ def main(label):
     report['owned_build_directory_removed'] = not Path(td).exists()
     report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
         '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
-    assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,6)]
+    assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,11)]
     report['client_selection_csharp_ids'] = sorted(set(re.findall(r'^PASS (CS00[789]|CS010) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
     assert report['client_selection_csharp_ids'] == ['CS007','CS008','CS009','CS010']
     report['all_commands_succeeded'] = bool(report['runs']) and all(

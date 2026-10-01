@@ -28,6 +28,10 @@ internal static class WirePeer
    JObject input=JObject.Parse(line);JObject output;
    bool isMaterial=(string)input["route"]=="vrchat_agent_material_dispatch";
    if(input["fixture_connection"]!=null){connection=(string)input["fixture_connection"];output=new JObject{["fixture_ready"]=true};}
+   else if(input["fixture_reload_material"]!=null){var records=material.ExportTaskRecords();material.StopAll("fixture reload");material=new MaterialCandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,backend);output=new JObject{["fixture_reloaded"]=material.ImportTaskRecords(records),["plans"]=material.LocalPlans(),["capabilities"]=new JArray()};if(material.Allows("edit")||material.Allows("copy"))throw new Exception("reload authority");}
+   else if(input["fixture_material_records"]!=null){output=new JObject{["records"]=material.ExportTaskRecords()};}
+   else if(input["fixture_material_capabilities"] is JArray capabilities){foreach(var op in capabilities)material.SetCapability((string)op,true);output=new JObject{["fixture_configured"]=true};}
+   else if(input["fixture_recover_exact"] is JObject recovery){output=new JObject{["fixture_recovered"]=material.RecoverPending((string)recovery["plan_id"],(string)recovery["digest"],(string)recovery["record_id"],(string)recovery["record_digest"])};}
    else if(input["fixture_local_plans"]!=null){output=new JObject{["fixture_plans"]=isMaterial?material.LocalPlans():gate.LocalPlans()};}
    else if(input["fixture_approve_exact"] is JObject a){output=new JObject{["fixture_approved"]=isMaterial?material.Approve((string)a["plan_id"],(string)a["digest"]):gate.Approve((string)a["plan_id"],(string)a["digest"])};}
    else if(input["fixture_pause_exact"] is JObject pause){output=new JObject{["fixture_paused"]=isMaterial?material.Pause((string)pause["plan_id"],(string)pause["digest"]):gate.Pause((string)pause["plan_id"],(string)pause["digest"])};}

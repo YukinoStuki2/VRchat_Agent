@@ -38,6 +38,12 @@ namespace UnityEditor {
   public static event Action update, quitting; public static event Action<PlayModeStateChange> playModeStateChanged;
   public static void Tick() => update?.Invoke(); public static void Quit() => quitting?.Invoke(); public static void Play() => playModeStateChanged?.Invoke(PlayModeStateChange.ExitingEditMode);
  }
+ public static class SessionState {
+  public static readonly Dictionary<string,string> Values=new Dictionary<string,string>();
+  public static string GetString(string key,string fallback)=>Values.TryGetValue(key,out var value)?value:fallback;
+  public static void SetString(string key,string value){Values[key]=value;}
+  public static void EraseString(string key){Values.Remove(key);}
+ }
  public static class AssemblyReloadEvents { public static event Action beforeAssemblyReload; public static void Reload() => beforeAssemblyReload?.Invoke(); }
  public static class AssetDatabase {
   public static UnityEngine.Object Asset = new UnityEngine.Material();

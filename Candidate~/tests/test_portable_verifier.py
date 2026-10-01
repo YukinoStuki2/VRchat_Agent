@@ -33,6 +33,14 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertIn("['CX001','CX002','CX003','CX004','CX005','CX006','CX007']",workflow)
         for number in ('CS008','CS009','CS010'):self.assertIn(number,workflow)
 
+    def test_VP009_ci_executes_recovery_and_editor_record_lifecycle(self):
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
+        for number in range(1,11):self.assertIn('PC'+str(number).zfill(3), workflow)
+        self.assertIn('WriteUnityCases.csproj',workflow)
+        for number in ('WU011','WU012'):self.assertIn(number,workflow)
+        self.assertIn("range(1,11)",unity)
+
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')
         self.assertTrue('fixture_started' in source,'peer startup handshake missing')

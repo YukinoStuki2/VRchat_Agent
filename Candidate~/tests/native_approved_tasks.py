@@ -308,10 +308,42 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     assert not runtime.material.plans and not runtime.material.history
                     checks.append('NA006')
                     assert report['native_pause_pass_ids']==[f'NP{i:03d}' for i in range(1,5)]
+                    report['native_recovery_pass_ids']=[]
+                    report['approved_stage']='NR001_reload_history_without_grants'
+                    loaded=await exchange({'fixture_reload_material':True})
+                    assert loaded['fixture_reloaded'] and loaded['plans']==[] and loaded['capabilities']==[], 'reload_restored_grant'
+                    report['native_recovery_pass_ids'].append('NR001')
+                    history=(await exchange({'fixture_material_records':True}))['records']
+                    await exchange({'fixture_material_capabilities':['edit']})
+                    recovery_home=home/'recovery-clients';recovery_home.mkdir()
+                    async with clients(args,recovery_home,endpoint,owner,processes,captured,report) as peers:
+                        for role in ('hermes','codex'):
+                            report['approved_stage']='NR002_explicit_recovery_'+role
+                            pending=await data(role,'material_prepare',{**manifests[role],'operations':['edit']})
+                            record=next(r for r in history if r['record_id']==pending['recovery_record_id'])
+                            current=(await plans(True))[0]
+                            assert json.loads(current['client_id'])[0]==owner.identity.credentials[role].principal
+                            assert current['client_id']!=record['client_id'], 'old_sdk_identity_reused'
+                            assert not (await exchange({'fixture_approve_exact':pending,'route':'vrchat_agent_material_dispatch'}))['fixture_approved']
+                            arguments={'task_id':MANIFEST['task_id'],'plan_id':pending['plan_id'],'action':'edit','arguments':{'property':'_Value','value':.125}}
+                            await denied(role,'material_execute',arguments)
+                            assert await file_bytes()==before
+                            pending=await data(role,'material_prepare',{**manifests[role],'operations':['edit']})
+                            assert (await exchange({'fixture_recover_exact':{'plan_id':pending['plan_id'],'digest':pending['digest'],
+                                'record_id':record['record_id'],'record_digest':record['digest']}}))['fixture_recovered']
+                            # Confirm the production native tool route uses the new approval, no copy/replay.
+                            await data(role,'material_execute',{'task_id':MANIFEST['task_id'],'plan_id':pending['plan_id'],'action':'edit',
+                                'arguments':{'property':'_Value','value':.625 if role=='hermes' else .875}})
+                            await data(role,'material_stop',{'task_id':MANIFEST['task_id'],'plan_id':pending['plan_id']})
+                            before=await file_bytes()
+                            assert before[role]['candidate']==('0.625' if role=='hermes' else '0.875') and before[role]['source']=='original'
+                        report['native_recovery_pass_ids'].append('NR002')
+                    assert await plans(True)==[]
+                    assert report['native_recovery_pass_ids']==['NR001','NR002']
                     report['approved_stage']='completed'
             finally:
                 responder.cancel();await asyncio.gather(responder,return_exceptions=True)
     report['session_cleanup']={role:{'created':len(created.get(role,set())),'deleted':len(deleted.get(role,set()))} for role in ('hermes','codex')}
     for role in ('hermes','codex'):
-        assert len(created.get(role,set()))==1 and created[role]==deleted.get(role,set())
+        assert len(created.get(role,set()))==2 and created[role]==deleted.get(role,set())
     assert created['hermes'].isdisjoint(created['codex'])

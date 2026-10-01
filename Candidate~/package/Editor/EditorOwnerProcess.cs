@@ -73,6 +73,23 @@ namespace Yukino.VRChatAgent
             }
         }
 
+        internal static string HermesArguments(JObject settings, bool allowed)
+        {
+            if (settings == null) return "";
+            if (!allowed || !settings.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(new[] {"host","port","remote_port","user"}) ||
+                settings["host"].Type != JTokenType.String || settings["user"].Type != JTokenType.String ||
+                settings["port"].Type != JTokenType.Integer || settings["remote_port"].Type != JTokenType.Integer)
+                throw new ArgumentException("owner_ssh_settings_invalid");
+            string host=(string)settings["host"], user=(string)settings["user"];
+            long port=(long)settings["port"], remote=(long)settings["remote_port"];
+            if (!System.Text.RegularExpressions.Regex.IsMatch(host, @"\A[A-Za-z0-9][A-Za-z0-9._-]{0,252}\z") ||
+                (user.Length>0 && !System.Text.RegularExpressions.Regex.IsMatch(user, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\z")) ||
+                port<1 || port>65535 || remote<1024 || remote>65535)
+                throw new ArgumentException("owner_ssh_settings_invalid");
+            return " --hermes-host "+Quote(host)+" --hermes-user "+Quote(user)+
+                " --hermes-port "+port+" --hermes-forward-port "+remote;
+        }
+        bool remoteHandoff;
         Process process;
         Task stderrDrain, monitor, starting;
         Func<Task> disconnect;
@@ -82,33 +99,35 @@ namespace Yukino.VRChatAgent
         public int OwnerPid { get; private set; }
 
         internal Task<bool> StartAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false)
+            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null)
         {
             if (used || disposed) throw new InvalidOperationException("owner_single_use");
             used = true; disconnect = close;
-            var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex);
+            var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex, hermesSsh == null ? null : (JObject)hermesSsh.DeepClone());
             starting = task;
             return task;
         }
         async Task<bool> StartCoreAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, bool allowHermes, bool allowCodex)
+            Func<Uri, string, byte[], Task<bool>> connect, bool allowHermes, bool allowCodex, JObject hermesSsh)
         {
             try
             {
                 if (!Path.IsPathRooted(python) || !Path.IsPathRooted(entry) || !File.Exists(python) ||
                     !File.Exists(entry) || string.IsNullOrWhiteSpace(project) || project.Length > 256)
                     throw new InvalidOperationException("owner_path_invalid");
+                string sshArguments = HermesArguments(hermesSsh, allowHermes);
+                remoteHandoff = hermesSsh != null;
                 var info = new ProcessStartInfo(python) {
                     Arguments = "-I -B " + Quote(entry) + " --project " + Quote(project) +
                         " --parent-pid " + Process.GetCurrentProcess().Id +
-                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : ""),
+                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : "") + sshArguments,
                     UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8,
                     WorkingDirectory = Path.GetDirectoryName(entry)
                 };
                 info.EnvironmentVariables.Clear();
-                foreach (string name in new[] {"SystemRoot","WINDIR","PATH","COMSPEC","PATHEXT","TEMP","TMP","HOME","USERPROFILE"})
+                foreach (string name in new[] {"SystemRoot","WINDIR","PATH","COMSPEC","PATHEXT","TEMP","TMP","HOME","USERPROFILE","SSH_AUTH_SOCK"})
                 {
                     string value = Environment.GetEnvironmentVariable(name);
                     if (value != null) info.EnvironmentVariables[name] = value;
@@ -184,7 +203,7 @@ namespace Yukino.VRChatAgent
                 bundle.RemoveAll();
                 if (stopping || !await connect(uri,bearer,bytes)) throw new InvalidOperationException("owner_connect_refused");
                 bearer = null;
-                JObject ready = Parse(await ReadLineAsync(process.StandardOutput, 6));
+                JObject ready = Parse(await ReadLineAsync(process.StandardOutput, remoteHandoff ? 36 : 6));
                 if (stopping || ready.Count != 1 || (string)ready["kind"] != "ready")
                     throw new InvalidOperationException("owner_gate_not_ready");
                 Ready = true; monitor = MonitorAsync(remaining);
@@ -208,7 +227,8 @@ namespace Yukino.VRChatAgent
                 while (!process.HasExited && deadline.Elapsed.TotalSeconds < 5) await Task.Delay(20);
                 CleanupComplete = process.HasExited && process.ExitCode == 0 &&
                     (bool?)result["process_cleanup_complete"] == true && (bool?)result["probe_cleanup_complete"] == true &&
-                    (bool?)result["probe_session_cleanup_confirmed"] == true;
+                    (bool?)result["probe_session_cleanup_confirmed"] == true &&
+                    (!remoteHandoff || (bool?)result["handoff_cleanup_confirmed"] == true);
                 if (stderrDrain != null && process.HasExited) await stderrDrain;
             }
             catch { CleanupComplete = false; }

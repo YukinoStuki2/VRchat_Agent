@@ -1,0 +1,6 @@
+name: vrchat-agent-candidate
+version: 0.2.0-preview.1
+description: Explicit private-chat binding to an operator-started VRChat candidate
+kind: standalone
+provides_hooks:
+  - pre_gateway_dispatch

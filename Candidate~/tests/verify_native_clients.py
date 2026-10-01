@@ -233,6 +233,14 @@ async def run(args, report):
                     material=captured+[p.read_bytes() for p in home.rglob('*') if p.is_file()]
                     report['secret_scan_clean']=not any(n in b for b in material for n in needles)
                     assert report['secret_scan_clean']
+                    for block in captured:
+                        for line in block.splitlines():
+                            try: failure=json.loads(line)
+                            except (ValueError,UnicodeError): continue
+                            if type(failure) is dict and set(failure)=={'handoff_diagnostic'}:
+                                report['handoff_diagnostic']=failure['handoff_diagnostic']
+                            if type(failure) is dict and set(failure)=={'error_type','frames'}:
+                                report.setdefault('native_failure_frames',[]).append(failure)
                     report['resource_warnings_absent']=not any(b'ResourceWarning:' in b for b in captured)
                     assert report['resource_warnings_absent']
             with socket.socket() as check:
@@ -254,8 +262,14 @@ def main():
     modes.add_argument('--hermes-binding',action='store_true',help='candidate conversation-bound adapter and normal Hermes dispatch; no model turn')
     modes.add_argument('--hermes-conversation',action='store_true',help='new native AIAgent construction/executor with fixture tool messages; no model request')
     modes.add_argument('--hermes-connection',action='store_true',help='fixed-target SDK connection plus native AIAgent; fixture handoff, not gateway')
+    p.add_argument('--hermes-handoff',action='store_true',help='with approved-tasks: real local IPC relay, fixture host selection; no SSH/gateway')
+    p.add_argument('--hermes-chat',action='store_true',help='relocated plugin/native hooks and AIAgent; platform doubles, no model or platform traffic')
+    p.add_argument('--hermes-ssh',action='store_true',help='with handoff: real loopback SSH auth/reverse-forward, not Windows/WAN')
     p.add_argument('--dotnet',default='/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
     args=p.parse_args()
+    if args.hermes_chat and not args.hermes_handoff: p.error("chat requires handoff")
+    if args.hermes_ssh and not args.hermes_handoff: p.error("SSH requires handoff")
+    if args.hermes_handoff and not args.approved_tasks: p.error("handoff requires approved-tasks")
     if Path(args.output).exists():raise FileExistsError(args.output)
     report={'passed':False,'independent_approval':False,'trusted_delivery_verified':False,
         'unity_editor_verified':False,'codex_scope':'native MCP call in ephemeral thread; no model turn',
@@ -264,10 +278,10 @@ def main():
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}
-    if args.hermes_registry or args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
+    if args.hermes_handoff or args.hermes_registry or args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
         for name in ('registry','mcp_schema_cache'):
             external['hermes_'+name]=Path(args.hermes_source)/('tools/'+name+'.py')
-    if args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
+    if args.hermes_handoff or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
         external['hermes_model_tools']=Path(args.hermes_source)/'model_tools.py'
     if (args.hermes_conversation or args.hermes_connection):
         for name in ('run_agent.py','agent/agent_init.py','agent/tool_executor.py','tools/tool_search.py','toolsets.py'):

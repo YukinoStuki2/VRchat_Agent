@@ -373,6 +373,108 @@ async def conversation_probe(config, fixed=None):
         result['transport_inputs_unchanged'] = True
     print(json.dumps(result),flush=True)
 
+async def handoff_approved_probe(doc, token, allowed):
+    """Real stdio relay/UNIX IPC/TLS/native registry, but fixture host selection."""
+    import tempfile
+    from contextlib import AsyncExitStack
+    from model_tools import handle_function_call
+    from tools.registry import registry
+    root=Path(__file__).resolve().parents[1]
+    sys.path[:0]=[str(root),str(root/'tests'),str(root/'clients')]
+    from hermes_handoff import Receiver
+    from native_gateway_fixture import gateway_fixture
+    baseline=set(registry.get_all_tool_names())
+    with tempfile.TemporaryDirectory(prefix='vrc-native-handoff-') as directory:
+        path=Path(directory)/'receiver.sock'
+        async with AsyncExitStack() as stack:
+            fixture = await stack.enter_async_context(gateway_fixture(path,tuple(allowed))) if doc.get('chat') else None
+            chat_host = fixture.host if fixture else None
+            receiver = chat_host.receiver if chat_host else await stack.enter_async_context(Receiver(path))
+            envelope={**doc['handoff'],'bearer':token}
+            ssh_report={}
+            if doc.get('ssh'):
+                from handoff_ssh_fixture import ssh_relay
+                relay=await stack.enter_async_context(ssh_relay(path,envelope,ssh_report))
+            else:
+                relay=await asyncio.create_subprocess_exec(sys.executable,'-B',str(root/'clients/hermes_handoff_relay.py'),str(path),
+                    stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+                relay.stdin.write(json.dumps(envelope).encode()+b'\n'); await relay.stdin.drain()
+            envelope.clear(); token=None
+            try:
+                offered=json.loads(await asyncio.wait_for(relay.stdout.readline(),5))
+                assert offered['kind']=='offered'
+                try:
+                    agent = None
+                    if chat_host:
+                        assert (await fixture.command('绑定 '+offered['id'])).startswith('已绑定新的专用会话')
+                        chat = chat_host.chats[fixture.route]
+                        agent = chat.agent
+                        assert agent is not None and agent.__class__.__name__ == 'AIAgent'
+                        binding = chat.binding
+                    else:
+                        binding=await receiver.claim(offered['id'],conversation_id='fixture-native-handoff',include=tuple(allowed))
+                except BaseException:
+                    if doc.get('ssh'):
+                        await stack.aclose()
+                        print(json.dumps({'handoff_diagnostic':ssh_report}),flush=True)
+                    raise
+                names={raw:entry['function']['name'] for raw,entry in zip(allowed,binding.snapshot())}
+                while line:=await asyncio.to_thread(sys.stdin.readline):
+                    request=json.loads(line);method=request['method'];params=request['params']
+                    if method=='ready':
+                        assert params=={}
+                        value={'native':'hermes','tools':list(names),'handoff_pass_ids':['HJ001','HJ002']}
+                    elif method=='call':
+                        assert set(params)=={'tool','arguments'} and params['tool'] in names
+                        name=names[params['tool']]
+                        if agent is not None:
+                            from types import SimpleNamespace
+                            call=SimpleNamespace(id='fixture-call',type='function',function=SimpleNamespace(name='tool_call',
+                                arguments=json.dumps({'name':name,'arguments':params['arguments']})))
+                            messages=[]
+                            await asyncio.to_thread(agent._execute_tool_calls,SimpleNamespace(tool_calls=[call]),messages,agent.session_id)
+                            assert len(messages)==1 and messages[0]['role']=='tool'
+                            text=messages[0]['content']
+                            response,end=json.JSONDecoder().raw_decode(text)
+                            suffix=text[end:].strip()
+                            # Native executor appends a warning on deliberate repeated denial.
+                            # Keep its guard enabled; accept no other trailing content.
+                            assert not suffix or (suffix.startswith('[Tool loop warning: ') and suffix.endswith(']'))
+                        else:
+                            response=json.loads(await asyncio.to_thread(handle_function_call,name,params['arguments'],
+                                session_id='fixture-native-handoff',enabled_tools=list(names.values())))
+                        assert 'mcp' in response
+                        value=response['mcp']
+                    elif method=='shutdown':
+                        assert params=={}
+                        if chat_host:
+                            assert (await fixture.command('停止')).startswith('已停止并关闭本轮连接')
+                            assert agent.client is None and not chat_host.chats
+                        else:
+                            relay.stdin.write(b'stop\n'); await relay.stdin.drain()
+                        assert json.loads(await asyncio.wait_for(relay.stdout.readline(),10))=={'kind':'closed','clean':True}
+                        assert await asyncio.wait_for(relay.wait(),5)==0
+                        assert not receiver.offers() and set(registry.get_all_tool_names())==baseline
+                        assert binding._peer.session_cleanup_confirmed
+                        await stack.aclose()
+                        value={'shutdown_complete':True}
+                        if doc.get('ssh'):
+                            assert ssh_report['ssh_authenticated'] and ssh_report['ssh_descendants']['clean']
+                            value['ssh']=ssh_report
+                    else:
+                        raise AssertionError('unknown_test_operation')
+                    print(json.dumps({'id':request['id'],'result':value}),flush=True)
+                    if method=='shutdown':break
+            finally:
+                relay.stdin.close()
+                if relay.returncode is None:
+                    try: await asyncio.wait_for(relay.wait(),10)
+                    except TimeoutError: relay.kill();await relay.wait()
+                if not doc.get('ssh'): assert await relay.stderr.read()==b''
+        assert not path.exists()
+    assert not Path(directory).exists() and set(registry.get_all_tool_names())==baseline
+
+
 async def main():
     # Source path is test-operator-selected, never exposed as a Candidate tool.
     source = Path(sys.argv[1]).resolve(strict=True)
@@ -389,6 +491,10 @@ async def main():
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_verify_locations(cadata=doc['certificate'])
     token = os.environ.pop('VRCHAT_AGENT_TEST_TOKEN')
+    if doc.get('handoff') is not None:
+        assert interactive
+        await handoff_approved_probe(doc,token,allowed)
+        return
     config = {'url': doc['endpoint'], 'headers': {'Authorization': 'Bearer '+token},
         'ssl_verify': context, 'strict_redirect_headers': True, 'connect_timeout': 8,
         'tools': {'include': allowed, 'resources': False, 'prompts': False},

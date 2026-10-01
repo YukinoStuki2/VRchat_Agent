@@ -34,6 +34,7 @@ namespace UnityEditor {
  }
  public static class EditorJsonUtility { public static string ToJson(UnityEngine.Object obj) => obj.Json; }
  public static class EditorGUILayout {
+  public static int IntField(string label,int value)=>value;
   public static string NextText; public static string TextField(string label,string value) {var result=NextText??value;NextText=null;return result;}
   public static readonly List<string> Labels = new List<string>();
   public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v)=>v;

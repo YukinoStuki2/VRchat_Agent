@@ -278,4 +278,27 @@ class ConnectionTests(unittest.IsolatedAsyncioTestCase):
             await peer.shutdown();self.fail('ca_trust_accepted')
         self.assertEqual(self.clients,[])
 
+    async def test_HE015_forwarded_connection_pins_original_http_authority(self):
+        import inspect
+        self.assertIn('server_port',inspect.signature(self.module.connect).parameters)
+        original=self.respond;hosts=[]
+        async def strict(request):
+            hosts.append(request.headers.get('host'))
+            if request.headers.get('host')!='127.0.0.1:29443': return httpx.Response(403)
+            return await original(request)
+        self.respond=strict
+        peer=await self.module.connect(**self.kw,server_port=29443)
+        try:
+            await peer.session.list_tools()
+            self.assertTrue(hosts and all(v=='127.0.0.1:29443' for v in hosts))
+            before=len(self.requests)
+            with self.assertRaisesRegex(RuntimeError,'candidate_endpoint_policy'):
+                await self.clients[-1].post('https://127.0.0.1:19443/mcp',
+                    headers={'host':'127.0.0.1:29444','mcp-session-id':'contract-session'},json={})
+            self.assertEqual(len(self.requests),before)
+        finally:
+            with self.assertRaisesRegex(RuntimeError,'candidate_connection_failed'): await peer.shutdown()
+        self.assertTrue(peer.session_cleanup_confirmed)
+        self.assertTrue(all(url=='https://127.0.0.1:19443/mcp' for _,url in self.requests))
+
 if __name__ == '__main__': unittest.main(verbosity=2)

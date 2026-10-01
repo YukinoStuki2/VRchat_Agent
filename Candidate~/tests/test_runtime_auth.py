@@ -74,6 +74,15 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(task.done())
         self.assertEqual(mcp._candidate_runtime.sessions, {})
 
+    async def test_AU008_status_attests_bound_project_after_unity_success(self):
+        from unittest.mock import AsyncMock, patch
+        async with self.fixture() as (url,tokens,server,verifier):
+            runtime=server._candidate_runtime
+            with patch.object(runtime,'connection',AsyncMock(return_value='fixture-connection')), patch('candidate_runtime.PluginHub.send_command',AsyncMock(return_value={'success':True,'data':{'read_only':True}})):
+                async with Client(url,auth=tokens['fixture-client-a']) as client:
+                    result=await client.call_tool('agent_status',{})
+                    self.assertEqual(result.data['data'].get('project_id'),'auth-fixture-project')
+
     async def test_AU007_probe_discovers_only_status(self):
         async with self.fixture() as (url,tokens,server,verifier):
             async with Client(url,auth=tokens['probe:fixture']) as probe:

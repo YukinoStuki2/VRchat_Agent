@@ -34,7 +34,7 @@ namespace Yukino.VRChatAgent
         internal static bool HasLocalOwner => localOwner != null;
         internal static bool LocalOwnerReady => localOwner != null && localOwner.Ready && LiveConnection() != "";
         internal static string LocalOwnerStatus { get; private set; } = "未启动";
-        internal static async Task<bool> StartLocalOwnerAsync(string python = null, bool allowHermes = false, bool allowCodex = false)
+        internal static async Task<bool> StartLocalOwnerAsync(string python = null, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null)
         {
             if (localOwner != null || ownedClient != null || EditorApplication.isCompiling ||
                 EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return false;
@@ -49,7 +49,7 @@ namespace Yukino.VRChatAgent
             { LocalOwnerStatus = "固定运行时或Python缺失，未启动"; return false; }
             var owner = new EditorOwnerProcess(); localOwner = owner; localStop = null;
             LocalOwnerStatus = "正在通过私有管道绑定；没有授予任务权限";
-            bool ready = await owner.StartAsync(python, entry, CoplayProjectIdentity.GetProjectHash(), ConnectOwnedAsync, StopOwnedAsync, allowHermes, allowCodex);
+            bool ready = await owner.StartAsync(python, entry, CoplayProjectIdentity.GetProjectHash(), ConnectOwnedAsync, StopOwnedAsync, allowHermes, allowCodex, hermesSsh);
             if (!ReferenceEquals(localOwner, owner) || !owner.Ready) ready = false;
             LocalOwnerStatus = ready ? "本地门控已连接；客户端尚需单独绑定" : "启动失败或已撤权；清理未确认时禁止重连";
             return ready;

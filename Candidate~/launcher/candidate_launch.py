@@ -74,6 +74,20 @@ def build_commands(raw):
     return runtime, ssh
 
 
+def build_handoff_command(raw):
+    """Fixed operator-installed subsystem, never a caller-selected remote shell.
+
+    Same strict SSH host trust and loopback forwarding as the tunnel-only path.
+    Credentials travel on redirected stdin, never in this argv or SSH env.
+    This builder neither starts a process nor proves delivery/readiness.
+    """
+    _, command = build_commands(raw)
+    if command is None:
+        raise ValueError('candidate_ssh_required')
+    return [value for value in command[:-1] if value != '-N'] + [
+        '-s', command[-1], 'vrchat-agent-handoff']
+
+
 def make_owner(parent_pid):
     integer(parent_pid, 1, 4294967295)
     if os.name == 'nt':

@@ -116,7 +116,7 @@ def main():
         report['csharp']={'code':run.returncode,'stdout':run.stdout,'stderr':run.stderr,'entry_mode':'default-package-relative'}
         assert run.returncode==0 and 'PASS ECP001' in run.stdout and 'PASS ECP002' in run.stdout,run.stdout+run.stderr
         report['regressions']=[]
-        suites=['test_run_identity.py','test_bootstrap_runtime.py','test_owned_launcher.py','test_editor_owner.py','test_tls_windows.py' if os.name=='nt' else 'test_tls_context.py']
+        suites=['test_run_identity.py','test_bootstrap_runtime.py','test_owned_launcher.py','test_editor_owner.py','test_private_process_pipes.py','test_editor_delivery.py','test_tls_windows.py' if os.name=='nt' else 'test_tls_context.py']
         for suite in suites:
             result=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',str(ROOT/'tests'/suite)],env=env,capture_output=True,text=True,timeout=120)
             report['regressions'].append({'suite':suite,'code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})

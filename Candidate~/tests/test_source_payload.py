@@ -23,6 +23,12 @@ def assembler():
 
 
 class SourcePayloadTests(unittest.TestCase):
+    def test_SP007_delivery_runtime_dependency_is_in_the_actual_payload(self):
+        files=assembler().collect(ROOT)
+        name='launcher/hermes_delivery.py'
+        self.assertTrue('Runtime~/'+name in files,'missing required SSH delivery module')
+        self.assertEqual(files['Runtime~/'+name],(ROOT/name).read_bytes())
+
     def test_SP006_package_member_names_stay_posix_on_windows(self):
         module = assembler(); files = module.collect(ROOT)
         with patch.object(module.packer, 'Path', PureWindowsPath):

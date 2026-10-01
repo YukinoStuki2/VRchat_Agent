@@ -27,6 +27,7 @@ class NativePeer:
         self.number = 0
         self.thread = None
         self.closed = False
+        self.ssh_report = None
 
     async def request(self, method, params):
         self.number += 1
@@ -57,6 +58,7 @@ class NativePeer:
                 await self.request('thread/unsubscribe',{'threadId':self.thread})
             elif self.role=='hermes' and self.process.returncode is None:
                 result=await self.request('shutdown',{})
+                self.ssh_report=result.pop('ssh',None)
                 assert result=={'shutdown_complete':True}
         finally:
             self.process.stdin.close()
@@ -76,6 +78,8 @@ async def clients(args,home,endpoint,owner,processes,captured,report):
             env['VRCHAT_AGENT_TEST_TOKEN']=owner.identity.credentials[role].token
             if role=='hermes':
                 env['HERMES_HOME']=str(folder)
+                if args.hermes_chat:
+                    (folder/'config.yaml').write_text('model:\n  context_length: 131072\n',encoding='utf-8')
                 argv=[args.hermes_python,'-I','-B',str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source]
             else:
                 ca=folder/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
@@ -92,10 +96,16 @@ async def clients(args,home,endpoint,owner,processes,captured,report):
             peer=NativePeer(process,role,captured);peers[role]=peer
             report['approved_stage']=role+'_initialize'
             if role=='hermes':
-                process.stdin.write((json.dumps({'endpoint':endpoint,'certificate':owner.tls.certificate.decode(),
-                    'mode':'approved-task'})+'\n').encode());await process.stdin.drain()
+                document={'endpoint':endpoint,'certificate':owner.tls.certificate.decode(),'mode':'approved-task','ssh':args.hermes_ssh,'chat':args.hermes_chat}
+                if args.hermes_handoff:
+                    document['handoff']={'version':1,'project':owner.project,'role':'hermes','port':owner.port,'server_port':owner.port,
+                        'certificate':owner.tls.certificate.decode(),'pin':owner.tls.pin,'expires_at':owner.identity.expires_at}
+                process.stdin.write((json.dumps(document)+'\n').encode());await process.stdin.drain()
                 ready=await peer.request('ready',{})
                 assert ready['native']=='hermes' and set(TOOLS)<=set(ready['tools'])
+                if args.hermes_handoff:
+                    assert ready['handoff_pass_ids']==['HJ001','HJ002']
+                    report['handoff_pass_ids']=ready['handoff_pass_ids']
             else:
                 await peer.request('initialize',{'clientInfo':{'name':'candidate-verifier','version':'1'},
                     'capabilities':{'experimentalApi':True}})
@@ -109,6 +119,9 @@ async def clients(args,home,endpoint,owner,processes,captured,report):
         yield peers
     finally:
         results=await asyncio.gather(*(peer.close() for peer in peers.values()),return_exceptions=True)
+        if args.hermes_ssh and 'hermes' in peers:
+            report['ssh']=peers['hermes'].ssh_report
+            assert report['ssh'] is not None and report['ssh']['ssh_authenticated']
         if any(isinstance(result,BaseException) for result in results):
             raise AssertionError('native_peer_cleanup_failed')
 

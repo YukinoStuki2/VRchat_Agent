@@ -20,7 +20,7 @@ class Connection:
         self._failed = False
         self._task = None
 
-    async def _run(self, *, port, context, bearer, expires_at):
+    async def _run(self, *, port, server_port, context, bearer, expires_at):
         client = None
         session_id = None
         try:
@@ -30,6 +30,7 @@ class Connection:
             httpx = sdk_httpx()
             deadline = asyncio.get_running_loop().time() + max(0, expires_at - time.time())
             url = f'https://127.0.0.1:{port}/mcp'
+            authority = f'127.0.0.1:{server_port}'
             get_started = False
             def refuse():
                 self.session = None
@@ -38,7 +39,8 @@ class Connection:
                 raise RuntimeError('candidate_endpoint_policy')
             async def before(request):
                 nonlocal get_started
-                if (str(request.url) != url or request.method not in ('GET','POST','DELETE')
+                if (str(request.url) != url or request.headers.get('host') != authority
+                        or request.method not in ('GET','POST','DELETE')
                         or 'last-event-id' in request.headers
                         or (session_id is not None and request.headers.get('mcp-session-id') != session_id)):
                     refuse()
@@ -62,7 +64,7 @@ class Connection:
                         refuse()
                     session_id = current
             client = httpx.AsyncClient(verify=context, trust_env=False, follow_redirects=False,
-                headers={'Authorization':'Bearer '+bearer}, timeout=httpx.Timeout(8, read=30),
+                headers={'Authorization':'Bearer '+bearer, 'Host':authority}, timeout=httpx.Timeout(8, read=30),
                 event_hooks={'request':[before], 'response':[after]})
             async with client:
                 async with streamable_http_client(url, http_client=client) as streams:
@@ -105,11 +107,13 @@ class Connection:
             raise cancelled
 
 
-async def connect(*, port, certificate, pin, bearer, expires_at):
-    """Start one owned SDK session, then transfer it to the trusted caller."""
+def validate_handoff(*, port, certificate, pin, bearer, expires_at, server_port=None):
+    """Validate without opening a connection; return one-run leaf-only TLS trust."""
     try:
         now = time.time()
+        server_port = port if server_port is None else server_port
         if (type(port) is not int or not 1024 <= port <= 65535
+                or type(server_port) is not int or not 1024 <= server_port <= 65535
                 or type(expires_at) is not int or not now < expires_at <= now + 3600
                 or type(bearer) is not str or re.fullmatch(r'[A-Za-z0-9._~-]{1,8192}', bearer) is None
                 or type(pin) is not str or re.fullmatch(r'[0-9a-f]{64}', pin) is None
@@ -124,8 +128,15 @@ async def connect(*, port, certificate, pin, bearer, expires_at):
             raise ValueError()  # accept only the owner's one-run leaf, not a CA trust grant
     except (ValueError, TypeError, ssl.SSLError):
         raise ValueError('candidate_handoff_invalid') from None
+    return context
+
+
+async def connect(*, port, certificate, pin, bearer, expires_at, server_port=None):
+    """Start one owned SDK session, then transfer it to the trusted caller."""
+    context = validate_handoff(port=port, certificate=certificate, pin=pin,
+                               bearer=bearer, expires_at=expires_at, server_port=server_port)
     peer = Connection()
-    peer._task = asyncio.create_task(peer._run(port=port, context=context,
+    peer._task = asyncio.create_task(peer._run(port=port, server_port=port if server_port is None else server_port, context=context,
         bearer=bearer, expires_at=expires_at))
     try:
         await peer._ready.wait()

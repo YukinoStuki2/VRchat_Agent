@@ -3,17 +3,32 @@ import asyncio
 import secrets
 import json
 from contextlib import asynccontextmanager
-from hermes_binding import bind
+if __package__:
+    from .hermes_binding import bind, Binding
+else:
+    from hermes_binding import bind, Binding
 
 
 @asynccontextmanager
 async def conversation(peer, *, include, options):
     """Own one new agent and native peer; no live-agent replacement or model call."""
     from tools.registry import registry
-    from run_agent import AIAgent
-    from model_tools import get_tool_definitions
     identity = 'vrc-' + secrets.token_hex(24)
     binding = await bind(peer, registry, conversation_id=identity, include=include)
+    async with bound_conversation(binding, options=options) as agent:
+        yield agent
+
+
+@asynccontextmanager
+async def bound_conversation(binding, *, options):
+    """Construct once from a trusted receiver claim; never rebind its peer."""
+    from tools.registry import registry
+    from run_agent import AIAgent
+    from model_tools import get_tool_definitions
+    if not isinstance(binding, Binding) or getattr(binding, '_constructed', False):
+        raise ValueError('candidate_construction_used')
+    binding._constructed = True
+    identity = binding._conversation
     agent = None
     worker = None
     try:

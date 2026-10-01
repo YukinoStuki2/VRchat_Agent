@@ -87,13 +87,17 @@ class WinAPI:
     def job_empty(self,job):
         info=ACCOUNTING();self.checked(self.k.QueryInformationJobObject(job,1,C.byref(info),C.sizeof(info),None))
         return info.ActiveProcesses==0
-    def create_suspended(self,args,env,callback,job):
+    def create_suspended(self,args,env,callback,job,*,stdio=None):
         # Explicit handle_list prevents leaking parent's unrelated inheritable handles.
         nullfd=os.open(os.devnull,os.O_RDWR);readfd=writefd=None;process=thread=None
+        stdio_fds=[]
         try:
             os.set_inheritable(nullfd,True)
             if callback is not None:
                 readfd,writefd=os.pipe();os.set_inheritable(writefd,True)
+            if stdio is not None:
+                for fd in stdio:
+                    dup=os.dup(fd);stdio_fds.append(dup);os.set_inheritable(dup,True)
             null=self.m.get_osfhandle(nullfd)
             err=self.m.get_osfhandle(writefd) if writefd is not None else null
             if not job:raise ValueError('Owned job required')
@@ -102,7 +106,8 @@ class WinAPI:
                 raise ValueError('Invalid child environment')
             startup=STARTUPINFOEX();startup.StartupInfo.cb=C.sizeof(startup)
             startup.StartupInfo.dwFlags=subprocess.STARTF_USESTDHANDLES
-            startup.StartupInfo.hStdInput=null;startup.StartupInfo.hStdOutput=null;startup.StartupInfo.hStdError=err
+            stdin,stdout=[self.m.get_osfhandle(fd) for fd in stdio_fds] if stdio_fds else (null,null)
+            startup.StartupInfo.hStdInput=stdin;startup.StartupInfo.hStdOutput=stdout;startup.StartupInfo.hStdError=err
             size=SIZE_T()
             self.k.InitializeProcThreadAttributeList(None,2,0,C.byref(size))
             if C.get_last_error()!=122 or not size.value:raise C.WinError(C.get_last_error())
@@ -110,7 +115,7 @@ class WinAPI:
             self.checked(self.k.InitializeProcThreadAttributeList(attributes,2,0,C.byref(size)))
             try:
                 startup.lpAttributeList=C.cast(attributes,C.c_void_p)
-                allowed=list({null,err});handles=(HANDLE*len(allowed))(*allowed);jobs=(HANDLE*1)(job)
+                allowed=list({stdin,stdout,err});handles=(HANDLE*len(allowed))(*allowed);jobs=(HANDLE*1)(job)
                 # Documented HANDLE_LIST (2) and JOB_LIST (13), both input attributes.
                 self.checked(self.k.UpdateProcThreadAttribute(attributes,0,0x20002,handles,C.sizeof(handles),None,None))
                 self.checked(self.k.UpdateProcThreadAttribute(attributes,0,0x2000D,jobs,C.sizeof(jobs),None,None))
@@ -131,7 +136,7 @@ class WinAPI:
             if thread is not None:self.close_handle(thread)
             raise
         finally:
-            for fd in (nullfd,writefd,readfd):
+            for fd in (nullfd,writefd,readfd,*stdio_fds):
                 if fd is not None:os.close(fd)
 
 class NativeProcess:
@@ -188,9 +193,9 @@ class OwnedProcesses:
         try:self.job=self.api.create_job()
         except BaseException:self.api.close_handle(self.parent);raise
     def alive(self):return not self.closed and self.api.parent_alive(self.parent)
-    def spawn(self,args,env,stderr_line_callback=None):
+    def spawn(self,args,env,stderr_line_callback=None,*,stdio=None):
         if self.closed or not self.alive():raise OSError('Parent unavailable')
-        child=self.api.create_suspended(args,env,stderr_line_callback,self.job)
+        child=self.api.create_suspended(args,env,stderr_line_callback,self.job,**({"stdio":stdio} if stdio is not None else {}))
         try:
             self.api.assign(self.job,child.handle)
             self.api.resume(child.thread)

@@ -29,7 +29,7 @@ def private_pipes():
     return all(stat.S_ISFIFO(os.fstat(fd).st_mode) for fd in (0,1))
 
 
-async def read_control(stop,timeout=None):
+async def read_control(stop,timeout=None,*,fd=0,limit=16):
     """Bounded polling only; no daemon reader blocked in console ReadLine."""
     deadline=None if timeout is None else time.monotonic()+timeout
     data=bytearray()
@@ -37,18 +37,18 @@ async def read_control(stop,timeout=None):
         if deadline is not None and time.monotonic()>=deadline:raise TimeoutError()
         if os.name=='nt':
             import msvcrt,win32pipe,pywintypes
-            try:available=win32pipe.PeekNamedPipe(msvcrt.get_osfhandle(0),0)[1]
+            try:available=win32pipe.PeekNamedPipe(msvcrt.get_osfhandle(fd),0)[1]
             except pywintypes.error as exc:
                 if exc.winerror in (109,232):return b''
                 raise
         else:
             import select
-            available=bool(select.select([0],[],[],0)[0])
+            available=bool(select.select([fd],[],[],0)[0])
         if available:
-            b=os.read(0,1)
+            b=os.read(fd,1)
             if not b:return b''
             data.extend(b)
-            if len(data)>16:raise ValueError('control_too_long')
+            if len(data)>limit:raise ValueError('control_too_long')
             if b==b'\n':return bytes(data)
         else:await asyncio.sleep(.02)
     return b''
@@ -60,35 +60,59 @@ def emit(value):
 
 async def run(args):
     from launcher.owned_run import create_owned_run,supervise_owned
-    stop=threading.Event()
+    from launcher.candidate_launch import validate_config
+    from launcher.hermes_delivery import deliver
+    stop=threading.Event();handoff_stop=threading.Event();offered=threading.Event()
     if await read_control(stop,5)!=b'start\n':return 2
     if os.getppid()!=args.parent_pid:return 2
     with socket.socket() as reserved:
         reserved.bind(('127.0.0.1',0));port=reserved.getsockname()[1]
     raw={'project':args.project,'parent_pid':args.parent_pid,'local_port':port}
+    remote=None
+    if any(getattr(args,name,None) is not None for name in ('hermes_host','hermes_user','hermes_port','hermes_forward_port')):
+        if 'hermes' not in args.client:raise ValueError('hermes_not_selected')
+        remote=validate_config({**raw,'ssh':{'host':args.hermes_host,'user':args.hermes_user or '',
+            'port':22 if args.hermes_port is None else args.hermes_port,'remote_port':args.hermes_forward_port}})
     owned=create_owned_run(raw,clients=tuple(args.client))
     task=asyncio.create_task(asyncio.to_thread(supervise_owned,raw,owned=owned,stop=stop))
     control=asyncio.create_task(read_control(stop))
+    delivery=None;delivery_result=None
     binding_sent=ready_sent=False
     try:
         while not task.done():
-            if control.done() or os.getppid()!=args.parent_pid:
-                stop.set()
-            if not stop.is_set() and owned.transport_ready.is_set() and not binding_sent:
+            requested=control.done() or os.getppid()!=args.parent_pid
+            if requested:
+                handoff_stop.set()
+                if delivery is None or delivery.done():stop.set()
+            if delivery is not None and delivery.done():
+                delivery_result=delivery.result();stop.set()
+            if not stop.is_set() and not requested and owned.transport_ready.is_set() and not binding_sent:
                 emit({'kind':'unity_binding','version':2,'clients':owned.owner.identity.clients,'owner_pid':os.getpid(),'project':args.project,
                     'endpoint':f'wss://127.0.0.1:{port}/hub/plugin','pin':owned.owner.tls.pin,
                     'unity_bearer':owned.owner.identity.credentials['unity'].token,
                     'expires_at':owned.owner.identity.expires_at})
                 binding_sent=True
-            if not stop.is_set() and binding_sent and owned.binding.ready.is_set() and not ready_sent:
-                emit({'kind':'ready'});ready_sent=True
+            if not stop.is_set() and not requested and binding_sent and owned.binding.ready.is_set():
+                if remote is not None and delivery is None:
+                    delivery=asyncio.create_task(deliver(remote,owned.owner,stop=handoff_stop,offered=offered))
+                if not ready_sent and (remote is None or offered.is_set()):
+                    emit({'kind':'ready'});ready_sent=True
             await asyncio.sleep(.02)
         result=await task
-        emit({'kind':'stopped',**result})
-        return 0 if result['phase']=='stopped' else 1
     finally:
-        stop.set();control.cancel();await asyncio.gather(control,return_exceptions=True)
-        await asyncio.wait_for(asyncio.shield(task),12)
+        handoff_stop.set()
+        try:
+            if delivery is not None:delivery_result=await delivery
+        finally:
+            stop.set();control.cancel();await asyncio.gather(control,return_exceptions=True)
+            await asyncio.wait_for(asyncio.shield(task),12)
+    if remote is not None:
+        result['handoff_cleanup_confirmed']=delivery_result is not None and delivery_result['remote_cleanup_confirmed']
+        result['process_cleanup_complete'] &= delivery_result is None or delivery_result['process_cleanup_complete']
+        if not result['handoff_cleanup_confirmed'] or delivery_result['code'] not in ('STOPPED','HANDOFF_CLOSED'):
+            result.update(phase='blocked',code=delivery_result['code'] if delivery_result else 'HANDOFF_NOT_STARTED')
+    emit({'kind':'stopped',**result})
+    return 0 if result['phase']=='stopped' else 1
 
 
 def main():
@@ -96,6 +120,10 @@ def main():
     parser.add_argument('--project',required=True)
     parser.add_argument('--parent-pid',required=True,type=int)
     parser.add_argument('--client',choices=('hermes','codex'),action='append',default=[])
+    parser.add_argument('--hermes-host')
+    parser.add_argument('--hermes-user')
+    parser.add_argument('--hermes-port',type=int)
+    parser.add_argument('--hermes-forward-port',type=int)
     try:
         args=parser.parse_args()
         if args.parent_pid!=os.getppid() or args.parent_pid<=1 or not private_pipes():return 2

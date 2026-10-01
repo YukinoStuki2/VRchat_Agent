@@ -1,5 +1,17 @@
 # Hermes host connection and conversation — uninstalled candidate modules
 
+## Current handoff/plugin slice (uninstalled)
+
+The Linux receiver, fixed SSH subsystem relay, owned editor delivery, per-chat
+new AIAgent, opt-in plugin entry and standalone-plugin in-memory layout now exist.
+See `INSTALL.md` for the manual operator boundary and deployment prerequisites.
+The relocated plugin is exercised through the real PluginManager/hook path, with
+platform authorization/replies and model messages explicitly test-driven. No live
+gateway activation, real model turn, Windows Hermes, cross-host deployment or
+Unity Editor acceptance is claimed. Local Codex user entry, task reload, final
+independent review and full VPM/ALCOM delivery remain open. Older sections describe
+their narrower historical scopes; they do not negate the current source work.
+
 `clients/hermes_binding.py` is host-side code for the installed Hermes environment,
 not a sidecar dependency or an installed plugin. Importing it starts no process,
 opens no endpoint, reads no credentials and registers no tools. It is deliberately

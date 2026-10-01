@@ -166,4 +166,20 @@ class ConstructionTests(unittest.IsolatedAsyncioTestCase):
             async with self.conversation(peer,include=('agent_status',),options={}) as agent:pass
         self.assertEqual(peer.stopped,1);self.assertEqual(agent.closed,1)
 
+    async def test_HC012_claimed_binding_constructed_once_without_rebinding(self):
+        import hermes_conversation as module
+        from hermes_binding import bind
+        self.assertTrue(hasattr(module,'bound_conversation'),'missing_claimed_binding_constructor')
+        peer=Peer()
+        binding=await bind(peer,registry,conversation_id='trusted-chat-generation',include=('agent_status',))
+        async with module.bound_conversation(binding,options={}) as agent:
+            self.assertEqual(agent.session_id,'trusted-chat-generation')
+            snapshot=binding.snapshot()
+            with self.assertRaisesRegex(ValueError,'candidate_construction_used'):
+                async with module.bound_conversation(binding,options={}):self.fail('reused')
+            self.assertEqual(binding.snapshot(),snapshot)
+            self.assertEqual(peer.stopped,0)
+        self.assertEqual(peer.stopped,1)
+        self.assertEqual(agent.closed,1)
+
 if __name__=='__main__':unittest.main(verbosity=2)

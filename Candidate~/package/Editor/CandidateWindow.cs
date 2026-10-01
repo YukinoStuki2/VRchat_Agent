@@ -9,6 +9,8 @@ namespace Yukino.VRChatAgent
         Vector2 scroll;
         bool allowHermes, allowCodex; // Local per-run selection; default closed, no persistence.
         bool externalPython; // Explicit development opt-in; default never searches host Python.
+        string hermesHost = "", hermesUser = "";
+        int hermesPort = 22, hermesForwardPort = 18088;
         string python = ""; // Local window only; never persists credentials or client configuration.
         [MenuItem("Tools/VRChat Agent/候选权限与清单")]
         static void Open() { GetWindow<CandidateWindow>("候选权限与清单"); }
@@ -20,9 +22,17 @@ namespace Yukino.VRChatAgent
             EditorGUILayout.LabelField("当前工程", CoplayProjectIdentity.GetProjectHash());
             EditorGUILayout.LabelField("本地连接", CandidateSession.LocalOwnerReady ? "门控已就绪，客户端另行绑定" : CandidateSession.LocalOwnerStatus);
             EditorGUI.BeginDisabledGroup(CandidateSession.HasLocalOwner);
-            EditorGUILayout.HelpBox("本轮客户端准入（不是绑定完成或任务批准）；默认全关，变更需先停止连接。凭据交付尚未完成。", MessageType.Info);
+            EditorGUILayout.HelpBox("本轮客户端准入（不是绑定完成或任务批准）；默认全关，变更需先停止连接。远程Hermes使用受限SSH子系统，远端仍须在指定聊天中认领；本地Codex接入尚未完成。", MessageType.Info);
             allowHermes = EditorGUILayout.ToggleLeft("允许本轮 Hermes 角色", allowHermes);
             allowCodex = EditorGUILayout.ToggleLeft("允许本轮 Codex 角色", allowCodex);
+            if (allowHermes)
+            {
+                hermesHost = EditorGUILayout.TextField("Hermes管理机SSH主机", hermesHost);
+                hermesUser = EditorGUILayout.TextField("受限SSH用户名", hermesUser);
+                hermesPort = EditorGUILayout.IntField("SSH端口", hermesPort);
+                hermesForwardPort = EditorGUILayout.IntField("管理机回环转发端口", hermesForwardPort);
+                EditorGUILayout.HelpBox("需预先安装远端接收器及vrchat-agent-handoff子系统、核对主机指纹并配置SSH密钥。不保存密码；本面板不修改SSH账号或信任配置。", MessageType.Info);
+            }
             externalPython = EditorGUILayout.ToggleLeft("开发测试：改用本机Python（不属于便携交付）", externalPython);
             if (externalPython) python = EditorGUILayout.TextField("本机Python 3.11绝对路径", python);
             else EditorGUILayout.LabelField("运行时", "随包固定Python；缺失或校验失败不自动回退");
@@ -79,7 +89,12 @@ namespace Yukino.VRChatAgent
         }
         async void StartLocal()
         {
-            try { await CandidateSession.StartLocalOwnerAsync(externalPython ? python : null, allowHermes, allowCodex); }
+            try
+            {
+                JObject hermesSsh = allowHermes ? new JObject { ["host"]=hermesHost, ["user"]=hermesUser,
+                    ["port"]=hermesPort, ["remote_port"]=hermesForwardPort } : null;
+                await CandidateSession.StartLocalOwnerAsync(externalPython ? python : null, allowHermes, allowCodex, hermesSsh);
+            }
             catch { CandidateSession.Gate.StopAll("本地连接启动失败，未批准任务"); }
             Repaint();
         }

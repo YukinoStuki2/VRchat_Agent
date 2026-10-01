@@ -1,5 +1,17 @@
 # Native-client compatibility — development evidence only
 
+## Current handoff/plugin slice (uninstalled)
+
+The Linux receiver, fixed SSH subsystem relay, owned editor delivery, per-chat
+new AIAgent, opt-in plugin entry and standalone-plugin in-memory layout now exist.
+See `clients/INSTALL.md` for the manual operator boundary and deployment prerequisites.
+The relocated plugin is exercised through the real PluginManager/hook path, with
+platform authorization/replies and model messages explicitly test-driven. No live
+gateway activation, real model turn, Windows Hermes, cross-host deployment or
+Unity Editor acceptance is claimed. Local Codex user entry, task reload, final
+independent review and full VPM/ALCOM delivery remain open. Older sections describe
+their narrower historical scopes; they do not negate the current source work.
+
 ## Candidate fixed-target connection (not installed)
 
 `clients/hermes_connection.py` now supplies an owned native SDK peer to the

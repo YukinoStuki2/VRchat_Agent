@@ -465,7 +465,10 @@ def create_server(project_id, *, mcp_auth=None):
     @server.tool
     async def agent_status(ctx: Context) -> dict:
         """读取所选Unity工程受控入口状态；不授予权限。"""
-        return await PluginHub.send_command(await runtime.connection(), 'agent_status', {})
+        result = await PluginHub.send_command(await runtime.connection(), 'agent_status', {})
+        if type(result) is dict and result.get('success') is True and type(result.get('data')) is dict:
+            result = {**result, 'data': {**result['data'], 'project_id': runtime.project_id}}
+        return result
 
     @server.tool
     async def agent_prepare(task_id: str, operations: list[dict], targets: list[str],

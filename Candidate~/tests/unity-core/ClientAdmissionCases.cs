@@ -9,6 +9,24 @@ internal static class ClientAdmissionCases
  static void Check(bool ok,string why){if(!ok)throw new Exception(why);}
  internal static async Task Run(string python,string directHelper)
  {
+  var build=typeof(EditorOwnerProcess).GetMethod("HermesArguments",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+  Check(build!=null,"CS008 missing restricted SSH settings builder");
+  var settings=new JObject{["host"]="fixture.invalid",["user"]="fixture",["port"]=22022,["remote_port"]=18088};
+  string output=(string)build.Invoke(null,new object[]{settings,true});
+  Check(output.Contains("--hermes-host \"fixture.invalid\"") && output.Contains("--hermes-forward-port 18088"),"CS008 exact settings not passed");
+  foreach(string field in new[]{"host","user","port","remote_port","extra"}) {
+   var bad=(JObject)settings.DeepClone();
+   if(field=="host")bad[field]="-oProxyCommand=sh";
+   else if(field=="user")bad[field]="a;id";
+   else if(field=="extra")bad[field]="unsupported";
+   else bad[field]=0;
+   bool refused=false;try{build.Invoke(null,new object[]{bad,true});}catch(System.Reflection.TargetInvocationException){refused=true;}
+   Check(refused,"CS008 invalid SSH field accepted "+field);
+  }
+  bool disabled=false;try{build.Invoke(null,new object[]{settings,false});}catch(System.Reflection.TargetInvocationException){disabled=true;}
+  Check(disabled,"CS008 unselected Hermes accepted remote settings");
+  Check((string)build.Invoke(null,new object[]{null,false})=="","CS008 default must be inert");
+  Console.WriteLine("PASS CS008 structured SSH arguments and selection boundary");
   string home=Path.Combine(Path.GetTempPath(),"candidate-selection-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(home);
   File.Copy(directHelper,Path.Combine(home,"direct_python.py"));
   try {

@@ -51,13 +51,13 @@ class OwnedProcesses:
     def alive(self):
         return not self.closed and not select.select([self.parent], [], [], 0)[0]
 
-    def spawn(self, args, env, stderr_line_callback=None):
+    def spawn(self, args, env, stderr_line_callback=None, *, stdio=None):
         if not self.alive():
             raise OSError('Parent unavailable')
         readfd, writefd = os.pipe() if stderr_line_callback else (None, None)
         try:
-            proc = subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL, stderr=writefd if writefd is not None else subprocess.DEVNULL,
+            proc = subprocess.Popen(args, env=env, stdin=stdio[0] if stdio else subprocess.DEVNULL,
+                stdout=stdio[1] if stdio else subprocess.DEVNULL, stderr=writefd if writefd is not None else subprocess.DEVNULL,
                 start_new_session=True, shell=False, close_fds=True)
         except BaseException:
             if readfd is not None:

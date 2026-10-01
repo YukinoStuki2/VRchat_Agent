@@ -27,6 +27,20 @@ internal static class ClientAdmissionCases
   Check(disabled,"CS008 unselected Hermes accepted remote settings");
   Check((string)build.Invoke(null,new object[]{null,false})=="","CS008 default must be inert");
   Console.WriteLine("PASS CS008 structured SSH arguments and selection boundary");
+  var codexArgs=typeof(EditorOwnerProcess).GetMethod("CodexArguments",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+  Check(codexArgs!=null,"CS009 missing local Codex arguments builder");
+  string local=Path.Combine(Path.GetTempPath(),"codex-args-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(local);
+  try {
+   string exe=Path.Combine(local,"native codex.exe");File.WriteAllText(exe,"fixture-not-executed");
+   string args=(string)codexArgs.Invoke(null,new object[]{exe,local,true});
+   Check(args.Contains("--codex-executable ") && args.Contains("--codex-project "),"CS009 fields missing");
+   foreach(var values in new[]{new object[]{exe,local,false},new object[]{"codex.cmd",local,true},new object[]{exe,"relative",true}}) {
+    bool refused=false;try{codexArgs.Invoke(null,values);}catch(System.Reflection.TargetInvocationException){refused=true;}
+    Check(refused,"CS009 unsafe local launch accepted");
+   }
+   Check((string)codexArgs.Invoke(null,new object[]{null,null,false})=="","CS009 default must be inert");
+  } finally {Directory.Delete(local,true);}
+  Console.WriteLine("PASS CS009 native local Codex arguments, no shell or default launch");
   string home=Path.Combine(Path.GetTempPath(),"candidate-selection-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(home);
   File.Copy(directHelper,Path.Combine(home,"direct_python.py"));
   try {
@@ -50,6 +64,21 @@ internal static class ClientAdmissionCases
      }
     }
    }
+   string native=Path.Combine(home,"fixture-codex.exe");File.WriteAllText(native,"fixture-not-executed");
+   foreach(string variant in new[]{"missing","false","true"}) {
+    string entry=Path.Combine(home,"editor_owner.py");
+    string script="import sys,os,json,time\nargs=sys.argv[1:]\nsys.stdin.readline()\n"+
+      "print(json.dumps({'kind':'unity_binding','version':2,'owner_pid':os.getpid(),'project':'selection-fixture','endpoint':'wss://127.0.0.1:18081/hub/plugin','pin':'a'*64,'unity_bearer':'x'*64,'expires_at':int(time.time())+120,'clients':['codex']}),flush=True)\n"+
+      "print(json.dumps({'kind':'ready'}),flush=True)\nsys.stdin.read()\n"+
+      "result={'kind':'stopped','process_cleanup_complete':True,'probe_cleanup_complete':True,'probe_session_cleanup_confirmed':True}\n";
+    if(variant!="missing")script+="result['codex_cleanup_complete']="+(variant=="true"?"True":"False")+"\n";
+    script+="print(json.dumps(result),flush=True)\n";File.WriteAllText(entry,script);
+    using(var owner=new EditorOwnerProcess()) {
+     Check(await owner.StartAsync(python,entry,"selection-fixture",(u,t,p)=>Task.FromResult(true),()=>Task.CompletedTask,false,true,null,native,home),"CS010 synthetic owner failed");
+     await owner.StopAsync();Check(owner.CleanupComplete==(variant=="true"),"CS010 local Codex cleanup receipt not enforced: "+variant);
+    }
+   }
+   Console.WriteLine("PASS CS010 exact Codex cleanup receipt required; synthetic owner only");
    Console.WriteLine("PASS CS007 C# explicit flags and exact versioned selection receipt; synthetic private owner");
   } finally {Directory.Delete(home,true);Check(!Directory.Exists(home),"selection test residue");}
  }

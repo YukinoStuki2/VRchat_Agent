@@ -9,6 +9,7 @@ namespace Yukino.VRChatAgent
         Vector2 scroll;
         bool allowHermes, allowCodex; // Local per-run selection; default closed, no persistence.
         bool externalPython; // Explicit development opt-in; default never searches host Python.
+        string codexExecutable = "";
         string hermesHost = "", hermesUser = "";
         int hermesPort = 22, hermesForwardPort = 18088;
         string python = ""; // Local window only; never persists credentials or client configuration.
@@ -22,9 +23,14 @@ namespace Yukino.VRChatAgent
             EditorGUILayout.LabelField("当前工程", CoplayProjectIdentity.GetProjectHash());
             EditorGUILayout.LabelField("本地连接", CandidateSession.LocalOwnerReady ? "门控已就绪，客户端另行绑定" : CandidateSession.LocalOwnerStatus);
             EditorGUI.BeginDisabledGroup(CandidateSession.HasLocalOwner);
-            EditorGUILayout.HelpBox("本轮客户端准入（不是绑定完成或任务批准）；默认全关，变更需先停止连接。远程Hermes使用受限SSH子系统，远端仍须在指定聊天中认领；本地Codex接入尚未完成。", MessageType.Info);
+            EditorGUILayout.HelpBox("本轮客户端准入（不是绑定完成或任务批准）；默认全关，变更需先停止连接。远程Hermes使用受限SSH子系统，远端仍须在指定聊天中认领；本地Codex在新控制台单独登录，不复用或修改现用配置。", MessageType.Info);
             allowHermes = EditorGUILayout.ToggleLeft("允许本轮 Hermes 角色", allowHermes);
             allowCodex = EditorGUILayout.ToggleLeft("允许本轮 Codex 角色", allowCodex);
+            if (allowCodex)
+            {
+                codexExecutable = EditorGUILayout.TextField("Codex原生.exe绝对路径", codexExecutable);
+                EditorGUILayout.HelpBox("仅Windows原生Codex，不接受.cmd/.bat包装器。不自动发送提示或消耗模型额度；首次在独立控制台登录。凭据仅内存，关闭后需重新登录；MCP授权不限制原生终端，修改仍应遵循项目规则。", MessageType.Info);
+            }
             if (allowHermes)
             {
                 hermesHost = EditorGUILayout.TextField("Hermes管理机SSH主机", hermesHost);
@@ -93,7 +99,7 @@ namespace Yukino.VRChatAgent
             {
                 JObject hermesSsh = allowHermes ? new JObject { ["host"]=hermesHost, ["user"]=hermesUser,
                     ["port"]=hermesPort, ["remote_port"]=hermesForwardPort } : null;
-                await CandidateSession.StartLocalOwnerAsync(externalPython ? python : null, allowHermes, allowCodex, hermesSsh);
+                await CandidateSession.StartLocalOwnerAsync(externalPython ? python : null, allowHermes, allowCodex, hermesSsh, allowCodex ? codexExecutable : null);
             }
             catch { CandidateSession.Gate.StopAll("本地连接启动失败，未批准任务"); }
             Repaint();

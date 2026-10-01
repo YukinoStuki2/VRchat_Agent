@@ -24,7 +24,14 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertTrue(workflow.count('tests/test_private_process_pipes.py') >= 3, 'pipe suite must run and be hash-frozen before/after')
         self.assertTrue(workflow.count('tests/test_editor_delivery.py') >= 3, 'delivery suite must run and be hash-frozen before/after')
         self.assertIn("['PP001','PP002','PP003','PP004']",workflow)
-        self.assertIn("['ED001','ED002','ED003']",workflow)
+        self.assertIn("['ED001','ED002','ED003','ED004','ED005']",workflow)
+
+    def test_VP008_ci_runs_local_codex_and_new_editor_contracts(self):
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        self.assertTrue(workflow.count('tests/test_codex_local.py')>=3,'local Codex must run and be hash-frozen')
+        self.assertIn("['ED001','ED002','ED003','ED004','ED005']",workflow)
+        self.assertIn("['CX001','CX002','CX003','CX004','CX005','CX006','CX007']",workflow)
+        for number in ('CS008','CS009','CS010'):self.assertIn(number,workflow)
 
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')

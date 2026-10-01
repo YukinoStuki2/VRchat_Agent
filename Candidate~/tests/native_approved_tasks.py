@@ -84,11 +84,11 @@ async def clients(args,home,endpoint,owner,processes,captured,report):
             else:
                 ca=folder/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
                 env.update(CODEX_HOME=str(folder),CODEX_CA_CERTIFICATE=str(ca))
-                config='[features]\nplugins = false\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n[mcp_servers.candidate]\n'
-                config+='url = '+json.dumps(endpoint)+'\nbearer_token_env_var = "VRCHAT_AGENT_TEST_TOKEN"\n'
-                config+='startup_timeout_sec = 8\ntool_timeout_sec = 8\nrequired = true\nenabled_tools = '+json.dumps(TOOLS)+'\n'
+                sys.path.insert(0,str(ROOT))
+                from launcher import codex_local
+                local_argv,env,config=codex_local.configuration(owner,Path(args.codex),folder,folder)
                 (folder/'config.toml').write_text(config,encoding='utf-8')
-                argv=[args.codex,'app-server','--stdio']
+                argv=[*local_argv,'app-server','--stdio']
             process=await asyncio.create_subprocess_exec(*argv,cwd=folder,env=env,
                 stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
             processes.append(process)
@@ -115,7 +115,7 @@ async def clients(args,home,endpoint,owner,processes,captured,report):
                 peer.thread=thread['thread']['id']
                 data=await peer.request('mcpServerStatus/list',{'detail':'toolsAndAuthOnly','serverName':'candidate','threadId':peer.thread})
                 assert data['nextCursor'] is None and len(data['data'])==1
-                assert set(data['data'][0]['tools'])==set(TOOLS) and data['data'][0]['authStatus']=='bearerToken'
+                assert set(data['data'][0]['tools'])==set(codex_local.TOOLS) and data['data'][0]['authStatus']=='bearerToken'
         yield peers
     finally:
         results=await asyncio.gather(*(peer.close() for peer in peers.values()),return_exceptions=True)

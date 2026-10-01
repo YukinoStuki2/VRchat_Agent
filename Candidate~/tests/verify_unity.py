@@ -142,8 +142,8 @@ def main(label):
     report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
         '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
     assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,6)]
-    report['client_selection_csharp_ids'] = re.findall(r'^PASS (CS007) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)
-    assert report['client_selection_csharp_ids'] == ['CS007']
+    report['client_selection_csharp_ids'] = sorted(set(re.findall(r'^PASS (CS00[789]|CS010) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
+    assert report['client_selection_csharp_ids'] == ['CS007','CS008','CS009','CS010']
     report['all_commands_succeeded'] = bool(report['runs']) and all(
         r['exit_code'] == 0 and not r['timeout'] and r['process_group_absent'] and r['pid_absent']
         for r in report['runs'])

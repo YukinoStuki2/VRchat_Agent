@@ -23,6 +23,11 @@ def assembler():
 
 
 class SourcePayloadTests(unittest.TestCase):
+    def test_SP008_local_codex_is_in_actual_runtime_payload(self):
+        files=assembler().collect(ROOT)
+        self.assertTrue('Runtime~/launcher/codex_local.py' in files,'local Codex absent from payload')
+        self.assertEqual(files['Runtime~/launcher/codex_local.py'],(ROOT/'launcher/codex_local.py').read_bytes())
+
     def test_SP007_delivery_runtime_dependency_is_in_the_actual_payload(self):
         files=assembler().collect(ROOT)
         name='launcher/hermes_delivery.py'

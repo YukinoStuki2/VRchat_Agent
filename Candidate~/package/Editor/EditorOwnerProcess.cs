@@ -89,7 +89,17 @@ namespace Yukino.VRChatAgent
             return " --hermes-host "+Quote(host)+" --hermes-user "+Quote(user)+
                 " --hermes-port "+port+" --hermes-forward-port "+remote;
         }
-        bool remoteHandoff;
+        internal static string CodexArguments(string executable, string project, bool allowed)
+        {
+            if (executable == null && project == null) return "";
+            if (!allowed || string.IsNullOrWhiteSpace(executable) || string.IsNullOrWhiteSpace(project) ||
+                !Path.IsPathRooted(executable) || !Path.IsPathRooted(project) ||
+                !string.Equals(Path.GetExtension(executable), ".exe", StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(executable) || !Directory.Exists(project))
+                throw new ArgumentException("owner_codex_settings_invalid");
+            return " --codex-executable " + Quote(executable) + " --codex-project " + Quote(project);
+        }
+        bool remoteHandoff, localCodex;
         Process process;
         Task stderrDrain, monitor, starting;
         Func<Task> disconnect;
@@ -99,16 +109,16 @@ namespace Yukino.VRChatAgent
         public int OwnerPid { get; private set; }
 
         internal Task<bool> StartAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null)
+            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null, string codexExecutable = null, string codexProject = null)
         {
             if (used || disposed) throw new InvalidOperationException("owner_single_use");
             used = true; disconnect = close;
-            var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex, hermesSsh == null ? null : (JObject)hermesSsh.DeepClone());
+            var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex, hermesSsh == null ? null : (JObject)hermesSsh.DeepClone(), codexExecutable, codexProject);
             starting = task;
             return task;
         }
         async Task<bool> StartCoreAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, bool allowHermes, bool allowCodex, JObject hermesSsh)
+            Func<Uri, string, byte[], Task<bool>> connect, bool allowHermes, bool allowCodex, JObject hermesSsh, string codexExecutable, string codexProject)
         {
             try
             {
@@ -117,10 +127,12 @@ namespace Yukino.VRChatAgent
                     throw new InvalidOperationException("owner_path_invalid");
                 string sshArguments = HermesArguments(hermesSsh, allowHermes);
                 remoteHandoff = hermesSsh != null;
+                string codexArguments = CodexArguments(codexExecutable, codexProject, allowCodex);
+                localCodex = codexExecutable != null;
                 var info = new ProcessStartInfo(python) {
                     Arguments = "-I -B " + Quote(entry) + " --project " + Quote(project) +
                         " --parent-pid " + Process.GetCurrentProcess().Id +
-                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : "") + sshArguments,
+                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : "") + sshArguments + codexArguments,
                     UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8,
@@ -228,7 +240,8 @@ namespace Yukino.VRChatAgent
                 CleanupComplete = process.HasExited && process.ExitCode == 0 &&
                     (bool?)result["process_cleanup_complete"] == true && (bool?)result["probe_cleanup_complete"] == true &&
                     (bool?)result["probe_session_cleanup_confirmed"] == true &&
-                    (!remoteHandoff || (bool?)result["handoff_cleanup_confirmed"] == true);
+                    (!remoteHandoff || (bool?)result["handoff_cleanup_confirmed"] == true) &&
+                    (!localCodex || (bool?)result["codex_cleanup_complete"] == true);
                 if (stderrDrain != null && process.HasExited) await stderrDrain;
             }
             catch { CleanupComplete = false; }

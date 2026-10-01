@@ -1,5 +1,15 @@
 # Native-client compatibility — development evidence only
 
+## Candidate fixed-target connection (not installed)
+
+`clients/hermes_connection.py` now supplies an owned native SDK peer to the
+existing constructor/binding from a trusted in-memory handoff. Fixed loopback URL,
+exclusive leaf trust, no environment proxy/redirect/reconnect, fixed HTTP session
+identity, idle expiry and acknowledged DELETE are implemented. HE14/HT8 are
+contract/real Linux TLS evidence respectively. This does not authenticate the
+handoff source, install a gateway, connect a remote Unity project or attest client
+brands. See `clients/README.md` for limits and reproduction commands.
+
 ## Candidate host-side conversation binding (not installed)
 
 `clients/hermes_binding.py` now implements per-conversation/per-generation tool

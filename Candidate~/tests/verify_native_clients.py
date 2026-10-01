@@ -85,18 +85,24 @@ async def run(args, report):
                             processes, captured, report, created, deleted)
                     else:
                         hermes_home=home/'hermes';hermes_home.mkdir()
-                        if args.hermes_conversation:
+                        if (args.hermes_conversation or args.hermes_connection):
                             (hermes_home/'config.yaml').write_text('model:\n  context_length: 131072\n',encoding='utf-8')
                         env={**child_environment(hermes_home),'HERMES_HOME':str(hermes_home),
                              'VRCHAT_AGENT_TEST_TOKEN':owner.identity.credentials['hermes'].token}
-                        if args.hermes_owned or args.hermes_binding or args.hermes_conversation:
+                        if args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
                             env['VRCHAT_AGENT_TEST_PROBE_TOKEN']=owner.identity.credentials['probe'].token
                         process=await asyncio.create_subprocess_exec(args.hermes_python,'-I','-B',
                             str(ROOT/'tests/native_hermes_peer.py'),args.hermes_source,cwd=hermes_home,env=env,
                             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
                         processes.append(process)
                         doc={'endpoint':endpoint,'certificate':owner.tls.certificate.decode(),
-                             'registry':args.hermes_registry,'owned':args.hermes_owned,'binding':args.hermes_binding,'conversation':args.hermes_conversation}
+                             'registry':args.hermes_registry,'owned':args.hermes_owned,'binding':args.hermes_binding,'conversation':(args.hermes_conversation or args.hermes_connection)}
+                        if args.hermes_connection:
+                            from tls_context import issue_tls_material
+                            other = issue_tls_material()
+                            doc['fixed_connection']={'certificate':owner.tls.certificate.decode(),
+                                'pin':owner.tls.pin,'expires_at':owner.identity.expires_at,
+                                'other_certificate':other.certificate.decode(),'other_pin':other.pin}
                         out,err=await asyncio.wait_for(process.communicate((json.dumps(doc)+'\n').encode()),25)
                         captured.extend((out,err))
                         for line in out.decode().splitlines():
@@ -113,10 +119,12 @@ async def run(args, report):
                             assert report['hermes']['pass_ids']==[f'HR{i:03d}' for i in range(1,7)]
                             assert tool_calls.get('hermes')==['agent_status','agent_stop']
                             report['hermes_wire_tools']=tool_calls['hermes']
-                        if args.hermes_owned or args.hermes_binding or args.hermes_conversation:
-                            if args.hermes_conversation:
+                        if args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
+                            if (args.hermes_conversation or args.hermes_connection):
                                 assert report['hermes'].get('conversation_verified') is True
-                                assert report['hermes']['pass_ids']==[f'HN{i:03d}' for i in range(1,6)]
+                                prefix = 'HT' if args.hermes_connection else 'HN'
+                                assert report['hermes']['pass_ids']==[f'{prefix}{i:03d}' for i in range(1,9 if args.hermes_connection else 6)]
+                                if args.hermes_connection: assert report['hermes']['fixed_connection_verified']
                             elif args.hermes_binding:
                                 assert report['hermes'].get('binding_verified') is True
                                 assert report['hermes']['pass_ids']==[f'HB{i:03d}' for i in range(1,6)]
@@ -126,11 +134,14 @@ async def run(args, report):
                             assert len(created.get('probe',set()))==1
                             assert deleted.get('probe')==created['probe']
                             assert created['probe'].isdisjoint(created['hermes'])
-                            assert tool_calls.get('hermes')==(['agent_status','agent_stop','agent_status'] if args.hermes_binding or args.hermes_conversation else ['agent_status','agent_status'])
+                            assert tool_calls.get('hermes')==(['agent_status','agent_stop','agent_status'] if args.hermes_binding or (args.hermes_conversation or args.hermes_connection) else ['agent_status','agent_status'])
                             assert tool_calls.get('probe')==['agent_status']*3
                             report['hermes_owned_wire_tools']={role:tool_calls[role] for role in ('hermes','probe')}
-                        assert len(created.get('hermes',set()))==(2 if args.hermes_owned or args.hermes_binding or args.hermes_conversation else 1)
+                        assert len(created.get('hermes',set()))==(3 if args.hermes_connection else 2 if args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection) else 1)
                         assert deleted.get('hermes')==created['hermes']
+                        if args.hermes_connection:
+                            assert request_counts.get('anonymous:POST')==1
+                            assert not created.get('anonymous')
                         codex_home=home/'codex';codex_home.mkdir()
                         ca=codex_home/'public-ca.pem';ca.write_bytes(owner.tls.certificate)
                         text='''[features]
@@ -208,7 +219,7 @@ async def run(args, report):
                         assert deleted.get('codex')==created['codex']
                         assert created['hermes'].isdisjoint(created['codex'])
                         report['session_cleanup']={role:{'created':len(created[role]),'deleted':len(deleted[role])}
-                                                   for role in (('hermes','codex','probe') if args.hermes_owned or args.hermes_binding or args.hermes_conversation else ('hermes','codex'))}
+                                                   for role in (('hermes','codex','probe') if args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection) else ('hermes','codex'))}
                     report['requests']=request_counts
                 finally:
                     for process in processes:
@@ -242,6 +253,7 @@ def main():
     modes.add_argument('--hermes-owned',action='store_true',help='native owned-task close beside a separate registered service; no shared gateway changes')
     modes.add_argument('--hermes-binding',action='store_true',help='candidate conversation-bound adapter and normal Hermes dispatch; no model turn')
     modes.add_argument('--hermes-conversation',action='store_true',help='new native AIAgent construction/executor with fixture tool messages; no model request')
+    modes.add_argument('--hermes-connection',action='store_true',help='fixed-target SDK connection plus native AIAgent; fixture handoff, not gateway')
     p.add_argument('--dotnet',default='/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
     args=p.parse_args()
     if Path(args.output).exists():raise FileExistsError(args.output)
@@ -252,12 +264,12 @@ def main():
         for p in (ROOT/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts
         and p.suffix in {'.py','.json','.cs','.csproj'})
     external={'codex_binary':Path(args.codex),'hermes_mcp_entry':Path(args.hermes_source)/'tools/mcp_tool.py'}
-    if args.hermes_registry or args.hermes_owned or args.hermes_binding or args.hermes_conversation:
+    if args.hermes_registry or args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
         for name in ('registry','mcp_schema_cache'):
             external['hermes_'+name]=Path(args.hermes_source)/('tools/'+name+'.py')
-    if args.hermes_binding or args.hermes_conversation:
+    if args.hermes_binding or (args.hermes_conversation or args.hermes_connection):
         external['hermes_model_tools']=Path(args.hermes_source)/'model_tools.py'
-    if args.hermes_conversation:
+    if (args.hermes_conversation or args.hermes_connection):
         for name in ('run_agent.py','agent/agent_init.py','agent/tool_executor.py','tools/tool_search.py','toolsets.py'):
             external['hermes_'+name]=Path(args.hermes_source)/name
     if args.approved_tasks:
@@ -270,7 +282,7 @@ def main():
     report['hermes_scope']=('installed public memory registration and tool-registry dispatch' if args.hermes_registry else 'installed native MCP engine')+'; not whole agent/model loop'
     if args.hermes_binding:
         report['hermes_scope']='candidate adapter through installed handle_function_call and registry; no model turn or live gateway'
-    if args.hermes_conversation:
+    if (args.hermes_conversation or args.hermes_connection):
         report['hermes_scope']='candidate new AIAgent construction and native executor with fixture tool messages; no model request or live gateway'
     report['hermes_dependencies_fully_locked']=False
     before={str(x.relative_to(ROOT)):hashlib.sha256(x.read_bytes()).hexdigest() for x in paths}

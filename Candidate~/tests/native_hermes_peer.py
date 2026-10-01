@@ -230,7 +230,7 @@ async def binding_probe(config):
     result['binding_verified']=True;result['shutdown_complete']=True
     print(json.dumps(result),flush=True)
 
-async def conversation_probe(config):
+async def conversation_probe(config, fixed=None):
     """Real AIAgent construction/executor, fixture tool messages; never a model turn."""
     from urllib.parse import urlsplit
     from types import SimpleNamespace
@@ -241,6 +241,13 @@ async def conversation_probe(config):
     from run_agent import AIAgent
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'clients'))
     from hermes_conversation import conversation
+    transport_paths = {}
+    if fixed is not None:
+        import importlib, hashlib
+        for module_name in ('mcp.client.streamable_http','mcp.client.session','mcp.shared.dispatcher','mcp.shared.jsonrpc_dispatcher',
+                mcp_tool.sdk_httpx().__name__+'._client',mcp_tool.sdk_httpx().__name__+'._transports.default'):
+            transport_paths[module_name] = Path(importlib.import_module(module_name).__file__)
+    transport_hashes = {name:hashlib.sha256(path.read_bytes()).hexdigest() for name,path in transport_paths.items()}
     endpoint=urlsplit(config['url']);network={'allowed':0,'denied':0,'denied_locations':[]}
     def blocked():
         import traceback
@@ -279,7 +286,26 @@ async def conversation_probe(config):
         return json.loads(messages[0]['content'])
     try:
         assert await asyncio.to_thread(mcp_tool.register_mcp_servers,{observer_name:observer_config})==[observer_tool]
-        await first.start(config);await second.start(config)
+        if fixed is None:
+            await first.start(config);await second.start(config)
+        else:
+            from hermes_connection import connect
+            from unittest.mock import patch
+            grant = dict(port=endpoint.port, certificate=fixed['certificate'],pin=fixed['pin'],
+                expires_at=fixed['expires_at'], bearer=config['headers']['Authorization'].removeprefix('Bearer '))
+            for invalid in ({**grant,'certificate':fixed['other_certificate'],'pin':fixed['other_pin']},
+                            {**grant,'bearer':'candidate-invalid-bearer'}):
+                try:
+                    unexpected = await connect(**invalid)
+                except RuntimeError as exc:
+                    assert str(exc)=='candidate_connection_failed'
+                else:
+                    await unexpected.shutdown()
+                    raise AssertionError('invalid_connection_admitted')
+            # Invalid proxy environment must not be consulted by this connector.
+            with patch.dict(os.environ, {'HTTPS_PROXY':'http://127.0.0.1:1','ALL_PROXY':'http://127.0.0.1:1','NO_PROXY':''}):
+                first = await connect(**grant)
+                second = await connect(**grant)
         async with conversation(first,include=('agent_status','agent_stop'),options=options) as a:
             assert isinstance(a,AIAgent)
             assert a.valid_tool_names=={'tool_search','tool_describe','tool_call'}
@@ -319,6 +345,14 @@ async def conversation_probe(config):
         assert stale.get('error')
         await observer_ok();result['pass_ids'].append('HN005')
         assert set(registry.get_all_tool_names())==baseline|{observer_tool}
+        if fixed is not None:
+            import time
+            expiring = await connect(**{**grant,'expires_at':int(time.time())+2})
+            try:
+                await asyncio.wait_for(asyncio.shield(expiring._task),3)
+                assert expiring.session is None and expiring.session_cleanup_confirmed
+            finally:
+                await expiring.shutdown()
     finally:
         try:await asyncio.gather(first.shutdown(),second.shutdown())
         finally:
@@ -327,6 +361,16 @@ async def conversation_probe(config):
     assert set(registry.get_all_tool_names())==baseline
     assert network['denied']==0
     result['conversation_verified']=True;result['shutdown_complete']=True;result['network_guard']=network
+    if fixed is not None:
+        assert first.session_cleanup_confirmed and second.session_cleanup_confirmed
+        result['fixed_connection_verified']=True
+        result['pass_ids']=[value.replace('HN','HT') for value in result['pass_ids']]
+        result['sdk_transport_not_MCPServerTask']=True
+        result['pass_ids'].extend(['HT006','HT007'])
+        result['pass_ids'].append('HT008')
+        assert transport_hashes == {name:hashlib.sha256(path.read_bytes()).hexdigest() for name,path in transport_paths.items()}
+        result['transport_inputs'] = transport_hashes
+        result['transport_inputs_unchanged'] = True
     print(json.dumps(result),flush=True)
 
 async def main():
@@ -352,7 +396,7 @@ async def main():
         'elicitation': {'enabled': False}}
     if doc.get('conversation') is True:
         assert not interactive and not doc.get('registry') and not doc.get('owned') and not doc.get('binding')
-        await conversation_probe(config)
+        await conversation_probe(config, doc.get('fixed_connection'))
         return
     if doc.get('binding') is True:
         assert not interactive and not doc.get('registry') and not doc.get('owned')

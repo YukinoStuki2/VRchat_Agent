@@ -1,4 +1,4 @@
-# Hermes conversation-bound adapter — uninstalled candidate module
+# Hermes host connection and conversation — uninstalled candidate modules
 
 `clients/hermes_binding.py` is host-side code for the installed Hermes environment,
 not a sidecar dependency or an installed plugin. Importing it starts no process,
@@ -157,3 +157,79 @@ Windows CI compiles both host modules; HC/HN execute in Linux's installed Hermes
 not Windows Hermes. Final independent review, trusted credential delivery,
 user-facing binding/shared-gateway activation, real Unity/model end-to-end work,
 reload continuation and complete VPM/ALCOM remain separate incomplete gates.
+
+## Fixed-target connection (candidate, not installed)
+
+`await hermes_connection.connect(port=..., certificate=..., pin=..., bearer=...,
+expires_at=...)` creates one owned native SDK session. Pass the returned peer to
+`conversation(...)` or `bind(...)` on the same running loop and await its shutdown
+on every path. Import is inert. There is no JSON/CLI receiver or gateway hook.
+
+All arguments come from a **trusted, authenticated host handoff**, not a model,
+chat message or discovered endpoint. This API does NOT authenticate that handoff,
+attest a client's brand/role, verify a remote Unity project, approve a task, start
+a tunnel or mint credentials. The endpoint is constructed, never caller-parsed:
+`https://127.0.0.1:<port>/mcp`. Remote operation requires a separately verified
+loopback tunnel and certificate/role/project binding. No public address is accepted.
+
+The client uses an explicit SSLContext with only the supplied single leaf
+certificate, validates its DER SHA-256 against the handoff pin, rejects CA grants,
+and keeps normal hostname/chain validation and TLS >= 1.2. This is exclusive leaf
+trust, not a separate per-socket certificate-hash hook. No system CA bundle,
+proxy environment, redirect, credential file, OAuth flow or fallback is used.
+The host must suppress unsafe SDK/debug logging and protect its own arguments;
+Python cannot guarantee memory erasure or defend against arbitrary same-process
+code. The caller's references are not erased by clearing the client's headers.
+
+Why use the installed SDK directly? The inspected native `MCPServerTask` hard-codes
+redirect following and inherits proxy environment; its configuration does not
+provide the required fixed-target policy. This module reuses its installed
+Streamable HTTP/ClientSession plus Hermes's `sdk_httpx` compatibility helper,
+not a second HTTP or MCP protocol implementation and not a patched installation.
+The binding's peer interface is `session` plus async `shutdown`; the earlier
+MCPServerTask path remains supported and unchanged.
+
+One dedicated task owns all SDK context entry/exit. Admission waits for initialize
+and a catalog round trip, requires a stateful session and pins its HTTP session ID.
+Request hooks fix URL/method/session, reject resumption and a second GET before
+network I/O. Response hooks reject every redirect, even one with a valid MCP body,
+and changed session IDs. No automatic session recreation or request replay is
+permitted. This does not promise a single TCP socket: the SDK may use separate
+HTTP connections for one session. A broken stream can be detected only when the
+SDK reports it or attempts its blocked retry; there is no independent heartbeat.
+
+Local expiry uses both per-request wall-clock checks and a monotonic idle deadline.
+On expiry or close, `session` is cleared before SDK cleanup; existing bindings then
+refuse stale calls. Already dispatched writes may have an unknown outcome, and no
+rollback is attempted. DELETE alone remains allowed for cleanup after local expiry.
+The server can reject DELETE after actual credential expiry: that is cleanup debt,
+not success. A created session needs an exact successful DELETE receipt; failure
+raises a fixed error rather than adopting the SDK's swallowed termination failure.
+Repeated cancellation waits for owned cleanup, and startup failures expose fixed
+categories. Network I/O is bounded; a blocked event loop/native thread still needs
+host process supervision. Client HTTP headers are cleared after exit.
+
+### Connection verification
+
+```
+INSTALLED_HERMES_PYTHON -I -B -W always::ResourceWarning \
+  tests/hermes_connection_contracts.py /absolute/installed-hermes
+
+PINNED_CANDIDATE_PYTHON -I -B -W always::ResourceWarning \
+  tests/verify_native_clients.py --hermes-connection \
+  --hermes-python /absolute/installed-hermes/venv/bin/python \
+  --hermes-source /absolute/installed-hermes \
+  --codex /absolute/verified-codex-binary \
+  --output evidence/unique-connection-run.json
+```
+
+HE001–HE014 use the real installed SDK/HTTP client with mock HTTP responses; negative
+cases deliberately generate captured SDK diagnostics. HT001–HT008 use real TLS,
+the new connector and real AIAgent construction/executor with fixture tool messages:
+two isolated conversations, a native registered observer, blocked wrong certificate
+and invalid bearer, poisoned proxy environment, and idle-expiry DELETE. The outer
+verifier reconciles three Hermes sessions, observer/Codex sessions, exact calls,
+zero forbidden-network attempts, secret scans and process/port/HOME cleanup.
+No model request, real Unity instance, remote handoff or gateway activation occurs.
+Windows CI only syntax-compiles the host modules; these contracts/native scenarios
+remain Linux evidence. Final independent review and complete VPM/ALCOM are pending.

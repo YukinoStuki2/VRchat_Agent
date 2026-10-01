@@ -2,6 +2,13 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
+## Hermes 固定目标连接（候选源码，未安装）
+
+- `clients/hermes_connection.py` 接收可信宿主已交付的内存凭据，固定 `127.0.0.1` HTTPS `/mcp`，独占单叶证书信任并核对输入pin，禁CA授权/环境代理/重定向/SDK流重试与续传。复用安装Hermes的MCP SDK与HTTP库，而非修改原生MCPServerTask的全局行为；原binding/conversation直接复用它的peer接口。
+- 单任务持有SDK生命周期，初始化与目录回合完成后才准入；HTTP会话ID固定，空会话/换ID拒绝。到期主动关闭，重复取消等待精确清理，DELETE失败不再按SDK静默返回冒称清理成功。旧绑定会因peer.session清空而拒绝调用，不自动注销仍由宿主持有的agent快照，不自动停止模型turn。
+- HE001–HE014真实SDK＋HTTP替身通过；HT001–HT008真实TLS/原生AIAgent执行器＋fixture消息通过，含错证书、错bearer、污染代理环境与闲置到期。修复前RED保留：输入准入、到期、路由/重试、会话替换、DELETE失败、初始化未完成即ready、连续取消、HTTP构造异常、无状态会话、307携合法MCP正文和CA授权。HE011/HE012首次通过的characterization单列。
+- 不改变现用Hermes/QQ、Unity工程或权限门控，不发送模型请求。可信跨机交付、用户绑定/网关激活、真实项目身份/人审、重载续接、独立复核与完整VPM/ALCOM仍未实现/验收。实现冻结、回归和CI读回在本轮结项证据另记，未提前声称完成。
+
 ## Hermes 新会话构造（候选源码，未安装）
 
 - 新增 `clients/hermes_conversation.py`：以原生AIAgent构造、enabled_toolsets与随机运行时session_id装入当前绑定；保留原生搜索/描述/调用入口。构造返回前核对工具与身份、深复制schema，不热改已有agent或继承历史授权。

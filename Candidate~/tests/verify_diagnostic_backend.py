@@ -17,6 +17,8 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def verify_payload(moved, work, report):
+    # Canonicalize only this driver-owned build output (CI TEMP may be 8.3).
+    moved=moved.resolve(strict=True)
     processes=[]
     sys.path.insert(0,str(moved/'diagnostics'))
     import server,snapshot

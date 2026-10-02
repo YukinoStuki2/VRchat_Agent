@@ -19,6 +19,25 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP014_owned_relocation_alias_is_canonicalized_before_comparison(self):
+        import sys
+        from types import SimpleNamespace
+        spec=importlib.util.spec_from_file_location('diagnostic_verifier',ROOT/'tests/verify_diagnostic_backend.py')
+        m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        with tempfile.TemporaryDirectory(prefix='owned-relocation-alias-') as td:
+            actual=Path(td)/'real';actual.mkdir()
+            # The driver passes only its own build output, never a source-root claim.
+            claimed=actual/'..'/'real'
+            server=SimpleNamespace(ENTRY=actual.resolve()/'diagnostics-backend/filesystem/dist/index.js')
+            def reached_backend():raise RuntimeError('reached_bundle_validation')
+            server.bundled_node=reached_backend
+            previous=list(sys.path)
+            try:
+                with patch.dict(sys.modules,{'server':server,'snapshot':SimpleNamespace()}):
+                    with self.assertRaisesRegex(RuntimeError,'reached_bundle_validation'):
+                        m.verify_payload(claimed,Path(td),{})
+            finally:sys.path[:]=previous
+
     def test_VP013_windows_portable_requires_pinned_diagnostic_payload(self):
         workflow=(ROOT.parent/'.github/workflows/candidate-portable.yml').read_text(encoding='utf-8')
         self.assertIn('--node-archive $nodeArchive',workflow)

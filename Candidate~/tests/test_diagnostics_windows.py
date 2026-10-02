@@ -261,7 +261,7 @@ class WindowsBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='dw-transport-') as temp:
             root = Path(temp) / 'snapshot'
             root.mkdir()
-            with patch.object(server.sys, 'platform', 'win32'), patch.object(server.shutil, 'which', return_value='C:\\nodejs\\node.exe'):
+            with patch.object(server.sys, 'platform', 'win32'), patch.object(server, 'bundled_node', return_value=Path('C:\\nodejs\\node.exe')):
                 transport = server.backend_transport(root)
             self.assertEqual(transport.command, 'C:\\nodejs\\node.exe')
             self.assertEqual(transport.args, [str(server.ENTRY), str(root)])

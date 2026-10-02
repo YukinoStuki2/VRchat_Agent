@@ -4,9 +4,10 @@ No network listener or automatic startup. The local CLI owns capture lifetime
 and preview approval. Legacy embedding callers still own that local boundary.
 Packaging and real Windows lifecycle validation remain pending.
 """
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import hashlib
+import json
 import os
-import shutil
 import sys
 
 from fastmcp import Client, FastMCP
@@ -16,8 +17,7 @@ from fastmcp.server.providers.proxy import ProxyProvider
 from fastmcp.server.middleware import Middleware
 from fastmcp.server.transforms import Visibility
 
-ENTRY = (Path(__file__).resolve().parents[2] / 'Experiments~/p0.2/filesystem/'
-         'fs01-candidate/src/filesystem/dist/index.js')
+ENTRY = Path(__file__).resolve().parents[1] / 'diagnostics-backend/filesystem/dist/index.js'
 READ_TOOLS = {'read_text_file', 'list_directory', 'get_file_info'}
 
 
@@ -60,25 +60,54 @@ class LocalSnapshotLease(Middleware):
         return result
 
 
-def backend_transport(root):
-    if sys.platform == 'win32':
-        node = shutil.which('node.exe')
-        if not node:
-            raise ValueError('local_node_executable_required')
-        # SDK keeps only its documented OS environment allowlist, not arbitrary
-        # NODE_OPTIONS/API keys. Explicitly relocate profile/temp into this lease.
-        env = {key: str(root.parent) for key in ('HOME', 'USERPROFILE', 'APPDATA',
-               'LOCALAPPDATA', 'TEMP', 'TMP')}
-        env['SYSTEMROOT'] = os.environ.get('SYSTEMROOT', '')
-        env['PATH'] = os.path.dirname(node)
-        return StdioTransport(command=node, args=[str(ENTRY), str(root)],
-                              env=env, cwd=str(root), keep_alive=False)
-    env = {'PATH': '/usr/bin:/bin', 'HOME': str(root.parent),
-           'TMPDIR': str(root.parent), 'LANG': 'C.UTF-8'}
-    return StdioTransport(command='/usr/bin/env',
-        args=['-i', *[f'{k}={v}' for k, v in env.items()], '/usr/bin/node', str(ENTRY), str(root)],
-        env=env, cwd=str(root), keep_alive=False)
+def bundled_node():
+    """Payload integrity, not an OS sandbox or an independent approval signature."""
+    base = ENTRY.parents[2]
+    try:
+        inventory = json.loads((base/'inventory.json').read_bytes())
+        key = 'windows-x86_64' if sys.platform == 'win32' else 'linux-x86_64'
+        pins = json.loads((Path(__file__).resolve().parents[1]/'distribution/diagnostics-backend.lock.json').read_bytes())
+        executable = 'node/node.exe' if sys.platform == 'win32' else 'node/node'
+        if (inventory['schema'] != 1 or inventory['platform'] != key or
+                inventory['node_archive_sha256'] != pins['platforms'][key]['sha256'] or
+                inventory['source_inputs'] != pins['inputs'] or
+                inventory['node_version'] != pins['node_version'] or
+                inventory['upstream_commit'] != pins['upstream_commit'] or
+                inventory['node_executable'] != executable or
+                inventory['entry'] != 'filesystem/dist/index.js' or
+                inventory['missing_notice_packages'] != []):
+            raise ValueError()
+        files = inventory['files']
+        if not isinstance(files,dict) or not {executable,'filesystem/dist/index.js'} <= files.keys():
+            raise ValueError()
+        if base.is_symlink() or any(p.is_symlink() for p in base.rglob('*')):
+            raise ValueError()
+        actual = {p.relative_to(base).as_posix() for p in base.rglob('*') if p.is_file()}
+        if actual != set(files) | {'inventory.json'}:
+            raise ValueError()
+        for name,digest in files.items():
+            path=PurePosixPath(name)
+            if (str(path)!=name or path.is_absolute() or '..' in path.parts or
+                    '\\' in name or ':' in name or
+                    hashlib.sha256((base/path).read_bytes()).hexdigest()!=digest):
+                raise ValueError()
+        return base/executable
+    except (OSError, KeyError, TypeError, ValueError):
+        raise ValueError('bundled_diagnostic_backend_invalid') from None
 
+
+def backend_transport(root):
+    node = bundled_node()
+    # Native executable on both platforms; no env shell or PATH fallback.
+    # SDK merges only OS essentials; NODE_OPTIONS/credentials are not inherited.
+    env = {key: str(root.parent) for key in ('HOME','USERPROFILE','APPDATA',
+        'LOCALAPPDATA','TEMP','TMP','TMPDIR')}
+    env['PATH'] = str(node.parent)
+    env['LANG'] = 'C.UTF-8'
+    if sys.platform == 'win32':
+        env['SYSTEMROOT'] = os.environ.get('SYSTEMROOT','')
+    return StdioTransport(command=str(node),args=[str(ENTRY),str(root)],
+        env=env,cwd=str(root),keep_alive=False)
 
 def create_server(snapshot, *, approved_digest=None):
     if not snapshot.valid() or not ENTRY.is_file():

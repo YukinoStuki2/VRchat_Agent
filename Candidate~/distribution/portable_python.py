@@ -96,7 +96,7 @@ def write_launch_descriptor(package, platform_key, version):
         json.dump({'schema':1, 'platform':platform_key, 'python_version':version, 'files':files}, output, indent=2)
 
 
-def build(archive, destination, wheelhouse=None):
+def build(archive, destination, wheelhouse=None, node_archive=None):
     """Task-owned dev directory only. No ZIP, VPM, config or existing env writes."""
     system = platform.system().lower()
     if platform.machine().lower() not in ('x86_64', 'amd64') or system not in ('linux', 'windows'):
@@ -152,8 +152,17 @@ def build(archive, destination, wheelhouse=None):
             target = package/'Runtime~/python-notices'/name
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)
         shutil.copytree(evidence/'wheel-notices', package/'Runtime~/wheel-notices')
+        diagnostic = None
+        if node_archive is not None:
+            backend = load('portable_diagnostic_backend', ROOT/'distribution/diagnostic_backend.py')
+            diagnostic = backend.build(node_archive, package/'Runtime~/diagnostics-backend')
+            if diagnostic['missing_notice_packages']:
+                raise ValueError('diagnostic_notices_incomplete')
+            shutil.copyfile(package/'Runtime~/diagnostics-backend/inventory.json',
+                evidence/'diagnostic-backend-inventory.json')
         write_launch_descriptor(package, key, pins['python_version'])
         result = {'scope': 'Local portable development runtime, not product/Unity acceptance',
+            'diagnostics_included': diagnostic is not None,
             'platform': key, 'dependency_source': 'offline-wheelhouse' if wheelhouse else 'pypi', 'python_archive_sha256': pin['sha256'], 'python_release': pins['release'],
             'executable': str(executable.relative_to(destination)), 'python_identity': observed,
             'python_notice_records': len(pin['licenses']),

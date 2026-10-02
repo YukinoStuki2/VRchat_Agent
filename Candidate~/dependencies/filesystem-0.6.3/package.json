@@ -1,0 +1,17 @@
+{
+  "name": "p02-filesystem-fixed-source-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local build of f46d9578190b476b3501923ea8977d899e8db2cb; NOT an npm server release",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "diff": "8.0.4",
+    "glob": "13.0.6",
+    "minimatch": "10.2.5",
+    "zod": "4.4.3",
+    "typescript": "5.9.3",
+    "@types/node": "22.19.21",
+    "@types/diff": "5.2.3",
+    "@types/minimatch": "5.1.2"
+  }
+}

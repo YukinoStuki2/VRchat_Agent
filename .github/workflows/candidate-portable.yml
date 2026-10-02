@@ -4,6 +4,8 @@ on:
     branches: [candidate-alcom-20260928]
     paths:
       - 'Candidate~/distribution/**'
+      - 'Candidate~/diagnostics/**'
+      - 'Candidate~/dependencies/filesystem-0.6.3/**'
       - 'Candidate~/runtime/**'
       - 'Candidate~/launcher/**'
       - 'Candidate~/package/**'
@@ -62,8 +64,14 @@ jobs:
           if (Test-Path $archive) { throw 'archive_already_exists' }
           Invoke-WebRequest -Uri $pin.url -OutFile $archive
           if ((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower() -ne $pin.sha256) { throw 'archive_hash' }
+          $nodePins = Get-Content Candidate~/distribution/diagnostics-backend.lock.json -Raw | ConvertFrom-Json
+          $nodePin = $nodePins.platforms.'windows-x86_64'
+          $nodeArchive = Join-Path $env:RUNNER_TEMP candidate-node-download.zip
+          if (Test-Path $nodeArchive) { throw 'node_archive_already_exists' }
+          Invoke-WebRequest -Uri $nodePin.url -OutFile $nodeArchive
+          if ((Get-FileHash -Algorithm SHA256 $nodeArchive).Hash.ToLower() -ne $nodePin.sha256) { throw 'node_archive_hash' }
           $dotnet = (Get-Command dotnet).Source
-          python -I -B -W always::ResourceWarning Candidate~/tests/verify_portable.py --archive $archive --dotnet $dotnet --output artifacts/portable.json 2>&1 | Tee-Object artifacts/portable-tests.txt
+          python -I -B -W always::ResourceWarning Candidate~/tests/verify_portable.py --archive $archive --node-archive $nodeArchive --dotnet $dotnet --output artifacts/portable.json 2>&1 | Tee-Object artifacts/portable-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Read back cleanup and freeze
         if: always()
@@ -71,6 +79,8 @@ jobs:
         run: |
           $archive = Join-Path $env:RUNNER_TEMP candidate-portable-download.tar.gz
           if (Test-Path $archive) { Remove-Item -LiteralPath $archive }
+          $nodeArchive = Join-Path $env:RUNNER_TEMP candidate-node-download.zip
+          if (Test-Path $nodeArchive) { Remove-Item -LiteralPath $nodeArchive }
           $before = Get-Content artifacts/source-before.json -Raw | ConvertFrom-Json -AsHashtable
           $after = @{}
           foreach ($file in $before.Keys) { $after[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower() }
@@ -78,8 +88,8 @@ jobs:
           $different = @($before.Keys | Where-Object { $before[$_] -ne $after[$_] })
           $result = if (Test-Path artifacts/portable.json) { Get-Content artifacts/portable.json -Raw | ConvertFrom-Json } else { $null }
           $absent = ($null -ne $result) -and $result.temporary_root_absent -and -not (Test-Path -LiteralPath $result.temporary_root)
-          @{ archive_absent = -not (Test-Path $archive); temporary_root_absent = $absent; source_unchanged = ($different.Count -eq 0) } | ConvertTo-Json | Set-Content artifacts/cleanup.json
-          if ($different.Count -ne 0 -or -not $absent -or -not $result.passed) { throw 'portable_acceptance_not_complete' }
+          @{ node_archive_absent = -not (Test-Path $nodeArchive); archive_absent = -not (Test-Path $archive); temporary_root_absent = $absent; source_unchanged = ($different.Count -eq 0) } | ConvertTo-Json | Set-Content artifacts/cleanup.json
+          if ($different.Count -ne 0 -or -not $absent -or -not $result.passed -or -not $result.build.diagnostics_included -or -not $result.diagnostic.result.native_read_write_denial_revoke_passed -or -not $result.diagnostic.result.tamper_rejected) { throw 'portable_acceptance_not_complete' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

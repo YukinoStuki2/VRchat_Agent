@@ -19,6 +19,10 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP010_builder_has_explicit_pinned_diagnostic_input(self):
+        import inspect
+        self.assertIn('node_archive',inspect.signature(module().build).parameters)
+
     def test_PP009_launch_descriptor_pins_fixed_entry_bytes(self):
         m=module()
         self.assertTrue(hasattr(m, 'write_launch_descriptor'), 'portable launch descriptor missing')

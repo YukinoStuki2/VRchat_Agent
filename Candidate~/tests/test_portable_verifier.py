@@ -19,6 +19,27 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP013_windows_portable_requires_pinned_diagnostic_payload(self):
+        workflow=(ROOT.parent/'.github/workflows/candidate-portable.yml').read_text(encoding='utf-8')
+        self.assertIn('--node-archive $nodeArchive',workflow)
+        self.assertIn('diagnostics-backend.lock.json',workflow)
+        self.assertIn('$result.build.diagnostics_included',workflow)
+        self.assertIn('$result.diagnostic.result.native_read_write_denial_revoke_passed',workflow)
+        self.assertIn('node_archive_absent',workflow)
+
+    def test_VP012_linux_never_counts_windows_console_as_executed(self):
+        m=driver()
+        self.assertTrue(hasattr(m,'regression_arguments'), 'platform-specific test selection missing')
+        with patch.object(m.sys,'platform','linux'):
+            selected=m.regression_arguments('test_private_process_pipes.py')
+        self.assertEqual(selected, [
+            'PrivatePipes.test_PP001_owned_child_roundtrip_preserves_private_pipe_ownership',
+            'PrivatePipes.test_PP002_reader_is_bounded_and_cancellable',
+            'PrivatePipes.test_PP003_visible_console_is_explicit_and_never_mixed_with_stdio'])
+        with patch.object(m.sys,'platform','win32'):
+            self.assertEqual(m.regression_arguments('test_private_process_pipes.py'), [])
+        self.assertEqual(m.regression_arguments('test_editor_owner.py'), [])
+
     def test_VP006_ci_exercises_new_private_pipe_and_delivery_contracts(self):
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
         self.assertTrue(workflow.count('tests/test_private_process_pipes.py') >= 3, 'pipe suite must run and be hash-frozen before/after')

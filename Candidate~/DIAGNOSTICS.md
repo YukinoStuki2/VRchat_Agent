@@ -1,5 +1,14 @@
 # 独立诊断：Windows实现增量与本地操作者CLI
 
+## 2026-10-02 自包含诊断分发增量（非完整产品批准）
+
+- `distribution/diagnostic_backend.py`使用锁定Node 22.23.1归档及既有filesystem 0.6.3修正版；构建期`npm ci --ignore-scripts`恢复精确依赖，保留完整许可文件和清单。运行时不执行npm、不下载、不借系统Node或实验目录。
+- `diagnostics/server.py`只解析包内`diagnostics-backend`；入口、Node、全部依赖字节及清单关系不符即拒绝。它是完整性检查，不是签名或同用户/管理员沙箱，能一起替换文件和清单的主体仍不在保证内。
+- Linux真实搬迁后MCP读取、越界和隐藏writer拒绝、撤权、篡改拒绝通过；组合便携Python的默认包相对C#入口、TLS/MCP及停止/Dispose也已通过。首轮Linux驱动误纳入Windows专用控制台测试而失败，现按平台明确选择；Windows仍必须执行实际控制台测试，未降低跳过门槛。
+- 组合构建可显式传入`node_archive`，构建证据同时保留后端完整inventory及许可摘要；没有Node归档的开发构建不含诊断，不可充当完整候选。
+- Windows组合构建及stdio诊断正在接入候选CI，尚未验收。独立诊断仍需可信本地控制台批准；不提供无控制台自动同意。SDK子进程正常退出证据不等于崩溃/断电清扫。
+- 下方实验目录/PATH启动与尚未打包的叙述是历史状态。没有完整VPM、ALCOM交付或最终独立批准；现用Hermes/Codex与真实工程不动。
+
 ## 2026-09-29续接提示（优先于下方历史状态）
 
 - Windows第三次真实内核run `36461636092` 在 `512f9a2` 上7/7通过、0skip；artifact digest、输入hash、HANDLE关闭及fixture删除均父级核对。只修自建fixture短路径并给每个负例正常读取对照，生产规则未放宽。见 `evidence/diagnostics-windows-parent-acceptance.json`；旧两次失败仍保留。此测试修正没有独立批准。

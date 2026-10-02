@@ -56,11 +56,22 @@ def recorded_directory(report, output):
         output.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')
 
 
+def regression_arguments(suite):
+    # The real console case remains mandatory on Windows; Linux cannot execute it.
+    if suite == 'test_private_process_pipes.py' and sys.platform == 'linux':
+        return [
+            'PrivatePipes.test_PP001_owned_child_roundtrip_preserves_private_pipe_ownership',
+            'PrivatePipes.test_PP002_reader_is_bounded_and_cancellable',
+            'PrivatePipes.test_PP003_visible_console_is_explicit_and_never_mixed_with_stdio']
+    return []
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--archive',required=True,type=Path)
     parser.add_argument('--dotnet',required=True,type=Path)
     parser.add_argument('--wheelhouse', type=Path)
+    parser.add_argument('--node-archive',type=Path)
     parser.add_argument('--output',required=True,type=Path)
     args=parser.parse_args()
     if args.output.exists():raise FileExistsError(args.output)
@@ -75,7 +86,7 @@ def main():
         return {str(p.relative_to(folder)): ('link:'+os.readlink(p) if p.is_symlink() else hashlib.sha256(p.read_bytes()).hexdigest()) for p in folder.rglob('*') if p.is_file() or p.is_symlink()}
     report={'scope':'Parent isolated portable CPython, locks and C# process/SDK; synthetic Unity wire, not Unity/product approval','passed':False}
     with recorded_directory(report, args.output) as work:
-        built=module.build(args.archive,work/'initial',wheelhouse=args.wheelhouse)
+        built=module.build(args.archive,work/'initial',wheelhouse=args.wheelhouse,node_archive=args.node_archive)
         relocated=work/'relocated';(work/'initial').rename(relocated)
         executable=relocated/built['executable']
         before=inventory(relocated/'package')
@@ -85,6 +96,23 @@ def main():
         assert report['relocated_identity']['prefix']==str(executable.parent if os.name=='nt' else executable.parent.parent)
         report['relocation_verified']=True
         env=module.clean_environment(work)
+        if args.node_archive is not None:
+            diagnostic_inventory=relocated/'evidence/diagnostic-backend-inventory.json'
+            assert diagnostic_inventory.is_file(),'diagnostic_provenance_not_retained'
+            report['diagnostic_inventory']=json.loads(diagnostic_inventory.read_bytes())
+            assert not report['diagnostic_inventory']['missing_notice_packages']
+            diagnostic_output=work/'diagnostic-check.json'
+            probe=('import importlib.util,json;from pathlib import Path;'
+                's=importlib.util.spec_from_file_location("diagnostic_check",'+repr(str(ROOT/'tests/verify_diagnostic_backend.py'))+');'
+                'm=importlib.util.module_from_spec(s);s.loader.exec_module(m);r={};'
+                'm.verify_payload(Path('+repr(str(relocated/'package/Runtime~'))+'),Path('+repr(str(work.resolve()))+'),r);'
+                'Path('+repr(str(diagnostic_output))+').write_text(json.dumps(r),encoding="utf-8")')
+            diagnostic_run=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning','-c',probe],
+                env=env,capture_output=True,text=True,timeout=60)
+            report['diagnostic']={'exit_code':diagnostic_run.returncode,'stdout':diagnostic_run.stdout,'stderr':diagnostic_run.stderr}
+            assert diagnostic_run.returncode==0 and 'ResourceWarning:' not in diagnostic_run.stderr
+            report['diagnostic']['result']=json.loads(diagnostic_output.read_bytes())
+            assert report['diagnostic']['result']['native_read_write_denial_revoke_passed'] and report['diagnostic']['result']['tamper_rejected']
         out=work/'dotnet';csproj=ROOT/'tests/unity-core/EditorBootstrapCases.csproj'
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
         build=compile_fixture(command,env,report)
@@ -118,8 +146,8 @@ def main():
         report['regressions']=[]
         suites=['test_run_identity.py','test_bootstrap_runtime.py','test_owned_launcher.py','test_editor_owner.py','test_private_process_pipes.py','test_editor_delivery.py','test_tls_windows.py' if os.name=='nt' else 'test_tls_context.py']
         for suite in suites:
-            result=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',str(ROOT/'tests'/suite)],env=env,capture_output=True,text=True,timeout=120)
-            report['regressions'].append({'suite':suite,'code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
+            result=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',str(ROOT/'tests'/suite),*regression_arguments(suite),'-v'],env=env,capture_output=True,text=True,timeout=120)
+            report['regressions'].append({'suite':suite,'selected_methods':regression_arguments(suite) or 'all', 'code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
             assert result.returncode==0 and 'ResourceWarning' not in result.stderr and 'skipped=' not in result.stderr,result.stderr
         # Keep real pip/installed/notice records, not only counts.
         for item in (relocated/'evidence').iterdir():

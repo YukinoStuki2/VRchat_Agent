@@ -112,8 +112,11 @@ class WindowsDiagnosticConsole(unittest.TestCase):
                 channels.extend((readin, writein, writeout))
                 worker = threading.Thread(target=drain, args=(readout,))
                 worker.start()
+                # CREATE_NO_WINDOW provides an invisible console on this runner.
+                # Explicitly detach it: absence and our visible fixture are distinct cases.
                 attach = ('import win32console,json,sys;'
-                    'print("CONSOLE_FIXTURE_BEFORE="+json.dumps(win32console.GetConsoleProcessList()),file=sys.stderr,flush=True);')
+                    'print("CONSOLE_FIXTURE_BEFORE="+json.dumps(win32console.GetConsoleProcessList()),file=sys.stderr,flush=True);'
+                    'win32console.FreeConsole();')
                 if mode != 'detached':
                     attach += 'win32console.AttachConsole(' + str(os.getpid()) + ');'
                 attach += 'print("CONSOLE_FIXTURE_BOOTSTRAP_READY",file=sys.stderr,flush=True);'

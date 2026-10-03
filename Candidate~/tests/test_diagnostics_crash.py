@@ -141,7 +141,11 @@ class CrashSnapshotTests(unittest.TestCase):
             keeper_handle = None
             try:
                 line = ready.get(timeout=15)
-                self.assertTrue(line, 'capture failed before readiness')
+                if not line:
+                    _, startup_stderr = process.communicate(timeout=15)
+                    # This child has only synthetic inputs and a scrubbed environment.
+                    self.fail('capture failed before readiness: exit=' + str(process.returncode)
+                        + '; stderr=' + startup_stderr[:8192].decode('utf8', 'replace'))
                 data = json.loads(line)
                 root = Path(data['root'])
                 self.assertTrue(root.is_relative_to(private))

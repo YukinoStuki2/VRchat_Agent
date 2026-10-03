@@ -262,6 +262,28 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         await data(role,'agent_stop',{'task_id':'scene-task'})
                         assert await plans()==[]
                         report['native_scene_pass_ids'].append(ident)
+                    report['native_hierarchy_pass_ids']=[]
+                    hierarchy_prepare={'task_id':'hierarchy-task','operations':[{'command':'manage_scene','action':'get_hierarchy'}],
+                                       'targets':['Scenes'],'ttl_seconds':120}
+                    for role,other,ident in (('hermes','codex','NH001'),('codex','hermes','NH002')):
+                        report['approved_stage']='hierarchy_'+role
+                        hierarchy_args={'action':'get_hierarchy','page_size':2,'include_transform':True}
+                        plan=await data(role,'agent_prepare',hierarchy_prepare);await denied(role,'manage_scene',hierarchy_args)
+                        plan=await data(role,'agent_prepare',hierarchy_prepare);await approve(plan)
+                        await denied(other,'manage_scene',hierarchy_args)
+                        first=await data(role,'manage_scene',hierarchy_args);last=await data(role,'manage_scene',{**hierarchy_args,'cursor':2})
+                        assert first['total']==3 and first['next_cursor']=='2' and len(first['items'])==2
+                        assert not last['truncated'] and last['next_cursor'] is None and len(last['items'])==1
+                        assert len({x['instanceID'] for x in first['items']+last['items']})==3
+                        children=await data(role,'manage_scene',{**hierarchy_args,'parent':11})
+                        assert children['scope']=='children' and children['items'][0]['instanceID']==44
+                        await pause_resume(role,plan,'manage_scene',hierarchy_args)
+                        await denied(role,'manage_scene',{**hierarchy_args,'parent':'11'})
+                        plan=await data(role,'agent_prepare',hierarchy_prepare);await approve(plan)
+                        await data(role,'agent_stop',{'task_id':'hierarchy-task'})
+                        await denied(role,'manage_scene',hierarchy_args);assert await plans()==[]
+                        report['native_hierarchy_pass_ids'].append(ident)
+                    assert report['native_hierarchy_pass_ids']==['NH001','NH002']
                     read_plans={}
                     report['approved_stage']='NA001_signed_local_plans'
                     for role in ('hermes','codex'):

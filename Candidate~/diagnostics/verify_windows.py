@@ -57,7 +57,7 @@ def main(argv=None):
     from tests import test_diagnostics_windows_kernel as cases
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(cases.WindowsKernelTests)
     ids = sorted(test.id() for test in suite)
-    files = [BASE / 'diagnostics/windows_handles.py', BASE / 'diagnostics/snapshot.py',
+    files = [BASE / 'diagnostics/windows_handles.py', BASE / 'diagnostics/snapshot.py', BASE / 'diagnostics/lifetime.py',
              BASE / 'diagnostics/verify_windows.py', BASE / 'tests/test_diagnostics_windows_kernel.py']
     def hashes():
         return {str(p.relative_to(BASE)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}

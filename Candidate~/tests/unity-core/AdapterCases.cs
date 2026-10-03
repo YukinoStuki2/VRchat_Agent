@@ -124,6 +124,31 @@ internal static class AdapterCases
     EditorApplication.isCompiling=false;Check(!(bool)call(sr)["success"],"compile auto-restored grant");
    } finally {EditorApplication.isCompiling=false;CommandRegistry.Implementation=originalHandler;gate.SetCapability("manage_scene","get_active",false);}
    Console.WriteLine("PASS UA010 scene scope/catalog/compile readiness through actual local adapter, Unity APIs doubled");
+   EditorGUILayout.NextToggle=sceneName+"  manage_scene/get_hierarchy";gui.Invoke(window,null);
+   Check(gate.Allows("manage_scene","get_hierarchy"),"hierarchy local catalog switch");
+   sp["body"]["operations"][0]["action"]="get_hierarchy";
+   originalHandler=CommandRegistry.Implementation;
+   try {
+    CommandRegistry.Implementation=(cmd,a)=>new MCPForUnity.Editor.Helpers.SuccessResponse("children fixture",new {scope="children",cursor=0,pageSize=2,next_cursor=(string)null,truncated=false,total=0,items=new object[0]});
+    Action<bool,string> parentCase=(allowed,why)=>{
+     var hp=call(sp);Check((bool)hp["success"],"hierarchy prepare");Check(gate.Approve((string)hp["data"]["plan_id"],(string)hp["data"]["digest"]),"hierarchy approve");
+     var hq=Wire("execute",(string)hp["data"]["plan_id"]);hq["body"]=JObject.Parse("{\"command\":\"manage_scene\",\"params\":{\"action\":\"get_hierarchy\",\"pageSize\":2,\"parent\":123}}");
+     int count=CommandRegistry.Calls;Check((bool)call(hq)["success"]==allowed,why);Check(CommandRegistry.Calls==count+(allowed?1:0),"denial must precede native read: "+why);
+    };
+    var current=UnityEditor.SceneManagement.EditorSceneManager.Current;
+    var go=new GameObject{scene=current};MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;
+    parentCase(true,"same active scene permitted");
+    go.Persistent=true;parentCase(false,"persistent prefab asset must not be a live hierarchy parent");go.Persistent=false;
+    go.scene=new UnityEngine.SceneManagement.Scene{Id=2,isLoaded=true};parentCase(false,"other scene rejected");
+    go.scene=new UnityEngine.SceneManagement.Scene{Id=1,isLoaded=false};parentCase(false,"unloaded rejected");
+    go.scene=default;parentCase(false,"invalid scene rejected");
+    MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=new UnityEngine.Object();parentCase(false,"component or unknown object rejected");
+    MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;parentCase(false,"stale ID rejected");
+    var stage=new UnityEngine.SceneManagement.Scene{Id=3,isLoaded=true};UnityEditor.SceneManagement.PrefabStageUtility.Current=new UnityEditor.SceneManagement.PrefabStage{scene=stage};
+    go.scene=stage;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;parentCase(true,"prefab stage exact parent");
+    go.scene=current;parentCase(false,"main scene not stage parent");
+   } finally {CommandRegistry.Implementation=originalHandler;UnityEditor.SceneManagement.PrefabStageUtility.Current=null;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;gate.SetCapability("manage_scene","get_hierarchy",false);}
+   Console.WriteLine("PASS UA011 final adapter confines native hierarchy parent to nonpersistent GameObject in exact active scene/stage");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

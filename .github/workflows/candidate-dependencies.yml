@@ -89,6 +89,7 @@ jobs:
           assert len(methods)==7 and {m.split('.test_')[1].split('_')[0] for m in methods}=={f'CB{i:03d}' for i in range(1,8)}
           report={'scope':'Signed SDK clients and net8 production gates; fixture backend, not native clients/Unity/human approval','rows':[]}
           target=pathlib.Path('dependency-evidence/client-binding-results.json')
+          expected_console_ids={f'RT{i:03d}' for i in range(15,25)}
           dotnet=shutil.which('dotnet');assert dotnet
           try:
               with tempfile.TemporaryDirectory(prefix='candidate-client-binding-') as td:
@@ -149,10 +150,10 @@ jobs:
                   result=subprocess.run([dotnet,str(work/'scene-bin/Release/net8.0/SceneNativeCases.dll')],capture_output=True,text=True,timeout=30)
                   report['scene_native']={'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,
                       'ids':sorted(re.findall(r'^PASS (NS[0-9]{3}) ',result.stdout,re.M))}
-                  assert result.returncode==0 and report['scene_native']['ids']==[f'NS{i:03d}' for i in range(1,5)]
+                  assert result.returncode==0 and report['scene_native']['ids']==[f'NS{i:03d}' for i in range(1,9)]
                   console_methods=[cls.name+'.'+m.name for cls in ast.parse((root/'tests/test_runtime.py').read_text(encoding='utf-8')).body
-                      if isinstance(cls,ast.ClassDef) for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_RT') and m.name.split('_')[1] in ('RT015','RT016','RT017','RT018','RT019','RT020','RT021')]
-                  assert len(console_methods)==7
+                      if isinstance(cls,ast.ClassDef) for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_RT') and m.name.split('_')[1] in expected_console_ids]
+                  assert len(console_methods)==len(expected_console_ids) and {m.split('.test_')[1].split('_')[0] for m in console_methods}==expected_console_ids
                   report['console_runtime']=[]
                   for method in console_methods:
                       code="import sys,runpy;sys.path[:0]="+repr([str(root/'dependencies/mcp-1.29.1'),str(root/'tests')])+";sys.argv=["+repr(str(root/'tests/test_runtime.py'))+", "+repr(method)+"];runpy.run_path(sys.argv[0],run_name='__main__')"
@@ -164,7 +165,7 @@ jobs:
                   assert all(hashlib.sha256((native/name).read_bytes()).hexdigest()==digest for name,digest in native_hashes.items())
           finally:
               report['owned_build_directory_absent']='td' in globals() and not pathlib.Path(td).exists()
-              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and report.get('scene_native',{}).get('ids')==[f'NS{i:03d}' for i in range(1,5)] and report.get('scene_native',{}).get('exit_code')==0 and len(report.get('console_runtime',[]))==7 and all(x['passed'] for x in report['console_runtime'])
+              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and report.get('scene_native',{}).get('ids')==[f'NS{i:03d}' for i in range(1,9)] and report.get('scene_native',{}).get('exit_code')==0 and sorted(x['method'].split('.test_')[1].split('_')[0] for x in report.get('console_runtime',[]))==sorted(expected_console_ids) and sorted(x['method'] for x in report['console_runtime'])==sorted(console_methods) and all(x['passed'] for x in report['console_runtime'])
               target.write_text(json.dumps(report,indent=2),encoding='utf-8')
           assert report['passed']
       - name: Collect actual locked Windows LICENSE and NOTICE files

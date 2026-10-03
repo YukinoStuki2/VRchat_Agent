@@ -41,5 +41,27 @@ class DiagnosticsCIContract(unittest.TestCase):
         self.assertIn('ResourceWarning', result.stdout + result.stderr)
 
 
+    def test_DCI003_lifetime_gate_tracks_every_crash_case(self):
+        tree = ast.parse((BASE / 'tests/test_diagnostics_crash.py').read_text(encoding='utf-8'))
+        ids = sorted(re.match(r'test_(DX[0-9]+)_', n.name).group(1) for n in ast.walk(tree)
+                     if isinstance(n, ast.FunctionDef) and n.name.startswith('test_DX'))
+        job = WORKFLOW.read_text(encoding='utf-8').split('Capture-owner termination', 1)[1]
+        self.assertIn('Ran ' + str(len(ids)) + ' tests', job)
+        for name in ids:
+            self.assertIn("'" + name + "'", job)
+        portable = (BASE / 'tests/verify_portable.py').read_text(encoding='utf-8')
+        self.assertIn('Ran ' + str(len(ids)) + ' tests', portable)
+
+    def test_DCI004_windows_executes_all_cleanup_retry_cases(self):
+        tree = ast.parse((BASE / 'tests/test_diagnostics_lifetime_retry.py').read_text(encoding='utf-8'))
+        methods = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test_DL_R1_')]
+        job = WORKFLOW.read_text(encoding='utf-8').split('Capture-owner termination', 1)[1]
+        self.assertIn('tests/test_diagnostics_lifetime_retry.py', job)
+        self.assertIn('Ran ' + str(len(methods)) + ' tests', job)
+        self.assertIn('skipped|FAILED|ResourceWarning', job)
+        portable = (BASE / 'tests/verify_portable.py').read_text(encoding='utf-8')
+        self.assertIn('test_diagnostics_lifetime_retry.py', portable)
+        self.assertIn('windows_kernel_executed', portable)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

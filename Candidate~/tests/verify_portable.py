@@ -113,6 +113,24 @@ def main():
             assert diagnostic_run.returncode==0 and 'ResourceWarning:' not in diagnostic_run.stderr
             report['diagnostic']['result']=json.loads(diagnostic_output.read_bytes())
             assert report['diagnostic']['result']['native_read_write_denial_revoke_passed'] and report['diagnostic']['result']['tamper_rejected']
+            lifetime_run=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',
+                str(ROOT/'tests/test_diagnostics_crash.py'),'--runtime-root',str(relocated/'package/Runtime~')],
+                env=env,capture_output=True,text=True,timeout=90)
+            report['diagnostic_lifetime']={'exit_code':lifetime_run.returncode,'stdout':lifetime_run.stdout,'stderr':lifetime_run.stderr}
+            lifetime_log=lifetime_run.stdout+lifetime_run.stderr
+            assert lifetime_run.returncode==0 and 'Ran 5 tests' in lifetime_log
+            assert all('test_DX'+str(i).zfill(3)+'_' in lifetime_log for i in range(1,6))
+            assert not any(mark in lifetime_log for mark in ('ResourceWarning','skipped','FAILED'))
+            retry_run=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',
+                str(ROOT/'tests/test_diagnostics_lifetime_retry.py'),'--runtime-root',str(relocated/'package/Runtime~')],
+                env=env,capture_output=True,text=True,timeout=90)
+            retry_log=retry_run.stdout+retry_run.stderr
+            report['diagnostic_cleanup_retry']={'exit_code':retry_run.returncode,'stdout':retry_run.stdout,
+                'stderr':retry_run.stderr,'windows_kernel_executed':os.name=='nt'}
+            assert retry_run.returncode==0 and 'Ran 7 tests' in retry_log
+            assert not any(mark in retry_log for mark in ('ResourceWarning','FAILED'))
+            assert ('skipped' not in retry_log) if os.name=='nt' else ('OK (skipped=2)' in retry_log)
+
         read_probe=('import sys,asyncio;sys.path[:0]='+repr([str(relocated/'package/Runtime~'/p) for p in
             ('runtime','native/src','dependencies/mcp-1.29.1')])+'\n'
             'from candidate_runtime import create_server\nfrom fastmcp import Client\n'
@@ -124,13 +142,16 @@ def main():
             '  assert "manage_scene" in tools\n'
             '  for action in ("get_active","get_build_settings","get_loaded_scenes","save","validate"):\n'
             '   r=await client.call_tool("manage_scene",{"action":action},raise_on_error=False);assert r.is_error\n'
-            'asyncio.run(check());print("PASS relocated-console-discovery-default-deny");print("PASS relocated-scene-discovery-default-deny")')
+            '  r=await client.call_tool("manage_scene",{"action":"get_hierarchy","page_size":2},raise_on_error=False);assert r.is_error\n'
+            'asyncio.run(check());print("PASS relocated-console-discovery-default-deny");print("PASS relocated-scene-discovery-default-deny");print("PASS relocated-hierarchy-default-deny")')
         probe=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning','-c',read_probe],
             env=env,capture_output=True,text=True,timeout=30)
         report['console_payload']={'exit_code':probe.returncode,'stdout':probe.stdout,'stderr':probe.stderr}
         assert probe.returncode==0 and 'PASS relocated-console-discovery-default-deny' in probe.stdout and 'ResourceWarning:' not in probe.stderr
         report['scene_payload']={'exit_code':probe.returncode,'default_denied':'PASS relocated-scene-discovery-default-deny' in probe.stdout}
         assert report['scene_payload']['default_denied']
+        report['hierarchy_payload']={'default_denied':'PASS relocated-hierarchy-default-deny' in probe.stdout}
+        assert report['hierarchy_payload']['default_denied']
         out=work/'dotnet';csproj=ROOT/'tests/unity-core/EditorBootstrapCases.csproj'
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
         build=compile_fixture(command,env,report)

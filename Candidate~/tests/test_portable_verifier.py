@@ -19,6 +19,72 @@ def driver():
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP015_ci_executes_exact_read_method_and_completion_gates(self):
+        import ast, textwrap
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        step=workflow.split('      - name: Signed client approval identity and compiled gates (not Unity)\n',1)[1].split('      - name:',1)[0]
+        tree=ast.parse(textwrap.dedent(step.split('        run: |\n',1)[1]))
+        assignments=sorted([n for n in ast.walk(tree) if isinstance(n,ast.Assign)
+            and any(isinstance(t,ast.Name) and t.id in {'expected_console_ids','console_methods'} for t in n.targets)],key=lambda n:n.lineno)
+        checks=[n for n in ast.walk(tree) if isinstance(n,ast.Assert)
+            and any(isinstance(x,ast.Name) and x.id=='console_methods' for x in ast.walk(n))]
+        summaries=[n for n in ast.walk(tree) if isinstance(n,ast.Assign)
+            and any(ast.unparse(t)=="report['passed']" for t in n.targets)]
+        self.assertTrue(checks, 'actual pre-loop execution gate missing')
+        self.assertEqual(len(summaries),1)
+        env={'root':ROOT,'ast':ast}
+        def execute(nodes):
+            exec(compile(ast.Module(body=nodes,type_ignores=[]),'ci-read-execution-gates','exec'),env)
+        execute(assignments)
+        methods=env['console_methods']
+        expected={f'RT{i:03d}' for i in range(15,25)}
+        self.assertEqual(len(methods),len(expected))
+        self.assertEqual({m.split('.test_')[1].split('_')[0] for m in methods},expected)
+        variants={'complete':methods,'zero':[],'missing':methods[:-1],
+            'missing_hierarchy':[m for m in methods if not any(x in m for x in ('RT022','RT023'))],
+            'duplicate':methods+[methods[0]],'duplicate_replacing_missing':methods[:-1]+[methods[0]],
+            'wrong_id':methods[:-1]+['RuntimeTests.test_RT999_unexpected'],
+            'duplicate_id_new_method':methods[:-1]+[methods[0]+'_duplicate']}
+        for label, selected in variants.items():
+            with self.subTest(gate='selection',case=label):
+                env['console_methods']=selected
+                if label=='complete':execute(checks)
+                else:
+                    with self.assertRaises(AssertionError):execute(checks)
+        # Only neutral fixtures for unrelated suites: execute the real final predicate.
+        env.update(methods=['binding-fixture'],console_methods=methods)
+        for label, completed in {**variants,'wrong_method_same_id':methods[:-1]+[methods[-1]+'_renamed']}.items():
+            with self.subTest(gate='completion',case=label):
+                env['report']={'owned_build_directory_absent':True,'rows':[{'passed':True}],
+                    'console_native':{'exit_code':0,'ids':[f'NC{i:03d}' for i in range(1,5)]},
+                    'scene_native':{'exit_code':0,'ids':[f'NS{i:03d}' for i in range(1,9)]},
+                    'console_runtime':[{'method':m,'passed':True} for m in completed]}
+                execute(summaries)
+                self.assertEqual(env['report']['passed'],label=='complete')
+
+    def test_VP016_compiled_scene_gates_require_seven_read_combination(self):
+        import ast, textwrap
+        workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+        step=workflow.split('      - name: Signed client approval identity and compiled gates (not Unity)\n',1)[1].split('      - name:',1)[0]
+        tree=ast.parse(textwrap.dedent(step.split('        run: |\n',1)[1]))
+        checks: list[ast.stmt]=[n for n in ast.walk(tree) if isinstance(n,ast.Assert) and "report['scene_native']['ids']" in ast.unparse(n)]
+        unity=ast.parse((ROOT/'tests/verify_unity.py').read_text(encoding='utf-8'))
+        summaries: list[ast.stmt]=[n for n in ast.walk(unity) if isinstance(n,ast.Assign) and any(ast.unparse(t)=="report['scene_ids_match']" for t in n.targets)]
+        self.assertEqual(len(checks),1)
+        self.assertEqual(len(summaries),1)
+        from types import SimpleNamespace
+        complete=[f'NS{i:03d}' for i in range(1,9)]
+        for ids in (complete,[],complete[:-1],complete[:-1]+[complete[0]],complete+[complete[0]]):
+            env={'result':SimpleNamespace(returncode=0),'report':{'scene_native':{'ids':ids},'scene_pass_ids':ids}}
+            with self.subTest(gate='workflow',ids=ids):
+                code=compile(ast.Module(body=checks,type_ignores=[]),'ci-scene-gate','exec')
+                if ids==complete:exec(code,env)
+                else:
+                    with self.assertRaises(AssertionError):exec(code,env)
+            with self.subTest(gate='verify_unity',ids=ids):
+                exec(compile(ast.Module(body=summaries,type_ignores=[]),'unity-scene-gate','exec'),env)
+                self.assertEqual(env['report']['scene_ids_match'],ids==complete)
+
     def test_VP014_owned_relocation_alias_is_canonicalized_before_comparison(self):
         import sys
         from types import SimpleNamespace
@@ -102,7 +168,7 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertIn("['OC001']", workflow)
         self.assertGreaterEqual(workflow.count("'Candidate~/catalog'"),2)
         unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
-        self.assertIn("{f'UA{i:03d}' for i in range(1, 11)}", unity)
+        self.assertIn("{f'UA{i:03d}' for i in range(1, 12)}", unity)
 
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')

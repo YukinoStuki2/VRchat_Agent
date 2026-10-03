@@ -23,6 +23,16 @@ internal static class WirePeer
      object data;
      if((string)p["action"]=="get_active")data=new{name="FixtureScene",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=2};
      else if((string)p["action"]=="get_build_settings")data=new[]{new{path="Assets/Fixture.unity",guid="fixture-guid",enabled=true,buildIndex=0}};
+     else if((string)p["action"]=="get_hierarchy"){
+      int total=p.ContainsKey("parent")?1:3,cursor=Math.Min((int?)p["cursor"]??0,total),size=(int)p["pageSize"],end=Math.Min(total,cursor+size);
+      var items=new JArray();for(int i=cursor;i<end;i++){
+       var item=new JObject{["name"]="fixture-node-"+i,["instanceID"]=p.ContainsKey("parent")?44:11+i,["activeSelf"]=true,["activeInHierarchy"]=true,
+        ["tag"]="Untagged",["layer"]=0,["isStatic"]=false,["path"]="fixture-node-"+i,["childCount"]=0,["childrenTruncated"]=false,["childrenCursor"]=null,["childrenPageSizeDefault"]=200,["componentTypes"]=new JArray("Transform")};
+       if((bool?)p["includeTransform"]==true)item["transform"]=new JObject{["position"]=new JArray(0,0,0),["rotation"]=new JArray(0,0,0),["scale"]=new JArray(1,1,1)};
+       items.Add(item);
+      }
+      data=new{scope=p.ContainsKey("parent")?"children":"roots",cursor,pageSize=size,next_cursor=end<total?end.ToString():null,truncated=end<total,total,items};
+     }
      else data=new{scenes=new[]{new{name="FixtureScene",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=2,isActive=true}}};
      var r=JObject.FromObject(new SuccessResponse("fixture scene metadata",data));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
     }
@@ -31,7 +41,7 @@ internal static class WirePeer
    });
   ConsoleNativeCases.Seed();
   gate.SetCapability("read_console","get",true);
-  foreach(string a in new[]{"get_active","get_build_settings","get_loaded_scenes"})gate.SetCapability("manage_scene",a,true);
+  foreach(string a in new[]{"get_active","get_build_settings","get_loaded_scenes","get_hierarchy"})gate.SetCapability("manage_scene",a,true);
   gate.SetCapability("manage_material","get_material_info",true);
   gate.SetCapability("manage_animation","controller_get_info",true);
   Trace("ready");

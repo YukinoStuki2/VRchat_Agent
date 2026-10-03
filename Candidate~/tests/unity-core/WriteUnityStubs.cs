@@ -26,7 +26,7 @@ namespace UnityEngine {
  }
 }
 namespace UnityEngine.SceneManagement { public class Scene { public bool isLoaded=true,isDirty;public string path="Assets/test.unity";public bool IsValid()=>true; } }
-namespace UnityEditor.SceneManagement { public static class EditorSceneManager { public static Action sceneDirtied;public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene s){s.isDirty=true;return true;} } }
+namespace UnityEditor.SceneManagement { public class PrefabStage { public UnityEngine.SceneManagement.Scene scene; } public static class PrefabStageUtility { public static PrefabStage GetCurrentPrefabStage()=>null; } public static class EditorSceneManager { public static UnityEngine.SceneManagement.Scene GetActiveScene()=>new UnityEngine.SceneManagement.Scene(); public static Action sceneDirtied;public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene s){s.isDirty=true;return true;} } }
 namespace UnityEditor {
  [AttributeUsage(AttributeTargets.Class)] public class InitializeOnLoadAttribute : Attribute {}
  [AttributeUsage(AttributeTargets.Method)] public class MenuItemAttribute : Attribute { public MenuItemAttribute(string s) {} }
@@ -82,6 +82,7 @@ namespace UnityEditor {
  public static class EditorGUI { public static bool Disabled; public static void BeginDisabledGroup(bool v){Disabled=v;} public static void EndDisabledGroup(){Disabled=false;} }
 }
 namespace MCPForUnity.Editor.Helpers {
+ public static class GameObjectLookup { public static UnityEngine.Object ResolveInstanceID(int id)=>null; }
  internal static class ProjectIdentityUtility { public static string GetProjectHash()=>"project-A"; }
  public static class HttpEndpointUtility { public static string BaseUrl="http://127.0.0.1:18081"; public static string GetBaseUrl()=>BaseUrl; public static bool IsRemoteScope()=>false; }
 }

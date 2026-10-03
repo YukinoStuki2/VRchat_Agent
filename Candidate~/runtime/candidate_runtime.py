@@ -32,12 +32,34 @@ SPECS = {
     'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
     'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
 }
-SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes'}
+SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes', 'get_hierarchy'}
 READ_TOOLS = SPECS.keys() | {'read_console', 'manage_scene'}
 CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
 SESSION_IDLE_TIMEOUT = 60.0
+
+
+def scene_params(args):
+    if args.get('action') not in SCENE_ACTIONS:
+        raise ToolError('operation_not_enabled')
+    if args['action'] != 'get_hierarchy':
+        if set(args) != {'action'}:
+            raise ToolError('unexpected_scene_arguments')
+        return dict(args)
+    if (not {'action', 'page_size'} <= set(args) or
+            set(args) - {'action','page_size','cursor','parent','include_transform'} or
+            type(args['page_size']) is not int or not 1 <= args['page_size'] <= 100):
+        raise ToolError('invalid_hierarchy_page')
+    if 'cursor' in args and (type(args['cursor']) is not int or not 0 <= args['cursor'] <= 1000000):
+        raise ToolError('invalid_hierarchy_cursor')
+    if 'parent' in args and (type(args['parent']) is not int or
+            not -2147483648 <= args['parent'] <= 2147483647 or args['parent'] == 0):
+        raise ToolError('hierarchy_requires_exact_instance_id')
+    if 'include_transform' in args and type(args['include_transform']) is not bool:
+        raise ToolError('invalid_hierarchy_transform')
+    names={'page_size':'pageSize','include_transform':'includeTransform'}
+    return {names.get(k,k):v for k,v in args.items()}
 
 
 def exact_id(value):
@@ -275,8 +297,7 @@ class Runtime(Middleware):
                     console_params(args)
                     action, target = 'get', 'Console'
                 elif name == 'manage_scene':
-                    if set(args) != {'action'} or args['action'] not in SCENE_ACTIONS:
-                        raise ToolError('operation_not_enabled')
+                    scene_params(args)
                     action, target = args['action'], 'Scenes'
                 else:
                     action, key, _, extension = SPECS[name]
@@ -390,7 +411,7 @@ class Runtime(Middleware):
             if command == 'read_console':
                 expected = console_params(invocation.arguments)
             elif command == 'manage_scene':
-                expected = {'action': invocation.arguments['action']}
+                expected = scene_params(invocation.arguments)
             else:
                 action, key, wire_key, _ = SPECS[command]
                 expected = {'action': action, wire_key: invocation.arguments[key]}
@@ -509,9 +530,9 @@ async def scene_read_preflight(ctx, **_options):
     invocation = _CURRENT.get()
     if (invocation is None or not invocation.active or invocation.cancelled or
             invocation.name != 'manage_scene' or ctx.session_id != invocation.client_id or
-            set(invocation.arguments) != {'action'} or
-            invocation.arguments['action'] not in SCENE_ACTIONS):
+            invocation.arguments.get('action') not in SCENE_ACTIONS):
         raise ToolError('request_not_bound')
+    scene_params(invocation.arguments)
     invocation.owner.check_plan(invocation)
     return None
 
@@ -563,7 +584,7 @@ def create_server(project_id, *, mcp_auth=None):
     # Module-local adapter: installed only by this candidate server factory.
     import importlib
     importlib.import_module('services.tools.manage_scene').preflight = scene_read_preflight
-    server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes；只接受action，不加载/保存/刷新/自动修复。实时场景元数据，不是冻结快照；层级读取尚未开放。')
+    server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes（仅action）和get_hierarchy。层级必填page_size整数1–100；可选cursor整数0–1000000、parent非零int32的当前场景/Prefab Stage内GameObject ID、include_transform布尔。拒绝名称/路径、max_depth、加载/保存/刷新/修复。单层实时摘要，非冻结完整树或完整组件属性；childrenPageSizeDefault仅上游提示，不扩大100条上限。')
     server.tool(manage_animation, description='仅已批准controller_get_info；其他操作拒绝。')
     server.tool(manage_material, description='仅已批准get_material_info；其他操作拒绝。')
     from material_runtime import register

@@ -3,7 +3,8 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
- public class Object { public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
+ public class Object { public bool Persistent; public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
+ public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; }
  public static class Application { public static string dataPath; }
  public struct Vector2 {}
  public static class GUILayout {
@@ -13,6 +14,20 @@ namespace UnityEngine {
    NextButton=null; BeforeClick?.Invoke();return true;
   }
  }
+}
+namespace UnityEngine.SceneManagement {
+ public struct Scene {
+  public int Id; public bool isLoaded; public bool IsValid()=>Id!=0;
+  public static bool operator==(Scene a,Scene b)=>a.Id==b.Id;
+  public static bool operator!=(Scene a,Scene b)=>a.Id!=b.Id;
+  public override bool Equals(object other)=>other is Scene scene && this==scene;
+  public override int GetHashCode()=>Id;
+ }
+}
+namespace UnityEditor.SceneManagement {
+ public static class EditorSceneManager {public static UnityEngine.SceneManagement.Scene Current=new UnityEngine.SceneManagement.Scene{Id=1,isLoaded=true};public static UnityEngine.SceneManagement.Scene GetActiveScene()=>Current;}
+ public class PrefabStage {public UnityEngine.SceneManagement.Scene scene;}
+ public static class PrefabStageUtility {public static PrefabStage Current;public static PrefabStage GetCurrentPrefabStage()=>Current;}
 }
 namespace UnityEditor {
  [AttributeUsage(AttributeTargets.Class)] public class InitializeOnLoadAttribute : Attribute {}
@@ -32,6 +47,7 @@ namespace UnityEditor {
   public static string GetAssetDependencyHash(string path) => "fixture-dependency-hash";
   public static UnityEngine.Object[] LoadAllAssetsAtPath(string path) => new[] { Asset };
  }
+ public static class EditorUtility {public static bool IsPersistent(UnityEngine.Object obj)=>obj.Persistent;}
  public static class EditorJsonUtility { public static string ToJson(UnityEngine.Object obj) => obj.Json; }
  public static class EditorGUILayout {
   public static int IntField(string label,int value)=>value;
@@ -47,6 +63,7 @@ namespace UnityEditor {
  public static class EditorGUI { public static bool Disabled; public static void BeginDisabledGroup(bool v){Disabled=v;} public static void EndDisabledGroup(){Disabled=false;} }
 }
 namespace MCPForUnity.Editor.Helpers {
+ public static class GameObjectLookup {public static UnityEngine.Object Fixture;public static UnityEngine.Object ResolveInstanceID(int id)=>Fixture;}
  internal static class ProjectIdentityUtility { public static string GetProjectHash()=>"project-A"; }
  public static class HttpEndpointUtility { public static string BaseUrl="http://127.0.0.1:18081"; public static string GetBaseUrl()=>BaseUrl; public static bool IsRemoteScope()=>false; }
 }

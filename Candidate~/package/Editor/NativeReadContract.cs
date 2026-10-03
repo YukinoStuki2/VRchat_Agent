@@ -39,6 +39,7 @@ namespace Yukino.VRChatAgent
         }
         static bool SceneMetadata(JToken data, JObject args)
         {
+            if ((string)args?["action"] == "get_hierarchy") return HierarchyPage(data, args);
             if (!Shape(args, "action") || !String(args["action"]) || data == null ||
                 data.ToString(Newtonsoft.Json.Formatting.None).Length > 1024 * 1024) return false;
             switch ((string)args["action"])
@@ -52,6 +53,39 @@ namespace Yukino.VRChatAgent
                         String(s["guid"]) && Bool(s["enabled"]) && s["buildIndex"]?.Type == JTokenType.Integer && (long)s["buildIndex"] == i).All(ok => ok);
                 default: return false;
             }
+        }
+        static bool Integer(JToken value, long min, long max) => value?.Type == JTokenType.Integer && (long)value >= min && (long)value <= max;
+        static bool HierarchyPage(JToken data, JObject args)
+        {
+            if (!Shape(data, "scope", "cursor", "pageSize", "next_cursor", "truncated", "total", "items") ||
+                !String(data["scope"]) || !Bool(data["truncated"]) || !Integer(data["total"], 0, int.MaxValue) ||
+                !Integer(data["cursor"], 0, int.MaxValue) || !Integer(data["pageSize"], 1, 100) ||
+                !(data["items"] is JArray items) || data.ToString(Newtonsoft.Json.Formatting.None).Length > 1024 * 1024) return false;
+            long total = (long)data["total"], cursor = (long)data["cursor"], size = (long)data["pageSize"];
+            if ((string)data["scope"] != (args.ContainsKey("parent") ? "children" : "roots") ||
+                cursor != Math.Min((long?)args["cursor"] ?? 0, total) || size != (long)args["pageSize"] ||
+                items.Count != Math.Min(size, total - cursor) || (bool)data["truncated"] != (cursor + items.Count < total)) return false;
+            if ((bool)data["truncated"] ? !String(data["next_cursor"]) ||
+                (string)data["next_cursor"] != (cursor + items.Count).ToString(System.Globalization.CultureInfo.InvariantCulture) :
+                !Null(data["next_cursor"])) return false;
+            bool transform = (bool?)args["includeTransform"] ?? false;
+            return items.All(item => HierarchyItem(item, transform)) &&
+                items.Select(item => (long)item["instanceID"]).Distinct().Count() == items.Count;
+        }
+        static bool HierarchyItem(JToken item, bool transform)
+        {
+            string[] fields = { "name", "instanceID", "activeSelf", "activeInHierarchy", "tag", "layer", "isStatic", "path",
+                "childCount", "childrenTruncated", "childrenCursor", "childrenPageSizeDefault", "componentTypes" };
+            if (!Shape(item, transform ? fields.Concat(new[] { "transform" }).ToArray() : fields) ||
+                !String(item["name"]) || !Integer(item["instanceID"], int.MinValue, int.MaxValue) || (long)item["instanceID"] == 0 ||
+                !Bool(item["activeSelf"]) || !Bool(item["activeInHierarchy"]) || !Bool(item["isStatic"]) ||
+                !String(item["tag"]) || !String(item["path"]) || !Integer(item["layer"], 0, 31) ||
+                !Integer(item["childCount"], 0, int.MaxValue) || !Bool(item["childrenTruncated"]) ||
+                (bool)item["childrenTruncated"] != ((long)item["childCount"] > 0) ||
+                !Integer(item["childrenPageSizeDefault"], 200, 200) || !All(item["componentTypes"], String)) return false;
+            if ((long)item["childCount"] > 0 ? !String(item["childrenCursor"]) || (string)item["childrenCursor"] != "0" : !Null(item["childrenCursor"])) return false;
+            return !transform || (Shape(item["transform"], "position", "rotation", "scale") &&
+                new[] { "position", "rotation", "scale" }.All(k => item["transform"][k] is JArray values && values.Count == 3 && values.All(Number)));
         }
         static bool SceneInfo(JToken data) => String(data["name"]) && String(data["path"]) && Bool(data["isDirty"]) &&
             Bool(data["isLoaded"]) && data["buildIndex"]?.Type == JTokenType.Integer && (long)data["buildIndex"] >= -1 &&

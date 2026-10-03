@@ -173,6 +173,17 @@ namespace Yukino.VRChatAgent
         {
             // This registry API rejects asynchronous handlers before executing them.
             // CandidateGate restricts command/action/targets; no arbitrary command route.
+            if (command == "manage_scene" && (string)args["action"] == "get_hierarchy" && args.ContainsKey("parent"))
+            {
+                // Native numeric lookup is global and also resolves components/assets.
+                // Check the same object immediately before synchronous dispatch, without loading assets.
+                var go = GameObjectLookup.ResolveInstanceID((int)args["parent"]) as GameObject;
+                var stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+                var scene = stage != null ? stage.scene : UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+                if (go == null || EditorUtility.IsPersistent(go) || !scene.IsValid() || !scene.isLoaded ||
+                    !go.scene.IsValid() || !go.scene.isLoaded || go.scene != scene)
+                    return new JObject { ["success"] = false };
+            }
             object response = CommandRegistry.GetHandler(command)(args);
             JObject result = response as JObject ?? JObject.FromObject(response);
             // Validate only native success data here; the core sanitizes every

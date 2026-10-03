@@ -56,8 +56,23 @@ namespace Yukino.VRChatAgent
             Require((command == "manage_material" && action == "get_material_info") ||
                 (command == "manage_animation" && action == "controller_get_info") ||
                 (command == "read_console" && action == "get") ||
-                (command == "manage_scene" && new[] { "get_active", "get_build_settings", "get_loaded_scenes" }.Contains(action)), "operation_not_supported");
+                (command == "manage_scene" && new[] { "get_active", "get_build_settings", "get_loaded_scenes", "get_hierarchy" }.Contains(action)), "operation_not_supported");
             return command + "/" + action;
+        }
+        static void SceneParams(JObject args)
+        {
+            Require(args != null && args["action"]?.Type == JTokenType.String, "invalid_scene_arguments");
+            if ((string)args["action"] != "get_hierarchy") { Keys(args, "action"); return; }
+            string[] allowed = { "action", "pageSize", "cursor", "parent", "includeTransform" };
+            Require(args.Properties().All(p => allowed.Contains(p.Name)) &&
+                args["pageSize"]?.Type == JTokenType.Integer && (long)args["pageSize"] >= 1 &&
+                (long)args["pageSize"] <= 100, "invalid_hierarchy_page");
+            if (args.ContainsKey("cursor")) Require(args["cursor"].Type == JTokenType.Integer &&
+                (long)args["cursor"] >= 0 && (long)args["cursor"] <= 1000000, "invalid_hierarchy_cursor");
+            if (args.ContainsKey("parent")) Require(args["parent"].Type == JTokenType.Integer &&
+                (long)args["parent"] >= int.MinValue && (long)args["parent"] <= int.MaxValue &&
+                (long)args["parent"] != 0, "hierarchy_requires_exact_instance_id");
+            if (args.ContainsKey("includeTransform")) Require(args["includeTransform"].Type == JTokenType.Boolean, "invalid_hierarchy_transform");
         }
         static void ConsoleParams(JObject args)
         {
@@ -221,7 +236,7 @@ namespace Yukino.VRChatAgent
                         Require((string)r["plan_id"] == "", "unexpected_identity");
                         Keys(body, "operations", "targets", "ttl_seconds");
                         var ops = body["operations"] as JArray; var targets = body["targets"] as JArray;
-                        Require(ops != null && ops.Count > 0 && ops.Count <= 6 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
+                        Require(ops != null && ops.Count > 0 && ops.Count <= 7 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
                         var seen = new HashSet<string>(StringComparer.Ordinal);
                         foreach (JToken item in ops)
                         {
@@ -266,7 +281,7 @@ namespace Yukino.VRChatAgent
                     if (command == "read_console")
                     { ConsoleParams(args); action = "get"; target = "Console"; }
                     else if (command == "manage_scene")
-                    { Keys(args, "action"); action = Text(args["action"]); target = "Scenes"; }
+                    { SceneParams(args); action = Text(args["action"]); target = "Scenes"; }
                     else
                     {
                         string keyName = command == "manage_material" ? "materialPath" : "controllerPath";

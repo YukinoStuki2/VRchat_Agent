@@ -182,6 +182,82 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             state.assert_not_awaited()
             refresh.assert_not_awaited()
 
+    async def test_RT024_seven_read_manifest_matches_final_gate_capacity(self):
+        reads=[('manage_animation',READ),
+               ('manage_material',{'action':'get_material_info','material_path':MATERIAL}),
+               ('read_console',{'action':'get','page_size':2,'format':'json'}),
+               ('manage_scene',{'action':'get_active'}),
+               ('manage_scene',{'action':'get_build_settings'}),
+               ('manage_scene',{'action':'get_loaded_scenes'}),
+               ('manage_scene',{'action':'get_hierarchy','page_size':2})]
+        operations=[{'command':name,'action':args['action']} for name,args in reads]
+        prepare={**PREPARE,'operations':operations,'targets':[CONTROLLER,MATERIAL,'Console','Scenes']}
+        for name,args in reads:
+            self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
+        self.assertEqual(self.peer.events,[])
+        for name,args in reads:
+            pending=await self.client.call_tool('agent_prepare',prepare)
+            self.assertEqual(pending.data['data']['status'],'pending')
+            self.assertEqual(self.peer.events[-1]['params']['body'],{k:v for k,v in prepare.items() if k!='task_id'})
+            denied=await self.client.call_tool(name,args,raise_on_error=False)
+            self.assertFalse(denied.data['success'],'pending must not approve any of the seven reads')
+        await self.client.call_tool('agent_prepare',prepare)
+        self.peer.approved=True  # Peer substitute; real final gate is covered by NS008.
+        before=len(self.peer.events)
+        for name,args in reads:
+            result=await self.client.call_tool(name,args)
+            self.assertTrue(result.data['success'])
+        executed=[e['params']['body'] for e in self.peer.events[before:] if e['params']['kind']=='execute']
+        self.assertEqual([(e['command'],e['params']['action']) for e in executed],
+                         [(r['command'],r['action']) for r in operations])
+        await self.client.call_tool('agent_stop',{'task_id':prepare['task_id']})
+        before=len(self.peer.events)
+        for name,args in reads:
+            self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
+        self.assertEqual(len(self.peer.events),before)
+        for invalid in ([],operations+[operations[0]],operations[:-1]+[operations[0]],
+                        operations[:-1]+[{'command':'manage_scene','action':'save'}]):
+            result=await self.client.call_tool('agent_prepare',{**prepare,'operations':invalid},raise_on_error=False)
+            self.assertTrue(result.is_error,'invalid seven-operation manifest accepted')
+        self.assertEqual(len(self.peer.events),before,'invalid manifest reached peer')
+
+    async def test_RT023_hierarchy_rejects_coercion_unbounded_and_cross_scope(self):
+        prepare={'task_id':'hierarchy-task','operations':[{'command':'manage_scene','action':'get_hierarchy'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        normal={'action':'get_hierarchy','page_size':2}
+        invalid=[{'page_size':0},{'page_size':101},{'page_size':True},{'page_size':'2'},
+                 {'cursor':-1},{'cursor':1000001},{'cursor':'0'},{'cursor':False},
+                 {'parent':'Root/Child'},{'parent':'-123'},{'parent':0},{'parent':True},
+                 {'parent':None},{'parent':2147483648},{'parent':-2147483649},
+                 {'include_transform':'true'},{'max_nodes':5000},{'max_depth':50},
+                 {'path':'Assets/Other.unity'},{'action':'load'},{'scene_view_target':1}]
+        for change in invalid:
+            with self.subTest(change=change):
+                await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=len([e for e in self.peer.events if e['params']['kind']=='execute'])
+                self.assertTrue((await self.client.call_tool('manage_scene',{**normal,**change},raise_on_error=False)).is_error)
+                self.assertEqual(before,len([e for e in self.peer.events if e['params']['kind']=='execute']))
+        await self.client.call_tool('agent_prepare',{**prepare,'operations':[{'command':'manage_scene','action':'get_active'}]})
+        self.peer.approved=True
+        self.assertTrue((await self.client.call_tool('manage_scene',normal,raise_on_error=False)).is_error)
+
+    async def test_RT022_hierarchy_native_paging_and_integer_parent(self):
+        prepare={'task_id':'hierarchy-task','operations':[{'command':'manage_scene','action':'get_hierarchy'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error, 'hierarchy capability missing')
+        self.peer.approved=True
+        for args in ({'action':'get_hierarchy','page_size':2},
+                     {'action':'get_hierarchy','page_size':3,'cursor':2,'parent':-123,'include_transform':True}):
+            result=await self.client.call_tool('manage_scene',args,raise_on_error=False)
+            self.assertFalse(result.is_error)
+            self.assertTrue(result.data['success'],repr(result.data))
+            expected={'action':'get_hierarchy','pageSize':args['page_size']}
+            for key,wire in [('cursor','cursor'),('parent','parent'),('include_transform','includeTransform')]:
+                if key in args:expected[wire]=args[key]
+            self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_scene','params':expected})
+        self.assertEqual([e['params']['body']['command'] for e in self.peer.events if e['params']['kind']=='execute'],['manage_scene']*2)
+
     async def test_RT019_scene_metadata_uses_native_wrapper_and_exact_scene_scope(self):
         actions = ['get_active', 'get_build_settings', 'get_loaded_scenes']
         prepare = {'task_id':'scene-task', 'operations':[

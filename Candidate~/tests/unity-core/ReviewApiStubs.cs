@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
  public class Object { public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
+ public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; }
  public static class Application { public static string dataPath; }
  public struct Vector2 {}
  public static class GUILayout {
@@ -14,7 +15,14 @@ namespace UnityEngine {
   }
  }
 }
+namespace UnityEngine.SceneManagement { public class Scene { public bool isLoaded=true; public bool IsValid()=>true; } }
+namespace UnityEditor.SceneManagement {
+ public static class EditorSceneManager { public static UnityEngine.SceneManagement.Scene GetActiveScene()=>new UnityEngine.SceneManagement.Scene(); }
+ public class PrefabStage { public UnityEngine.SceneManagement.Scene scene; }
+ public static class PrefabStageUtility { public static PrefabStage GetCurrentPrefabStage()=>null; }
+}
 namespace UnityEditor {
+ public static class EditorUtility { public static bool IsPersistent(UnityEngine.Object o)=>false; }
  [AttributeUsage(AttributeTargets.Class)] public class InitializeOnLoadAttribute : Attribute {}
  [AttributeUsage(AttributeTargets.Method)] public class MenuItemAttribute : Attribute { public MenuItemAttribute(string s) {} }
  public enum MessageType { Info, Warning, Error }
@@ -44,6 +52,7 @@ namespace UnityEditor {
  public static class EditorGUI { public static bool Disabled; public static void BeginDisabledGroup(bool v){Disabled=v;} public static void EndDisabledGroup(){Disabled=false;} }
 }
 namespace MCPForUnity.Editor.Helpers {
+ public static class GameObjectLookup { public static UnityEngine.Object ResolveInstanceID(int id)=>null; }
  public static class HttpEndpointUtility { public static string BaseUrl="http://127.0.0.1:18081"; public static string GetBaseUrl()=>BaseUrl; public static bool IsRemoteScope()=>false; }
 }
 namespace MCPForUnity.Editor.Services.Transport {

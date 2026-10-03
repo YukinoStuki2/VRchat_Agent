@@ -163,10 +163,10 @@ def main(label):
     report['console_pass_ids']=sorted(set(re.findall(r'^PASS (NC\d{3}) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
     report['console_ids_match']=report['console_pass_ids']==[f'NC{i:03d}' for i in range(1,5)]
     report['scene_pass_ids']=sorted(set(re.findall(r'^PASS (NS\d{3}) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
-    report['scene_ids_match']=report['scene_pass_ids']==[f'NS{i:03d}' for i in range(1,5)]
+    report['scene_ids_match']=report['scene_pass_ids']==[f'NS{i:03d}' for i in range(1,9)]
     report['client_binding_pass_ids'] = sorted(r['name'] for r in report['runs'] if re.fullmatch(r'CB00[1-7]',r['name']) and r['exit_code']==0)
     report['client_binding_ids_match'] = report['client_binding_pass_ids'] == [f'CB{i:03d}' for i in range(1,8)]
-    expected = ({f'UC{i:03d}' for i in range(1, 16)} | {f'UA{i:03d}' for i in range(1, 11)} |
+    expected = ({f'UC{i:03d}' for i in range(1, 16)} | {f'UA{i:03d}' for i in range(1, 12)} |
                 {f'UF{i:03d}' for i in range(1, 25)} | {'UR002', 'UR003', 'WI001', 'CLC001', 'CLC002'} |
                 {f'LC{i:03d}' for i in range(1, 8)} | {f'OI{i:03d}' for i in range(1, 11)})
     report['expected_ids_match'] = set(report['pass_ids']) == expected

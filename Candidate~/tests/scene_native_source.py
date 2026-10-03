@@ -1,6 +1,6 @@
 """Test-only exact-method extraction from pinned Coplay ManageScene.
 
-Compiles original parser, dispatch and three original readers. Unrelated method
+Compiles original parser, dispatch, metadata/hierarchy readers and their helpers. Unrelated method
 bodies throw; Unity APIs are fixtures. NOT full-source/Unity compilation proof,
 not an installed reader. Refuse any upstream drift before extracting bytes.
 """
@@ -16,7 +16,8 @@ def assemble(editor_root, output):
         raise ValueError('scene_native_source_drift')
     text = raw.decode('utf-8')
     names = ('ParseFloatArray', 'ToSceneCommand', 'HandleCommand',
-             'GetActiveSceneInfo', 'GetBuildSettingsScenes', 'GetLoadedScenes')
+             'GetActiveSceneInfo', 'GetBuildSettingsScenes', 'GetLoadedScenes',
+             'GetSceneHierarchyPaged', 'ResolveGameObject', 'BuildGameObjectSummary', 'GetGameObjectPath')
     lines = text.splitlines(keepends=True)
     pieces = []
     hashes = {}
@@ -43,7 +44,6 @@ def assemble(editor_root, output):
         static object LoadScene(int a)=>Denied();
         static object LoadSceneAdditive(string a)=>Denied();
         static object SaveScene(string a,string b)=>Denied();
-        static object GetSceneHierarchyPaged(SceneCommand c)=>Denied();
         static object CaptureScreenshot(SceneCommand c)=>Denied();
         static object FrameSceneView(SceneCommand c)=>Denied();
         static object CloseScene(SceneCommand c)=>Denied();

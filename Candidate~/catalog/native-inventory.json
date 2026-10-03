@@ -2299,9 +2299,10 @@
       "implemented_candidate_read_actions": [
         "get_active",
         "get_build_settings",
-        "get_loaded_scenes"
+        "get_loaded_scenes",
+        "get_hierarchy"
       ],
-      "audit_note_zh": "三个元数据读取需本地开关和Scenes实时范围清单；只接受action，拒绝加载/保存/刷新/修复/场景视角。候选前置适配不查询未授权状态或自动刷新；最终Unity连接门控检查编译/更新。构建列表索引包含禁用项，不等于运行时build index。"
+      "audit_note_zh": "场景元数据和层级摘要读取需本地开关及Scenes实时范围清单。层级只允许page_size整数1–100、cursor整数0–1000000、parent精确整数ID及include_transform布尔；父对象必须是当前场景/Prefab Stage内非持久化GameObject。名称/路径、加载/保存/刷新/修复/视角仍拒绝。分页是单层实时摘要，非冻结完整树；childrenPageSizeDefault为上游提示，不扩大100条上限；组件类型摘要不等于完整组件属性。构建列表索引包含禁用项。"
     },
     {
       "name": "manage_script",

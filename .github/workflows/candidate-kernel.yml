@@ -2,7 +2,7 @@ name: Candidate Windows kernel checks
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/launcher/**', 'Candidate~/diagnostics/**', 'Candidate~/tests/test_launcher_candidate_windows.py', 'Candidate~/tests/test_diagnostics_windows_kernel.py', '.github/workflows/candidate-kernel.yml', '.gitattributes']
+    paths: ['Candidate~/launcher/**', 'Candidate~/diagnostics/**', 'Candidate~/tests/test_launcher_candidate_windows.py', 'Candidate~/tests/test_diagnostics_windows_kernel.py', 'Candidate~/tests/test_diagnostics_crash.py', 'Candidate~/tests/test_diagnostics_lifetime_retry.py', 'Candidate~/tests/test_diagnostics_ci_contract.py', '.github/workflows/candidate-kernel.yml', '.gitattributes']
   workflow_dispatch:
 permissions:
   contents: read
@@ -73,6 +73,27 @@ jobs:
           if ($raw -match 'ResourceWarning') { throw 'Resource warning, including process shutdown: not a passing run' }
           $r = Get-Content evidence/diagnostics-completion-windows-ci.json -Raw | ConvertFrom-Json
           if (-not $r.passed -or -not $r.windows_kernel_executed -or $r.test_count -ne 7 -or $r.passed_ids.Count -ne 7 -or $r.skipped_ids.Count -ne 0 -or $r.failed_ids.Count -ne 0 -or -not $r.isolated_home_removed -or -not $r.source_hashes_unchanged -or $r.cleanup.Count -ne 7) { throw 'Windows diagnostics evidence gate failed' }
+      - name: Capture-owner termination and unapproved snapshot lifetime
+        shell: pwsh
+        run: |
+          Set-Location 'Candidate~'
+          $sources = @('diagnostics/lifetime.py','diagnostics/snapshot.py','diagnostics/windows_handles.py','tests/test_diagnostics_crash.py','tests/test_diagnostics_lifetime_retry.py','tests/test_diagnostics_ci_contract.py','../.github/workflows/candidate-kernel.yml')
+          Get-FileHash $sources -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/diagnostic-lifetime-before.json
+          python -I -B -W always::ResourceWarning tests/test_diagnostics_crash.py 2>&1 | Tee-Object evidence/diagnostic-lifetime-windows.txt
+          $result = $LASTEXITCODE
+          Get-FileHash $sources -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/diagnostic-lifetime-after.json
+          if ($result -ne 0) { exit $result }
+          $raw = Get-Content evidence/diagnostic-lifetime-windows.txt -Raw
+          if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Snapshot lifetime checks incomplete' }
+          foreach ($id in @('DX001','DX002','DX003','DX004','DX005')) { if ($raw -notmatch "test_${id}_") { throw 'Missing lifetime case' } }
+          python -I -B -W always::ResourceWarning tests/test_diagnostics_lifetime_retry.py 2>&1 | Tee-Object evidence/diagnostic-lifetime-retry-windows.txt
+          $result = $LASTEXITCODE
+          Get-FileHash $sources -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/diagnostic-lifetime-after.json
+          if ($result -ne 0) { exit $result }
+          $retry = Get-Content evidence/diagnostic-lifetime-retry-windows.txt -Raw
+          if ($retry -notmatch 'Ran 7 tests' -or $retry -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Cleanup retry checks incomplete' }
+          foreach ($suffix in @('transient_lock_retries_while_host_pipe_open','permanent_lock_has_bounded_failure','retry_rejects_replaced_directory_and_parent','retry_rejects_linked_parent','outer_retry_after_root_already_deleted','windows_reader_handles_cross_deadline','windows_outer_handle_cross_deadline')) { if ($retry -notmatch "test_DL_R1_${suffix}") { throw 'Missing cleanup retry case' } }
+          if ((Get-Content evidence/diagnostic-lifetime-before.json -Raw) -ne (Get-Content evidence/diagnostic-lifetime-after.json -Raw)) { throw 'Lifetime source drift' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -80,5 +101,7 @@ jobs:
           path: |
             Candidate~/evidence/diagnostics-completion-windows-ci.json
             Candidate~/evidence/diagnostics-completion-windows-ci.txt
+            Candidate~/evidence/diagnostic-lifetime-*.json
+            Candidate~/evidence/diagnostic-lifetime-*.txt
           if-no-files-found: error
           retention-days: 7

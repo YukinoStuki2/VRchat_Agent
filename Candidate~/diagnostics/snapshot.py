@@ -37,9 +37,11 @@ class Snapshot:
     files: tuple
     expires_at: float
     _active: threading.Event
+    _keeper_alive: object = None
 
     def valid(self):
-        return self._active.is_set() and time.monotonic() < self.expires_at
+        return (self._active.is_set() and time.monotonic() < self.expires_at and
+                (self._keeper_alive is None or self._keeper_alive()))
 
 
 def relative_name(name):
@@ -202,7 +204,8 @@ def capture(root, files, *, task_id, temp_parent=None):
     keys = [n.casefold() for n in names] if sys.platform == 'win32' else names
     if len(set(keys)) != len(names):
         raise ValueError('duplicate selection')
-    with private_container(temp_parent) as private:
+    from lifetime import guarded_container
+    with guarded_container(temp_parent) as (private, deadline, keeper_alive, seal):
         target = Path(private) / 'snapshot'
         target.mkdir(mode=0o700)
         total = 0
@@ -220,9 +223,10 @@ def capture(root, files, *, task_id, temp_parent=None):
             if folder.is_dir():
                 folder.chmod(0o500)
         target.chmod(0o500)
+        seal()
         active = threading.Event()
         active.set()
         try:
-            yield Snapshot(target, task_id, names, time.monotonic() + 300, active)
+            yield Snapshot(target, task_id, names, deadline, active, keeper_alive)
         finally:
             active.clear()

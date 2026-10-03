@@ -63,7 +63,7 @@ class SourcePayloadTests(unittest.TestCase):
         for relative in ('launcher/editor_owner.py', 'launcher/direct_python.py',
                          'runtime/__main__.py', 'native/src/main.py',
                          'dependencies/mcp-1.29.1/mcp/client/streamable_http.py',
-                         'diagnostics/server.py', 'distribution/requirements.lock'):
+                         'diagnostics/server.py', 'diagnostics/lifetime.py', 'distribution/requirements.lock'):
             self.assertEqual(files['Runtime~/' + relative], (ROOT / relative).read_bytes())
         for relative in ('Editor/CandidateSession.cs', 'Editor/CandidateWindow.cs',
                          'Editor/OwnedTransport/CandidateOwnedTransport.asmref'):

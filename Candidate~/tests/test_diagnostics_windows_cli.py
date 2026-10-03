@@ -36,8 +36,21 @@ class WindowsDiagnosticConsole(unittest.TestCase):
         except console.error:
             pass
         console.AllocConsole()
-        screen = console.GetStdHandle(console.STD_OUTPUT_HANDLE)
-        input_buffer = console.GetStdHandle(console.STD_INPUT_HANDLE)
+        self.addCleanup(console.FreeConsole)
+        # STARTF_USESTDHANDLES preserves our CI pipes across AllocConsole.
+        # Open the console devices themselves, not redirected standard handles.
+        import win32file, win32con
+        def console_device(name):
+            handle = win32file.CreateFile(name, win32con.GENERIC_READ | win32con.GENERIC_WRITE,
+                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE, None, win32con.OPEN_EXISTING, 0, None)
+            try:
+                result = console.PyConsoleScreenBufferType(handle)
+            finally:
+                handle.Close()  # The wrapper duplicates it; never leak the original.
+            self.addCleanup(result.Close)
+            return result
+        screen = console_device('CONOUT$')
+        input_buffer = console_device('CONIN$')
         origin = console.PyCOORDType(0, 0)
         screen.SetConsoleScreenBufferSize(console.PyCOORDType(240, 300))
         screen.FillConsoleOutputCharacter(' ', 240 * 300, origin)
@@ -158,9 +171,6 @@ class WindowsDiagnosticConsole(unittest.TestCase):
                     os.close(fd)
                 if worker:
                     worker.join(5)
-                input_buffer.Close()
-                screen.Close()
-                console.FreeConsole()
                 self.assertTrue(clean, 'owned Job cleanup failed')
                 self.assertFalse(worker and worker.is_alive(), 'stdio reader remains')
             self.assertNotIn('ResourceWarning:', '\n'.join(stderr))

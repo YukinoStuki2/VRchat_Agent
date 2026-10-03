@@ -2,7 +2,19 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
-## Console 原生只读整合（当前开发）
+## 场景元数据只读（当前开发，尚未冻结验收）
+
+- 新增原生`manage_scene/get_active|get_build_settings|get_loaded_scenes`，明确`Scenes`实时工程范围；只接收action。本地中文目录开关和清单批准、最终C#门控、原生输出合同及Codex独立工具列表已接入。不是层级、对象/组件或资产搜索的完成声明。
+- 原生Python前置会查询editor_state并可能refresh/compile；候选仅替换该模块前置为当前请求/原计划核验，实际读取仍是原生wrapper/handler。最终Unity LiveConnection在编译、更新、Playmode时拒绝；未开放状态旁路、加载/保存/自动修复或任意执行。
+- RT019先因范围未支持失败，再因原生前置失败撤权复现，修后通过；RT020/RT021为初次通过的拒绝与不查询/刷新characterization。NS001–004编译固定上游的原样parser/dispatch/reader方法；未走方法为抛错替身、Unity API替身，**不是完整上游文件编译或真实Unity验收**。UA010已复现本地适配器将Scenes误当文件，增加实时范围证据；冻结回归/双客户端/分发/Windows等待本轮读回。
+
+## Console / 诊断前轮最终结果
+
+- `3d0ae40`已提交推送。Console原生双客户端/SSH通过，运行时79项、C#既有70个唯一ID、Linux独立诊断24项分别通过，非跨组累加。
+- Windows依赖`37108626071`绑定`958b0fc`成功；Windows便携`37110061329`绑定`3d0ae40`成功。公开工件严格校验官方SHA-256，源码before/after并逐字节比对各自git提交后接受；不把不同提交混称一个冻结批准。
+- Windows本地诊断DW001–003均执行成功：detached拒绝、标准输入不能覆盖本地否决、本地批准后真实stdio读取及EOF清理。真实控制台/模拟操作者，不是Windows原生Codex或真人验收；强杀磁盘生命周期、完整安装入口仍未完成。完整候选/最终独立复核/VPM/ALCOM仍缺。
+
+## Console 原生只读整合（此前过程记录）
 
 - 显式Console范围、双侧get参数门控、原生输出合同及中文目录开关已接入；clear仍拒绝。复用固定上游Python/C# reader，不是第二套日志读取实现。实时日志不承诺快照，truncated的total只作下界。
 - Linux原生Hermes/Codex各自批准、分页、跨会话拒绝、停止/拒清空已实际执行；编译C#运行真实上游反射handler，Unity LogEntries与本地批准仍是fixture。原NA/NP/NR回归随同执行，没有模型请求或真实工程操作。

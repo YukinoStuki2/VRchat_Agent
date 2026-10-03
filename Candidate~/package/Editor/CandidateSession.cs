@@ -187,6 +187,8 @@ namespace Yukino.VRChatAgent
             // Explicit live Console capability: not a file, not a frozen log snapshot.
             // Project/session identity is rechecked by the gate; log appends are expected.
             if (assetPath == "Console") return "live-console:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
+            // Scene metadata is a live project-scoped read, never a file grant.
+            if (assetPath == "Scenes") return "live-scenes:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
             string project = Directory.GetParent(Application.dataPath).FullName;
             string full = Path.GetFullPath(Path.Combine(project, assetPath));
             if (!full.StartsWith(Path.GetFullPath(Application.dataPath) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) throw new IOException("target_outside_assets");

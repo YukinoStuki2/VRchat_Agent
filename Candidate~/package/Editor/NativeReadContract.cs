@@ -29,6 +29,7 @@ namespace Yukino.VRChatAgent
                 (Shape(result, "success", "message", "data") && String(result["message"])))) return false;
             var data = result["data"];
             if (command == "read_console") return ConsolePage(data, args);
+            if (command == "manage_scene") return SceneMetadata(data, args);
             if (command == "manage_material") return Shape(data, "material", "shader", "properties") &&
                 String(data["material"]) && String(data["shader"]) && All(data["properties"], Property);
             if (command == "manage_animation") return Shape(data, "path", "name", "layerCount", "parameterCount", "layers", "parameters") &&
@@ -36,6 +37,25 @@ namespace Yukino.VRChatAgent
                 Count(data["parameterCount"], data["parameters"]) && All(data["layers"], Layer) && All(data["parameters"], Parameter);
             return false;
         }
+        static bool SceneMetadata(JToken data, JObject args)
+        {
+            if (!Shape(args, "action") || !String(args["action"]) || data == null ||
+                data.ToString(Newtonsoft.Json.Formatting.None).Length > 1024 * 1024) return false;
+            switch ((string)args["action"])
+            {
+                case "get_active": return Shape(data, "name", "path", "buildIndex", "isDirty", "isLoaded", "rootCount") && SceneInfo(data);
+                case "get_loaded_scenes": return Shape(data, "scenes") && data["scenes"] is JArray scenes && scenes.Count <= 1024 &&
+                    scenes.All(s => Shape(s, "name", "path", "buildIndex", "isDirty", "isLoaded", "rootCount", "isActive") && SceneInfo(s) && Bool(s["isActive"])) &&
+                    scenes.Count(s => (bool)s["isActive"]) <= 1;
+                case "get_build_settings": return data is JArray builds && builds.Count <= 1024 &&
+                    builds.Select((s, i) => Shape(s, "path", "guid", "enabled", "buildIndex") && String(s["path"]) &&
+                        String(s["guid"]) && Bool(s["enabled"]) && s["buildIndex"]?.Type == JTokenType.Integer && (long)s["buildIndex"] == i).All(ok => ok);
+                default: return false;
+            }
+        }
+        static bool SceneInfo(JToken data) => String(data["name"]) && String(data["path"]) && Bool(data["isDirty"]) &&
+            Bool(data["isLoaded"]) && data["buildIndex"]?.Type == JTokenType.Integer && (long)data["buildIndex"] >= -1 &&
+            data["rootCount"]?.Type == JTokenType.Integer && (long)data["rootCount"] >= 0;
         static bool ConsolePage(JToken data, JObject args)
         {
             if (args == null || !Shape(data, "cursor", "pageSize", "nextCursor", "truncated", "total", "items") ||

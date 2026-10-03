@@ -143,6 +143,64 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await PluginHub._registry.list_sessions(), {})
         self.assertEqual(PluginHub._connections, {})
 
+    async def test_RT020_scene_rejects_mutations_coercion_and_scope_inheritance(self):
+        prepare = {'task_id':'scene-task','operations':[{'command':'manage_scene','action':'get_active'}],
+                   'targets':['Scenes'],'ttl_seconds':60}
+        for args in ({'action':'save'}, {'action':'load'}, {'action':'create'}, {'action':'validate'},
+                     {'action':'get_hierarchy'}, {'action':'scene_view_frame'}, {'action':'GET_ACTIVE'},
+                     {'action':'get_active '}, {'action':True}, {'action':'get_active','path':'Assets/Else.unity'},
+                     {'action':'get_active','auto_repair':False}, {'action':'get_active','cursor':0},
+                     {'action':'get_loaded_scenes'}):
+            await self.client.call_tool('agent_prepare', prepare)
+            self.peer.approved=True
+            before=len([e for e in self.peer.events if e['params']['kind']=='execute'])
+            result=await self.client.call_tool('manage_scene',args,raise_on_error=False)
+            self.assertTrue(result.is_error, repr(args))
+            self.assertEqual(before,len([e for e in self.peer.events if e['params']['kind']=='execute']))
+        for target in ('scenes','Scenes/Other','Assets/Fixture.unity','Console'):
+            bad=await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)
+            self.assertTrue(bad.is_error)
+        await self.client.call_tool('agent_prepare',PREPARE)
+        self.assertTrue((await self.client.call_tool('manage_scene',{'action':'get_active'},raise_on_error=False)).is_error)
+        await self.client.call_tool('agent_prepare',prepare)
+        async with Client(self.server) as other:
+            self.assertTrue((await other.call_tool('manage_scene',{'action':'get_active'},raise_on_error=False)).is_error)
+
+    async def test_RT021_scene_preflight_never_queries_ungranted_state_or_refresh(self):
+        from candidate_runtime import scene_read_preflight
+        from fastmcp.exceptions import ToolError
+        from unittest.mock import patch, AsyncMock
+        with self.assertRaises(ToolError):
+            await scene_read_preflight(None)
+        await self.client.call_tool('agent_prepare',{'task_id':'scene-task',
+            'operations':[{'command':'manage_scene','action':'get_active'}],'targets':['Scenes'],'ttl_seconds':60})
+        self.peer.approved=True
+        with patch('services.resources.editor_state.get_editor_state',new=AsyncMock()) as state, \
+             patch('services.tools.refresh_unity.refresh_unity',new=AsyncMock()) as refresh:
+            result=await self.client.call_tool('manage_scene',{'action':'get_active'})
+            self.assertTrue(result.data['success'])
+            state.assert_not_awaited()
+            refresh.assert_not_awaited()
+
+    async def test_RT019_scene_metadata_uses_native_wrapper_and_exact_scene_scope(self):
+        actions = ['get_active', 'get_build_settings', 'get_loaded_scenes']
+        prepare = {'task_id':'scene-task', 'operations':[
+            {'command':'manage_scene','action':a} for a in actions],
+            'targets':['Scenes'], 'ttl_seconds':60}
+        prepared = await self.client.call_tool('agent_prepare', prepare, raise_on_error=False)
+        self.assertFalse(prepared.is_error, 'explicit native scene metadata scope missing')
+        self.peer.approved = True
+        for action in actions:
+            result = await self.client.call_tool('manage_scene', {'action':action}, raise_on_error=False)
+            self.assertFalse(result.is_error)
+            self.assertTrue(result.data['success'], repr(result.data))
+            self.assertEqual(self.peer.events[-1]['params']['body'],
+                {'command':'manage_scene','params':{'action':action}})
+        executed = [e['params']['body']['command'] for e in self.peer.events if e['params']['kind']=='execute']
+        self.assertEqual(executed, ['manage_scene'] * 3, 'preflight must not send editor-state/refresh commands')
+        await self.client.call_tool('agent_stop', {'task_id':'scene-task'})
+        self.assertTrue((await self.client.call_tool('manage_scene', {'action':'get_active'}, raise_on_error=False)).is_error)
+
     async def test_RT016_console_rejects_clear_coercion_and_unbounded_reads(self):
         prepare={'task_id':'console-task','operations':[{'command':'read_console','action':'get'}],
                  'targets':['Console'],'ttl_seconds':60}
@@ -338,7 +396,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RT007_surface_and_unmanaged_paths_are_closed(self):
         names = {t.name for t in await self.client.list_tools()}
-        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console',
+        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene',
             'material_prepare', 'material_execute', 'material_status', 'material_stop'})
         for name, args in [('agent_approve', {}), ('execute_custom_tool', {}),
                            ('manage_animation', {**READ, 'client_id': 'fake'}),

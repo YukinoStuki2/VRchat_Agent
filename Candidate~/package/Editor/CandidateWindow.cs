@@ -53,7 +53,7 @@ namespace Yukino.VRChatAgent
             EditorGUI.EndDisabledGroup();
             Capability("材质信息读取", "manage_material", "get_material_info");
             Capability("控制器信息读取", "manage_animation", "controller_get_info");
-            EditorGUILayout.HelpBox("旧v1入口保持只读。候选材质写走下方独立入口；删除、全量刷新/导入、场景保存、包操作、任意执行仍拒绝。", MessageType.Info);
+            EditorGUILayout.HelpBox("旧v1入口保持只读。Scenes范围允许读取本工程当前/已加载/构建列表元数据，不加载或保存，结果随用户操作变化。候选材质写走下方独立入口；删除、全量刷新/导入、场景保存、包操作、任意执行仍拒绝。", MessageType.Info);
             if (GUILayout.Button("撤销全部任务权限（不回退文件）"))
             {
                 gate.StopAll("本地已撤销全部任务；不回退文件");

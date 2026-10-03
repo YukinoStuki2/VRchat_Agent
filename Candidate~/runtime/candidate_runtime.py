@@ -25,13 +25,15 @@ from transport.plugin_registry import PluginRegistry
 from services.tools.manage_animation import manage_animation
 from services.tools.manage_material import manage_material
 from services.tools.read_console import read_console
+from services.tools.manage_scene import manage_scene
 
 _CURRENT: ContextVar[Any] = ContextVar('candidate_request', default=None)
 SPECS = {
     'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
     'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
 }
-READ_TOOLS = SPECS.keys() | {'read_console'}
+SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes'}
+READ_TOOLS = SPECS.keys() | {'read_console', 'manage_scene'}
 CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
@@ -272,6 +274,10 @@ class Runtime(Middleware):
                 if name == 'read_console':
                     console_params(args)
                     action, target = 'get', 'Console'
+                elif name == 'manage_scene':
+                    if set(args) != {'action'} or args['action'] not in SCENE_ACTIONS:
+                        raise ToolError('operation_not_enabled')
+                    action, target = args['action'], 'Scenes'
                 else:
                     action, key, _, extension = SPECS[name]
                     if set(args) != {'action', key} or args['action'] != action:
@@ -383,6 +389,8 @@ class Runtime(Middleware):
             self.check_plan(invocation)
             if command == 'read_console':
                 expected = console_params(invocation.arguments)
+            elif command == 'manage_scene':
+                expected = {'action': invocation.arguments['action']}
             else:
                 action, key, wire_key, _ = SPECS[command]
                 expected = {'action': action, wire_key: invocation.arguments[key]}
@@ -415,14 +423,17 @@ class Runtime(Middleware):
         exact_id(task_id)
         if type(ttl_seconds) not in (int, float) or not math.isfinite(ttl_seconds) or not 0 < ttl_seconds <= 900:
             raise ToolError('invalid_ttl')
-        if not isinstance(operations, list) or not 1 <= len(operations) <= len(READ_TOOLS):
+        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS) + 1 + len(SCENE_ACTIONS):
             raise ToolError('invalid_operations')
         pairs = []
         for operation in operations:
             if type(operation) is not dict or set(operation) != {'command', 'action'}:
                 raise ToolError('invalid_operations')
             command = operation['command']
-            if command not in READ_TOOLS or operation['action'] != ('get' if command == 'read_console' else SPECS[command][0]):
+            allowed = (SCENE_ACTIONS if command == 'manage_scene' else
+                       {'get'} if command == 'read_console' else
+                       {SPECS[command][0]} if command in SPECS else set())
+            if type(operation['action']) is not str or operation['action'] not in allowed:
                 raise ToolError('operation_not_enabled')
             pairs.append((command, operation['action']))
         if (type(targets) is not list or not 1 <= len(targets) <= 64
@@ -430,6 +441,8 @@ class Runtime(Middleware):
             raise ToolError('invalid_targets')
         for target in targets:
             if target == 'Console' and ('read_console', 'get') in pairs:
+                continue
+            if target == 'Scenes' and any(command == 'manage_scene' for command, _ in pairs):
                 continue
             target_path(target)
             if not any(c in SPECS and target.endswith(SPECS[c][3]) for c, _ in pairs):
@@ -486,6 +499,23 @@ class Runtime(Middleware):
         return await PluginHub.send_command(plan.connection_id, 'agent_stop', {})
 
 
+async def scene_read_preflight(ctx, **_options):
+    """Native scene wrapper's preflight adapter in this owned candidate process.
+
+    Upstream preflight can refresh/import/compile and query an ungranted resource.
+    Final editor dispatch remains responsible for compile/update readiness. No
+    cached editor state, automatic refresh, retry, or self-granted status query.
+    """
+    invocation = _CURRENT.get()
+    if (invocation is None or not invocation.active or invocation.cancelled or
+            invocation.name != 'manage_scene' or ctx.session_id != invocation.client_id or
+            set(invocation.arguments) != {'action'} or
+            invocation.arguments['action'] not in SCENE_ACTIONS):
+        raise ToolError('request_not_bound')
+    invocation.owner.check_plan(invocation)
+    return None
+
+
 def create_server(project_id, *, mcp_auth=None):
     exact_id(project_id)
     config.transport_mode = 'http'
@@ -530,6 +560,10 @@ def create_server(project_id, *, mcp_auth=None):
         return await runtime.stop(task_id)
 
     server.tool(read_console, description='仅本地批准Console范围后的get；必须action=get、format=json、page_size整数1–100。仅types(error/warning/log)、cursor整数0–1000000、filter_text、include_stacktrace布尔可选；拒绝clear/count/类型转换。分页total在truncated时仅为下界，实时日志非冻结快照。')
+    # Module-local adapter: installed only by this candidate server factory.
+    import importlib
+    importlib.import_module('services.tools.manage_scene').preflight = scene_read_preflight
+    server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes；只接受action，不加载/保存/刷新/自动修复。实时场景元数据，不是冻结快照；层级读取尚未开放。')
     server.tool(manage_animation, description='仅已批准controller_get_info；其他操作拒绝。')
     server.tool(manage_material, description='仅已批准get_material_info；其他操作拒绝。')
     from material_runtime import register

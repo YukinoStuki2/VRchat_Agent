@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation>
+<CandidateNativeRoot Condition="'$(CandidateNativeRoot)' == ''">/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor</CandidateNativeRoot></PropertyGroup>
+<ItemGroup><Compile Include="../../package/Editor/Core/*.cs"/><Compile Include="../../package/Editor/NativeReadContract.cs"/><Compile Include="SceneNativeCases.cs"/><Compile Include="$(SceneNativeSource)"/>
+<Compile Include="$(CandidateNativeRoot)/Helpers/Response.cs"/><Compile Include="$(CandidateNativeRoot)/Helpers/ToolParams.cs"/><Compile Include="$(CandidateNativeRoot)/Helpers/ParamCoercion.cs"/><Compile Include="$(CandidateNativeRoot)/Helpers/StringCaseUtility.cs"/>
+<Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference></ItemGroup></Project>

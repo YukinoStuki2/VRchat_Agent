@@ -108,6 +108,22 @@ internal static class AdapterCases
    } finally {CommandRegistry.Implementation=originalHandler;}
    gate.SetCapability("read_console","get",false);
    Console.WriteLine("PASS UA009 explicit Console scope through local adapter; logs remain live, native reader doubled");
+   AdapterOwnedFixture.Begin();
+   string sceneName="";foreach(JObject row in (JArray)catalogDoc["tools"])if((string)row["name"]=="manage_scene")sceneName=(string)row["name_zh"];
+   EditorGUILayout.NextToggle=sceneName+"  manage_scene/get_active";GUILayout.NextButton="展开操作：manage_scene";gui.Invoke(window,null);
+   Check(gate.Allows("manage_scene","get_active"),"scene catalog switch not wired");
+   var sp=Wire("prepare","");sp["body"]=JObject.Parse("{\"operations\":[{\"command\":\"manage_scene\",\"action\":\"get_active\"}],\"targets\":[\"Scenes\"],\"ttl_seconds\":60}");
+   var scenePending=call(sp);Check((bool)scenePending["success"],"UA010 Scenes is a live scope, not an asset: "+scenePending);
+   Check(gate.Approve((string)scenePending["data"]["plan_id"],(string)scenePending["data"]["digest"]),"scene approval");
+   var sr=Wire("execute",(string)scenePending["data"]["plan_id"]);sr["body"]=JObject.Parse("{\"command\":\"manage_scene\",\"params\":{\"action\":\"get_active\"}}");
+   originalHandler=CommandRegistry.Implementation;
+   try {
+    CommandRegistry.Implementation=(cmd,a)=>new MCPForUnity.Editor.Helpers.SuccessResponse("scene fixture",new {name="Unsaved",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=3});
+    Check((bool)call(sr)["success"],"scene response rejected");int callsBeforeCompile=CommandRegistry.Calls;
+    EditorApplication.isCompiling=true;EditorApplication.Tick();Check(!(bool)call(sr)["success"]&&CommandRegistry.Calls==callsBeforeCompile,"compilation reached native");
+    EditorApplication.isCompiling=false;Check(!(bool)call(sr)["success"],"compile auto-restored grant");
+   } finally {EditorApplication.isCompiling=false;CommandRegistry.Implementation=originalHandler;gate.SetCapability("manage_scene","get_active",false);}
+   Console.WriteLine("PASS UA010 scene scope/catalog/compile readiness through actual local adapter, Unity APIs doubled");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

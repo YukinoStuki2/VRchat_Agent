@@ -18,11 +18,20 @@ internal static class WirePeer
   material.SetCapability("copy",true); material.SetCapability("edit",true);
   var gate=new CandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,
    p=>"fixture-only-evidence-"+p,(c,p)=> {
+    // Protocol fixture only. Exact upstream scene methods are exercised separately by SceneNativeCases.
+    if(c=="manage_scene"){
+     object data;
+     if((string)p["action"]=="get_active")data=new{name="FixtureScene",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=2};
+     else if((string)p["action"]=="get_build_settings")data=new[]{new{path="Assets/Fixture.unity",guid="fixture-guid",enabled=true,buildIndex=0}};
+     else data=new{scenes=new[]{new{name="FixtureScene",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=2,isActive=true}}};
+     var r=JObject.FromObject(new SuccessResponse("fixture scene metadata",data));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
     if(c=="read_console"){var r=JObject.FromObject(MCPForUnity.Editor.Tools.ReadConsole.HandleCommand(p));return (bool?)r["success"]==true&&!NativeReadContract.Valid(c,r,p)?new JObject{["success"]=false}:r;}
     return JObject.FromObject(new SuccessResponse("fixture handler",new{fixture_only=true,call=++calls,command=c,path=(string)(p["materialPath"]??p["controllerPath"])}));
    });
   ConsoleNativeCases.Seed();
   gate.SetCapability("read_console","get",true);
+  foreach(string a in new[]{"get_active","get_build_settings","get_loaded_scenes"})gate.SetCapability("manage_scene",a,true);
   gate.SetCapability("manage_material","get_material_info",true);
   gate.SetCapability("manage_animation","controller_get_info",true);
   Trace("ready");

@@ -293,7 +293,7 @@ def main():
         native_element=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateNativeRoot')
         assert native_element is not None and native_element.text
         native=Path(native_element.text)
-        for name in ('Tools/ReadConsole.cs','Helpers/ToolParams.cs','Helpers/ParamCoercion.cs','Helpers/StringCaseUtility.cs'):
+        for name in ('Tools/ReadConsole.cs','Tools/ManageScene.cs','Helpers/ToolParams.cs','Helpers/ParamCoercion.cs','Helpers/StringCaseUtility.cs'):
             external['upstream_'+name]=native/name
     external_before={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}
     report['native_inputs']=external_before

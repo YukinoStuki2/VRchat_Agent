@@ -99,7 +99,7 @@ class UnityAuthTests(unittest.IsolatedAsyncioTestCase):
                         json={'jsonrpc':'2.0','id':1,'method':'ping'})
                     self.assertEqual(denied.status_code, 401)
                 async with Client(http_url, auth=tokens['mcp']) as client:
-                    self.assertEqual({t.name for t in await client.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','material_prepare','material_execute','material_status','material_stop'})
+                    self.assertEqual({t.name for t in await client.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','manage_scene','material_prepare','material_execute','material_status','material_stop'})
 
     async def test_UA102_signed_editor_cannot_register_a_different_project(self):
         async with self.fixture() as (url, tokens, mcp):

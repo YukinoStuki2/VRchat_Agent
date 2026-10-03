@@ -2296,8 +2296,12 @@
       "name_zh": "场景管理",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "get_active",
+        "get_build_settings",
+        "get_loaded_scenes"
+      ],
+      "audit_note_zh": "三个元数据读取需本地开关和Scenes实时范围清单；只接受action，拒绝加载/保存/刷新/修复/场景视角。候选前置适配不查询未授权状态或自动刷新；最终Unity连接门控检查编译/更新。构建列表索引包含禁用项，不等于运行时build index。"
     },
     {
       "name": "manage_script",

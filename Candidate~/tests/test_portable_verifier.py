@@ -102,7 +102,7 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertIn("['OC001']", workflow)
         self.assertGreaterEqual(workflow.count("'Candidate~/catalog'"),2)
         unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
-        self.assertIn("{f'UA{i:03d}' for i in range(1, 10)}", unity)
+        self.assertIn("{f'UA{i:03d}' for i in range(1, 11)}", unity)
 
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')

@@ -15,7 +15,7 @@ import test_client_binding as binding
 import websockets
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','read_console',
+TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','read_console','manage_scene',
          'material_prepare','material_execute','material_stop']
 
 class NativePeer:
@@ -241,6 +241,27 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         assert any(p['plan_id']==plan['plan_id'] and p['paused'] for p in remaining),'paused_plan_lost'
                         assert (await exchange({'fixture_resume_exact':plan,'route':route}))['fixture_resumed']
                         await data(role,tool,arguments)
+                    report['native_scene_pass_ids']=[]
+                    scene_prepare={'task_id':'scene-task','operations':[
+                        {'command':'manage_scene','action':a} for a in ('get_active','get_build_settings','get_loaded_scenes')],
+                        'targets':['Scenes'],'ttl_seconds':120}
+                    for role,other,ident in (('hermes','codex','NE001'),('codex','hermes','NE002')):
+                        report['approved_stage']='scene_'+role
+                        plan=await data(role,'agent_prepare',scene_prepare)
+                        await denied(role,'manage_scene',{'action':'get_active'})
+                        plan=await data(role,'agent_prepare',scene_prepare);await approve(plan)
+                        await denied(other,'manage_scene',{'action':'get_active'})
+                        for action in ('get_active','get_build_settings','get_loaded_scenes'):
+                            value=await data(role,'manage_scene',{'action':action})
+                            assert value is not None
+                        await pause_resume(role,plan,'manage_scene',{'action':'get_active'})
+                        await data(role,'agent_stop',{'task_id':'scene-task'})
+                        await denied(role,'manage_scene',{'action':'get_active'})
+                        plan=await data(role,'agent_prepare',scene_prepare);await approve(plan)
+                        await denied(role,'manage_scene',{'action':'save'})
+                        await data(role,'agent_stop',{'task_id':'scene-task'})
+                        assert await plans()==[]
+                        report['native_scene_pass_ids'].append(ident)
                     read_plans={}
                     report['approved_stage']='NA001_signed_local_plans'
                     for role in ('hermes','codex'):

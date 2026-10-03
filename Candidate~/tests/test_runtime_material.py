@@ -353,7 +353,7 @@ class MaterialTests(MaterialHarness):
             async with Client(self.url) as client:
                 tools = await client.list_tools()
                 self.assertEqual({t.name for t in tools}, TOOLS | {
-                    'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console'})
+                    'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene'})
                 plan = await self.prepare(client)
                 wire = self.events[-1]
                 self.assertEqual(wire['name'], ROUTE)

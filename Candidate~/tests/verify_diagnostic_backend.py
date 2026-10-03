@@ -41,14 +41,29 @@ def verify_payload(moved, work, report):
                 async with Client(factory,roots=[source.as_uri()]) as client:
                     names={t.name for t in await client.list_tools()}
                     assert names=={'read_text_file','list_directory','get_file_info','agent_diagnostics_status'}
+                    before_hidden=len(processes)
                     assert await client.list_resources()==[] and await client.list_prompts()==[]
+                    assert await client.list_resource_templates()==[]
+                    assert len(processes)==before_hidden,'hidden_catalog_forwarded_to_backend'
                     read=await client.call_tool('read_text_file',{'path':str(snap.root/'Editor.log')})
                     assert not read.is_error and 'fixture diagnostic marker' in str(read.content)
                     for name,arguments in [('write_file',{'path':str(snap.root/'new.txt'),'content':'x'}),
                         ('read_text_file',{'path':str(source/'private.txt')})]:
                         value=await client.call_tool(name,arguments,raise_on_error=False);assert value.is_error
+                    before_denied=len(processes)
+                    async with Client(factory) as foreign:
+                        for query in (foreign.list_resources, foreign.list_resource_templates, foreign.list_prompts):
+                            try: await query()
+                            except Exception as exc: assert 'snapshot_bound_to_other_session' in str(exc)
+                            else: raise AssertionError('foreign_hidden_catalog_inherited_lease')
                     snap._active.clear()
                     value=await client.call_tool('agent_diagnostics_status',{},raise_on_error=False);assert value.is_error
+                    for query in (client.list_resources, client.list_resource_templates, client.list_prompts):
+                        try: await query()
+                        except Exception as exc: assert 'local_snapshot_expired_or_closed' in str(exc)
+                        else: raise AssertionError('closed_hidden_catalog_bypassed_lease')
+                    assert len(processes)==before_denied,'denied_catalog_spawned_backend'
+                    report['hidden_catalog_local_only_and_bound']=True
             assert not snap.root.parent.exists()
         report['children']=[{'pid':p.pid,'returncode':p.returncode} for p in processes]
         report['child_pids']=[p.pid for p in processes]

@@ -38,6 +38,16 @@ class LocalSnapshotLease(Middleware):
                 self.snapshot._active.clear()
                 raise ToolError('approved_snapshot_changed')
 
+    # Hidden catalogs have no backend semantics; on_request still checks the lease.
+    async def on_list_resources(self, context, call_next):
+        return []
+
+    async def on_list_resource_templates(self, context, call_next):
+        return []
+
+    async def on_list_prompts(self, context, call_next):
+        return []
+
     async def on_request(self, context, call_next):
         # Initialize/ping are handled locally by FastMCP, not proxied. No backend
         # process or file access is needed before binding a data/catalog request.

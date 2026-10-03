@@ -169,7 +169,7 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
                             self.assertEqual(response.status_code, 404)
                 self.assertTrue(await owner.ping(), 'foreign DELETE must not close owner session')
             async with Client(url, auth=tokens['fixture-client-b']) as other:
-                self.assertEqual(len(await other.list_tools()), 10)
+                self.assertEqual({t.name for t in await other.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','material_prepare','material_execute','material_status','material_stop'})
             self.assertEqual(server._candidate_runtime.plans, {})
             self.assertEqual(server._candidate_runtime.material.plans, {})
 

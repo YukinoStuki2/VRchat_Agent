@@ -122,7 +122,7 @@
     "dependencies/mcp-sse-cleanup.patch": "6b868bab26515729d68c013267b0d2557b1d0f09706f5eb3898306608abbbbcf",
     "diagnostics/cli.py": "469422df3dce9e1831c2aeeb35a6f4d11f56869f5001a3d3f02f2eaf22097569",
     "diagnostics/record_test.py": "6666cdbf9cad9a00a632dc10772aea8465d4d8c285a72582bba9990aec252b5c",
-    "diagnostics/server.py": "19b28fdba6de53c2da29d6272af172865c30b086214a936ee49638f65703eecd",
+    "diagnostics/server.py": "f581f4ea34aee21ad0a78952c7e72c4ce6a31c22efa831071ad2be81f98779cd",
     "diagnostics/snapshot.py": "36e96eee21be5455b30b4f75286238251a528d09f6cdee098377227a61dba6ef",
     "diagnostics/verify_windows.py": "00f5e90dc23ba575bea98c473dc6ff5da7168f4c82534ee4d5739e9ca86ce1c1",
     "diagnostics/windows_handles.py": "9f1fe8585a09794183bcf47f4030e60577a9d6a5ab68c868d33d32dc1e89fd33",

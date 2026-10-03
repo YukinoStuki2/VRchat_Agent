@@ -137,8 +137,8 @@ jobs:
                       'ids':sorted(re.findall(r'^PASS (NC[0-9]{3}) ',result.stdout,re.M))}
                   assert result.returncode==0 and report['console_native']['ids']==[f'NC{i:03d}' for i in range(1,5)]
                   console_methods=[cls.name+'.'+m.name for cls in ast.parse((root/'tests/test_runtime.py').read_text(encoding='utf-8')).body
-                      if isinstance(cls,ast.ClassDef) for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_RT01') and m.name.split('_')[1] in ('RT015','RT016','RT017')]
-                  assert len(console_methods)==3
+                      if isinstance(cls,ast.ClassDef) for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_RT01') and m.name.split('_')[1] in ('RT015','RT016','RT017','RT018')]
+                  assert len(console_methods)==4
                   report['console_runtime']=[]
                   for method in console_methods:
                       code="import sys,runpy;sys.path[:0]="+repr([str(root/'dependencies/mcp-1.29.1'),str(root/'tests')])+";sys.argv=["+repr(str(root/'tests/test_runtime.py'))+", "+repr(method)+"];runpy.run_path(sys.argv[0],run_name='__main__')"
@@ -150,7 +150,7 @@ jobs:
                   assert all(hashlib.sha256((native/name).read_bytes()).hexdigest()==digest for name,digest in native_hashes.items())
           finally:
               report['owned_build_directory_absent']='td' in globals() and not pathlib.Path(td).exists()
-              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and len(report.get('console_runtime',[]))==3 and all(x['passed'] for x in report['console_runtime'])
+              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and len(report.get('console_runtime',[]))==4 and all(x['passed'] for x in report['console_runtime'])
               target.write_text(json.dumps(report,indent=2),encoding='utf-8')
           assert report['passed']
       - name: Collect actual locked Windows LICENSE and NOTICE files

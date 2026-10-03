@@ -23,7 +23,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "runtime"), str(ROOT / "native/src")]
 
 def no_network(event, args):
-    if event == "socket.__new__" and args[1] != socket.AF_UNIX:
+    # Windows asyncio uses socket.socketpair's IPv4 loopback implementation.
+    # Permit only events originating in that exact stdlib function, not arbitrary
+    # loopback clients. No production code is exempt and DNS remains forbidden.
+    if sys.platform == "win32" and event in {"socket.__new__", "socket.bind", "socket.connect"}:
+        caller = sys._getframe(1)
+        plumbing = {socket.socket.__init__.__code__, socket.socket.accept.__code__}
+        while caller is not None and caller.f_code in plumbing:
+            caller = caller.f_back
+        if caller is not None and caller.f_code is socket.socketpair.__code__:
+            if event == "socket.__new__" and args[1] == socket.AF_INET:
+                return
+            if event in {"socket.bind", "socket.connect"} and args[1][0] == "127.0.0.1":
+                return
+    if event == "socket.__new__" and args[1] != getattr(socket, "AF_UNIX", None):
         raise PermissionError("RUNTIME FIXTURE: network forbidden")
     if event in {"socket.connect", "socket.bind", "socket.sendto", "socket.sendmsg",
                  "socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr"}:
@@ -92,6 +105,26 @@ class UnityPeerFixture:
 
     async def close(self, **kwargs):
         pass
+
+
+class NetworkGuardTests(unittest.TestCase):
+    def test_RT018_stdlib_socketpair_only_no_inet_or_dns(self):
+        left, right = socket.socketpair()
+        try:
+            left.sendall(b"self-pipe")
+            self.assertEqual(right.recv(16), b"self-pipe")
+        finally:
+            left.close()
+            right.close()
+        for family in (socket.AF_INET, socket.AF_INET6):
+            with self.assertRaises(PermissionError):
+                socket.socket(family, socket.SOCK_STREAM)
+        with self.assertRaises(PermissionError):
+            socket.getaddrinfo("example.invalid", 443)
+        for address in (("127.0.0.1", 80), ("203.0.113.1", 443)):
+            for event in ("socket.connect", "socket.bind", "socket.sendto"):
+                with self.assertRaises(PermissionError):
+                    no_network(event, (None, address))
 
 
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):

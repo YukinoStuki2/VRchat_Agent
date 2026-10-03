@@ -162,6 +162,21 @@ def main():
             result=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',str(ROOT/'tests'/suite),*regression_arguments(suite),'-v'],env=env,capture_output=True,text=True,timeout=120)
             report['regressions'].append({'suite':suite,'selected_methods':regression_arguments(suite) or 'all', 'code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
             assert result.returncode==0 and 'ResourceWarning' not in result.stderr and 'skipped=' not in result.stderr,result.stderr
+        if os.name == 'nt' and args.node_archive is not None:
+            diagnostic_console = subprocess.run([str(executable), '-I', '-B', '-W', 'always::ResourceWarning',
+                str(ROOT/'tests/test_diagnostics_windows_cli.py'), str(relocated/'package/Runtime~')],
+                env=env, capture_output=True, text=True, timeout=120)
+            report['windows_diagnostic_console'] = {'code': diagnostic_console.returncode,
+                'stdout': diagnostic_console.stdout, 'stderr': diagnostic_console.stderr,
+                'scope': 'real Windows console + fixture operator; no native client/human claim'}
+            assert diagnostic_console.returncode == 0 and 'ResourceWarning:' not in diagnostic_console.stderr
+            receipts = [json.loads(line.split('=', 1)[1]) for line in diagnostic_console.stdout.splitlines()
+                if line.startswith('WINDOWS_DIAGNOSTIC_CONSOLE=')]
+            assert len(receipts) == 1 and len(receipts[0]) == 3
+            assert {row['case'].split('.test_')[1].split('_')[0] for row in receipts[0]} == {'DW001', 'DW002', 'DW003'}
+            assert all(row['normal_exit'] and row['job_empty_before_cleanup'] and row['temporary_root_absent']
+                and row['source_unchanged'] and row['human_approval_verified'] is False for row in receipts[0])
+            report['windows_diagnostic_console']['receipts'] = receipts[0]
         # Keep real pip/installed/notice records, not only counts.
         for item in (relocated/'evidence').iterdir():
             destination=args.output.parent/(args.output.stem+'-'+item.name)

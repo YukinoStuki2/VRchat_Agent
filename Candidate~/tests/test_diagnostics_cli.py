@@ -78,6 +78,7 @@ class ApprovedServerTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
         import time
         import cli
+        import server  # Resolve/import dependencies before starting the short test lease.
         self.assertTrue(hasattr(cli, 'serve_snapshot'), 'bounded stdio owner missing')
         for fail in (False, True):
             with self.subTest(fail=fail), tempfile.TemporaryDirectory(prefix='dc-lifetime-') as home:

@@ -208,8 +208,25 @@ tempfile.TemporaryDirectory._rmtree = locked
             private = Path(temp).resolve()
             process, root, deadline = self._keeper(private)
             (root / 'copy.txt').write_bytes(b'synthetic')
-            api = Win32(); handle = api.open(str(root.parent), directory=True)
+            # Attributes-only handles are not a directory-listing sharing lock.
+            # Prove the owned directory is renameable first, then require that
+            # a real GENERIC_READ/no-delete-share handle denies that operation.
+            outer = root.parent
+            renamed = outer.with_name(outer.name + '-rename-control')
+            outer.rename(renamed); renamed.rename(outer)
+            api = Win32()
+            handle = api.lib.CreateFileW('\\\\?\\' + str(outer),
+                0x80000000, 1, None, 3, 0x02200000, None)
+            import ctypes
+            api.check(handle is not None and handle != ctypes.c_void_p(-1).value)
             try:
+                try:
+                    outer.rename(renamed)
+                except OSError as error:
+                    self.assertEqual(error.winerror, 32, 'expected sharing violation, not unrelated denial')
+                else:
+                    renamed.rename(outer)
+                    self.fail('directory-read HANDLE did not enforce no-delete sharing')
                 process.stdin.write(b'R'); process.stdin.flush()
                 time.sleep(max(0, deadline - time.monotonic()) + 0.15)
                 self.assertFalse(root.exists(), 'inner root should be deletable')

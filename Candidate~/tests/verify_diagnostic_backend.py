@@ -50,9 +50,11 @@ def verify_payload(moved, work, report):
                     snap._active.clear()
                     value=await client.call_tool('agent_diagnostics_status',{},raise_on_error=False);assert value.is_error
             assert not snap.root.parent.exists()
-        assert processes and all(p.returncode==0 for p in processes)
+        report['children']=[{'pid':p.pid,'returncode':p.returncode} for p in processes]
         report['child_pids']=[p.pid for p in processes]
-        report['all_children_exit_zero']=True
+        report['all_children_exit_zero']=bool(processes) and all(p.returncode==0 for p in processes)
+        print(json.dumps({'diagnostic_child_exits':report['children']}),flush=True)
+        assert report['all_children_exit_zero']
         if sys.platform!='win32':
             assert all(not Path(f'/proc/{p.pid}').exists() for p in processes)
             report['all_child_pids_absent']=True

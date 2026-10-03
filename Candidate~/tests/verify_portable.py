@@ -113,6 +113,19 @@ def main():
             assert diagnostic_run.returncode==0 and 'ResourceWarning:' not in diagnostic_run.stderr
             report['diagnostic']['result']=json.loads(diagnostic_output.read_bytes())
             assert report['diagnostic']['result']['native_read_write_denial_revoke_passed'] and report['diagnostic']['result']['tamper_rejected']
+        read_probe=('import sys,asyncio;sys.path[:0]='+repr([str(relocated/'package/Runtime~'/p) for p in
+            ('runtime','native/src','dependencies/mcp-1.29.1')])+'\n'
+            'from candidate_runtime import create_server\nfrom fastmcp import Client\n'
+            'async def check():\n'
+            ' async with Client(create_server("relocated-console-fixture")) as client:\n'
+            '  tools={t.name for t in await client.list_tools()};assert "read_console" in tools\n'
+            '  for action in ("get","clear"):\n'
+            '   r=await client.call_tool("read_console",{"action":action,"format":"json","page_size":2},raise_on_error=False);assert r.is_error\n'
+            'asyncio.run(check());print("PASS relocated-console-discovery-default-deny")')
+        probe=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning','-c',read_probe],
+            env=env,capture_output=True,text=True,timeout=30)
+        report['console_payload']={'exit_code':probe.returncode,'stdout':probe.stdout,'stderr':probe.stderr}
+        assert probe.returncode==0 and 'PASS relocated-console-discovery-default-deny' in probe.stdout and 'ResourceWarning:' not in probe.stderr
         out=work/'dotnet';csproj=ROOT/'tests/unity-core/EditorBootstrapCases.csproj'
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
         build=compile_fixture(command,env,report)

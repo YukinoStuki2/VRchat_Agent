@@ -54,12 +54,31 @@ namespace Yukino.VRChatAgent
         static string Op(string command, string action)
         {
             Require((command == "manage_material" && action == "get_material_info") ||
-                (command == "manage_animation" && action == "controller_get_info"), "operation_not_supported");
+                (command == "manage_animation" && action == "controller_get_info") ||
+                (command == "read_console" && action == "get"), "operation_not_supported");
             return command + "/" + action;
+        }
+        static void ConsoleParams(JObject args)
+        {
+            string[] required = { "action", "types", "count", "pageSize", "format", "includeStacktrace" };
+            Require(args != null && required.All(k => args.ContainsKey(k)) &&
+                args.Properties().All(p => required.Contains(p.Name) || p.Name == "cursor" || p.Name == "filterText"), "invalid_console_arguments");
+            Require((string)args["action"] == "get" && (string)args["format"] == "json", "operation_not_supported");
+            Require(args["count"]?.Type == JTokenType.Integer && (long)args["count"] == 10 &&
+                args["pageSize"]?.Type == JTokenType.Integer && (long)args["pageSize"] >= 1 && (long)args["pageSize"] <= 100 &&
+                args["includeStacktrace"]?.Type == JTokenType.Boolean, "invalid_console_page");
+            if (args.ContainsKey("cursor")) Require(args["cursor"].Type == JTokenType.Integer &&
+                (long)args["cursor"] >= 0 && (long)args["cursor"] <= 1000000, "invalid_console_page");
+            if (args.ContainsKey("filterText")) Require(args["filterText"].Type == JTokenType.String &&
+                ((string)args["filterText"]).Length <= 512 && !((string)args["filterText"]).Any(char.IsControl), "invalid_console_filter");
+            var types = args["types"] as JArray;
+            Require(types != null && types.Count >= 1 && types.Count <= 3 && types.All(t => t.Type == JTokenType.String &&
+                new[] { "error", "warning", "log" }.Contains((string)t)) && types.Select(t => (string)t).Distinct().Count() == types.Count, "invalid_console_types");
         }
         static string PathValue(JToken token)
         {
             string path = Text(token);
+            if (path == "Console") return path;
             Require(path.StartsWith("Assets/", StringComparison.Ordinal) && path.IndexOfAny(new[] { '\\', ':' }) < 0 &&
                 path.Split('/').All(p => p.Length > 0 && p != "." && p != ".." && p == p.Trim()), "invalid_target");
             Require(path.EndsWith(".mat", StringComparison.Ordinal) || path.EndsWith(".controller", StringComparison.Ordinal), "invalid_target");
@@ -201,7 +220,7 @@ namespace Yukino.VRChatAgent
                         Require((string)r["plan_id"] == "", "unexpected_identity");
                         Keys(body, "operations", "targets", "ttl_seconds");
                         var ops = body["operations"] as JArray; var targets = body["targets"] as JArray;
-                        Require(ops != null && ops.Count > 0 && ops.Count <= 2 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
+                        Require(ops != null && ops.Count > 0 && ops.Count <= 3 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
                         var seen = new HashSet<string>(StringComparer.Ordinal);
                         foreach (JToken item in ops)
                         {
@@ -215,7 +234,8 @@ namespace Yukino.VRChatAgent
                             string path = PathValue(token);
                             Require(paths.Add(path), "duplicate_target");
                             Require((path.EndsWith(".mat", StringComparison.Ordinal) && seen.Contains("manage_material/get_material_info")) ||
-                                (path.EndsWith(".controller", StringComparison.Ordinal) && seen.Contains("manage_animation/controller_get_info")), "target_operation_mismatch");
+                                (path.EndsWith(".controller", StringComparison.Ordinal) && seen.Contains("manage_animation/controller_get_info")) ||
+                                (path == "Console" && seen.Contains("read_console/get")), "target_operation_mismatch");
                         }
                         Require(body["ttl_seconds"].Type == JTokenType.Float || body["ttl_seconds"].Type == JTokenType.Integer, "invalid_ttl");
                         double ttl = (double)body["ttl_seconds"];
@@ -240,8 +260,15 @@ namespace Yukino.VRChatAgent
                     Require(kind == "execute", "unknown_kind");
                     Keys(body, "command", "params"); string command = Text(body["command"]);
                     var args = body["params"] as JObject;
-                    string keyName = command == "manage_material" ? "materialPath" : "controllerPath";
-                    Keys(args, "action", keyName); string action = Text(args["action"]); string target = PathValue(args[keyName]);
+                    string action, target;
+                    if (command == "read_console")
+                    { ConsoleParams(args); action = "get"; target = "Console"; }
+                    else
+                    {
+                        string keyName = command == "manage_material" ? "materialPath" : "controllerPath";
+                        Keys(args, "action", keyName); action = Text(args["action"]); target = PathValue(args[keyName]);
+                        Require(target != "Console", "invalid_target");
+                    }
                     string operation = Op(command, action);
                     Require(((JArray)active.Manifest["operations"]).Cast<JObject>().Any(x => (string)x["command"] == command && (string)x["action"] == action) &&
                         ((JArray)active.Manifest["targets"]).Any(x => (string)x == target), "outside_plan");

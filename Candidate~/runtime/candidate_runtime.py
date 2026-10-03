@@ -24,12 +24,14 @@ from transport.plugin_hub import PluginHub
 from transport.plugin_registry import PluginRegistry
 from services.tools.manage_animation import manage_animation
 from services.tools.manage_material import manage_material
+from services.tools.read_console import read_console
 
 _CURRENT: ContextVar[Any] = ContextVar('candidate_request', default=None)
 SPECS = {
     'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
     'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
 }
+READ_TOOLS = SPECS.keys() | {'read_console'}
 CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
@@ -50,6 +52,32 @@ def target_path(value):
             or any(p in ('', '.', '..') or p != p.strip() for p in value.split('/'))):
         raise ToolError('invalid_target')
     return value
+
+
+def console_params(args):
+    # Keep the native reader/schema; accept only bounded structured get/paging.
+    required = {'action', 'page_size', 'format'}
+    optional = {'types', 'cursor', 'filter_text', 'include_stacktrace'}
+    if (not required <= args.keys() or args.keys() - required - optional or
+            args['action'] != 'get' or args['format'] != 'json'):
+        raise ToolError('operation_not_enabled')
+    size, cursor = args['page_size'], args.get('cursor', 0)
+    kinds = args.get('types', ['error', 'warning', 'log'])
+    if (type(size) is not int or not 1 <= size <= 100 or type(cursor) is not int or
+            not 0 <= cursor <= 1000000 or type(kinds) is not list or not 1 <= len(kinds) <= 3 or
+            any(type(k) is not str or k not in {'error', 'warning', 'log'} for k in kinds) or
+            len(set(kinds)) != len(kinds) or type(args.get('include_stacktrace', False)) is not bool):
+        raise ToolError('invalid_console_page')
+    wire = {'action': 'get', 'types': kinds, 'count': 10, 'pageSize': size,
+            'format': 'json', 'includeStacktrace': args.get('include_stacktrace', False)}
+    if 'cursor' in args:
+        wire['cursor'] = cursor
+    if 'filter_text' in args:
+        text = args['filter_text']
+        if type(text) is not str or len(text) > 512 or any(ord(c) < 32 for c in text):
+            raise ToolError('invalid_console_filter')
+        wire['filterText'] = text
+    return wire
 
 
 def snapshot(value):
@@ -221,7 +249,7 @@ class Runtime(Middleware):
         if name in TOOLS:
             return await self.material.on_call_tool(context, call_next)
         args = snapshot(context.message.arguments or {})
-        if name not in CONTROLS | SPECS.keys():
+        if name not in CONTROLS | READ_TOOLS:
             raise ToolError('operation_not_enabled')
         ctx = context.fastmcp_context
         if ctx is None or not ctx.session_id:
@@ -240,16 +268,20 @@ class Runtime(Middleware):
                 if len(self.preparing) >= 128 and previous is None:
                     raise ToolError('prepare_capacity')
                 self.preparing[invocation.client_id] = invocation
-            if name in SPECS:
-                action, key, _, extension = SPECS[name]
-                if set(args) != {'action', key} or args['action'] != action:
-                    raise ToolError('operation_not_enabled')
-                target_path(args[key])
-                if not args[key].endswith(extension):
-                    raise ToolError('invalid_target')
+            if name in READ_TOOLS:
+                if name == 'read_console':
+                    console_params(args)
+                    action, target = 'get', 'Console'
+                else:
+                    action, key, _, extension = SPECS[name]
+                    if set(args) != {'action', key} or args['action'] != action:
+                        raise ToolError('operation_not_enabled')
+                    target = target_path(args[key])
+                    if not target.endswith(extension):
+                        raise ToolError('invalid_target')
                 invocation.plan = self.plans.get(invocation.client_id)
                 self.check_plan(invocation)
-                if (name, action) not in invocation.plan.operations or args[key] not in invocation.plan.targets:
+                if (name, action) not in invocation.plan.operations or target not in invocation.plan.targets:
                     raise ToolError('outside_plan')
             elif name == 'agent_catalog':
                 if (set(args) - {'offset','limit'} or
@@ -265,7 +297,7 @@ class Runtime(Middleware):
                 raise ToolError('invalid_ttl')
             await ctx.set_state('unity_instance', self.project_id)
             result = await call_next(context)
-            if name in SPECS:
+            if name in READ_TOOLS:
                 if ctx.session in self.closed_sessions:
                     raise ToolError('session_closed')  # Never return a late session result.
                 data = result.structured_content
@@ -279,7 +311,7 @@ class Runtime(Middleware):
             # Includes failures before PluginHub.send_command, exceptions and
             # server-side cancellation. command_failed compares plan identity.
             try:
-                if name in SPECS and not read_succeeded and not paused:
+                if name in READ_TOOLS and not read_succeeded and not paused:
                     self.command_failed()
                 if invocation.revoked_plan is not None:
                     await self.notify_stop(invocation.client_id, invocation.revoked_plan)
@@ -324,7 +356,7 @@ class Runtime(Middleware):
 
     def command_failed(self, result=None):
         invocation = _CURRENT.get()
-        if (invocation is not None and invocation.owner is self and invocation.name in SPECS
+        if (invocation is not None and invocation.owner is self and invocation.name in READ_TOOLS
                 and self.plans.get(invocation.client_id) is invocation.plan
                 and not self.paused_response(invocation, result)):
             # Preserve the precise identity until middleware can await bounded
@@ -347,10 +379,14 @@ class Runtime(Middleware):
         from material_runtime import TOOLS
         if command in TOOLS:
             return self.material.envelope(invocation, session_id, command, params)
-        if command in SPECS:
+        if command in READ_TOOLS:
             self.check_plan(invocation)
-            action, key, wire_key, _ = SPECS[command]
-            if params != {'action': action, wire_key: invocation.arguments[key]}:
+            if command == 'read_console':
+                expected = console_params(invocation.arguments)
+            else:
+                action, key, wire_key, _ = SPECS[command]
+                expected = {'action': action, wire_key: invocation.arguments[key]}
+            if params != expected:
                 raise ToolError('operation_not_enabled')
             kind = 'execute'
             body = {'command': command, 'params': params}
@@ -379,22 +415,24 @@ class Runtime(Middleware):
         exact_id(task_id)
         if type(ttl_seconds) not in (int, float) or not math.isfinite(ttl_seconds) or not 0 < ttl_seconds <= 900:
             raise ToolError('invalid_ttl')
-        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS):
+        if not isinstance(operations, list) or not 1 <= len(operations) <= len(READ_TOOLS):
             raise ToolError('invalid_operations')
         pairs = []
         for operation in operations:
             if type(operation) is not dict or set(operation) != {'command', 'action'}:
                 raise ToolError('invalid_operations')
             command = operation['command']
-            if command not in SPECS or operation['action'] != SPECS[command][0]:
+            if command not in READ_TOOLS or operation['action'] != ('get' if command == 'read_console' else SPECS[command][0]):
                 raise ToolError('operation_not_enabled')
             pairs.append((command, operation['action']))
         if (type(targets) is not list or not 1 <= len(targets) <= 64
                 or len(set(targets)) != len(targets) or len(set(pairs)) != len(pairs)):
             raise ToolError('invalid_targets')
         for target in targets:
+            if target == 'Console' and ('read_console', 'get') in pairs:
+                continue
             target_path(target)
-            if not any(target.endswith(SPECS[c][3]) for c, _ in pairs):
+            if not any(c in SPECS and target.endswith(SPECS[c][3]) for c, _ in pairs):
                 raise ToolError('invalid_target')
         # Bound idle session storage. Expiry removes mapping, never renews Unity approval.
         self.plans = {k: p for k, p in self.plans.items() if p.expires_at > time.monotonic()}
@@ -491,6 +529,7 @@ def create_server(project_id, *, mcp_auth=None):
         """立即关闭本会话清单映射，通知Unity撤权；不回滚文件。"""
         return await runtime.stop(task_id)
 
+    server.tool(read_console, description='仅本地批准Console范围后的get；必须action=get、format=json、page_size整数1–100。仅types(error/warning/log)、cursor整数0–1000000、filter_text、include_stacktrace布尔可选；拒绝clear/count/类型转换。分页total在truncated时仅为下界，实时日志非冻结快照。')
     server.tool(manage_animation, description='仅已批准controller_get_info；其他操作拒绝。')
     server.tool(manage_material, description='仅已批准get_material_info；其他操作拒绝。')
     from material_runtime import register

@@ -110,6 +110,57 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await PluginHub._registry.list_sessions(), {})
         self.assertEqual(PluginHub._connections, {})
 
+    async def test_RT016_console_rejects_clear_coercion_and_unbounded_reads(self):
+        prepare={'task_id':'console-task','operations':[{'command':'read_console','action':'get'}],
+                 'targets':['Console'],'ttl_seconds':60}
+        normal={'action':'get','page_size':20,'format':'json'}
+        invalid=[{'action':'clear'},{'action':'GET'},{'page_size':True},{'page_size':'20'},
+                 {'page_size':0},{'page_size':101},{'cursor':-1},{'cursor':1000001},{'cursor':'0'},
+                 {'include_stacktrace':'true'},{'types':['all']},{'types':['error','error']},
+                 {'types':'["error"]'},{'filter_text':None},{'filter_text':'x'*513},
+                 {'count':10},{'format':'plain'},{'approved':True}]
+        for change in invalid:
+            with self.subTest(change=change):
+                await self.client.call_tool('agent_prepare',prepare)
+                self.peer.approved=True
+                before=len([e for e in self.peer.events if e['params']['kind']=='execute'])
+                result=await self.client.call_tool('read_console',{**normal,**change},raise_on_error=False)
+                self.assertTrue(result.is_error)
+                self.assertEqual(len([e for e in self.peer.events if e['params']['kind']=='execute']),before)
+        for target in ('Console/Other','console','Assets/Console','Console '):
+            bad=await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)
+            self.assertTrue(bad.is_error)
+
+    async def test_RT017_console_cannot_inherit_asset_or_other_session_approval(self):
+        normal={'action':'get','page_size':10,'format':'json'}
+        await self.client.call_tool('agent_prepare',PREPARE)
+        self.peer.approved=True
+        denied=await self.client.call_tool('read_console',normal,raise_on_error=False)
+        self.assertTrue(denied.is_error)
+        await self.client.call_tool('agent_prepare',{'task_id':'console-task',
+            'operations':[{'command':'read_console','action':'get'}],'targets':['Console'],'ttl_seconds':60})
+        async with Client(self.server) as other:
+            result=await other.call_tool('read_console',normal,raise_on_error=False)
+            self.assertTrue(result.is_error)
+        self.assertFalse((await self.client.call_tool('read_console',normal)).is_error)
+        await self.client.call_tool('agent_stop',{'task_id':'console-task'})
+        self.assertTrue((await self.client.call_tool('read_console',normal,raise_on_error=False)).is_error)
+
+    async def test_RT015_console_get_traverses_native_handler_with_explicit_scope(self):
+        args={'task_id':'console-task','operations':[{'command':'read_console','action':'get'}],
+              'targets':['Console'],'ttl_seconds':60}
+        prepared=await self.client.call_tool('agent_prepare',args,raise_on_error=False)
+        self.assertFalse(prepared.is_error, 'explicit Console read scope missing')
+        self.peer.approved=True  # Unity-only approval is separately tested in compiled C#.
+        result=await self.client.call_tool('read_console',{'action':'get','page_size':20,
+            'cursor':0,'format':'json','include_stacktrace':True},raise_on_error=False)
+        self.assertFalse(result.is_error, 'native console reader missing')
+        self.assertTrue(result.data['success'])
+        body=self.peer.events[-1]['params']['body']
+        self.assertEqual(body,{'command':'read_console','params':{'action':'get',
+            'types':['error','warning','log'],'count':10,'pageSize':20,'cursor':0,
+            'format':'json','includeStacktrace':True}})
+
     async def test_RT014_catalog_rejects_unbounded_or_coerced_arguments(self):
         for args in ({'limit':0},{'limit':21},{'limit':True},{'limit':'2'},
                      {'offset':-1},{'offset':1.5},{'offset':True},{'offset':'0'},
@@ -254,7 +305,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RT007_surface_and_unmanaged_paths_are_closed(self):
         names = {t.name for t in await self.client.list_tools()}
-        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material',
+        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console',
             'material_prepare', 'material_execute', 'material_status', 'material_stop'})
         for name, args in [('agent_approve', {}), ('execute_custom_tool', {}),
                            ('manage_animation', {**READ, 'client_id': 'fake'}),

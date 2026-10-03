@@ -290,6 +290,11 @@ def main():
         import xml.etree.ElementTree as ET
         response=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateResponseSource').text
         external.update(dotnet_binary=Path(args.dotnet),upstream_response=Path(response))
+        native_element=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateNativeRoot')
+        assert native_element is not None and native_element.text
+        native=Path(native_element.text)
+        for name in ('Tools/ReadConsole.cs','Helpers/ToolParams.cs','Helpers/ParamCoercion.cs','Helpers/StringCaseUtility.cs'):
+            external['upstream_'+name]=native/name
     external_before={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}
     report['native_inputs']=external_before
     report['expected_codex_version']='0.159.2'
@@ -304,7 +309,7 @@ def main():
         assert external_before['codex_binary']=='1748767b230ebfc3d4ab7e4e254920d0c0ad9691fd8c11f190e7d44511a4a92e', 'unreviewed_codex_binary'
         asyncio.run(run(args,report))
         report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty']
-            and (not args.approved_tasks or report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)]))
+            and (not args.approved_tasks or (report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)] and report.get('native_console_pass_ids')==['NQ001','NQ002'])))
     except BaseException as exc:
         report['error_type']=type(exc).__name__
         import traceback

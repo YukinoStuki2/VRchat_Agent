@@ -15,7 +15,7 @@ import test_client_binding as binding
 import websockets
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material',
+TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','read_console',
          'material_prepare','material_execute','material_stop']
 
 class NativePeer:
@@ -198,6 +198,37 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         assert [row['name'] for row in rows]==[row['name'] for row in expected_catalog['tools']]
                         assert page['total']==len(rows) and await plans()==[] and await plans(True)==[]
                         report['native_catalog_pass_ids'].append('NC001' if role=='hermes' else 'NC002')
+                    report['native_console_pass_ids']=[]
+                    console_prepare={'task_id':'console-task','operations':[{'command':'read_console','action':'get'}],
+                                     'targets':['Console'],'ttl_seconds':120}
+                    console_args={'action':'get','page_size':2,'cursor':0,'format':'json','include_stacktrace':True}
+                    for role,other,ident in (('hermes','codex','NQ001'),('codex','hermes','NQ002')):
+                        report['approved_stage']='console_'+role
+                        plan=await data(role,'agent_prepare',console_prepare)
+                        assert plan['status']=='pending'
+                        await denied(role,'read_console',console_args)
+                        plan=await data(role,'agent_prepare',console_prepare)
+                        await approve(plan)
+                        await denied(other,'read_console',console_args)
+                        rows=[];cursor=0
+                        while True:
+                            page=await data(role,'read_console',{**console_args,'cursor':cursor})
+                            assert page['cursor']==cursor and page['pageSize']==2
+                            rows.extend(page['items'])
+                            if not page['truncated']:
+                                assert page['nextCursor'] is None and page['total']==len(rows)
+                                break
+                            assert page['total']==cursor+3 and page['nextCursor']==str(cursor+2)
+                            cursor=int(page['nextCursor'])
+                        assert len(rows)==5 and len({r['message'] for r in rows})==5
+                        assert all(r['file']=='Assets/Fixture.cs' for r in rows)
+                        await data(role,'agent_stop',{'task_id':'console-task'})
+                        await denied(role,'read_console',console_args)
+                        plan=await data(role,'agent_prepare',console_prepare);await approve(plan)
+                        await denied(role,'read_console',{**console_args,'action':'clear'})
+                        await data(role,'agent_stop',{'task_id':'console-task'})
+                        assert await plans()==[]
+                        report['native_console_pass_ids'].append(ident)
                     report['native_pause_pass_ids']=[]
                     async def pause_resume(role,plan,tool,arguments,material=False):
                         route='vrchat_agent_material_dispatch' if material else 'vrchat_agent_dispatch'

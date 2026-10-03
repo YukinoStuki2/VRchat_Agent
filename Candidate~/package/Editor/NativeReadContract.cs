@@ -22,18 +22,41 @@ namespace Yukino.VRChatAgent
         static bool All(JToken array, Func<JToken, bool> valid) => array is JArray items && items.All(valid);
         static bool Components(JToken value, params string[] names) => Shape(value, names) && names.All(n => Number(value[n]));
 
-        internal static bool Valid(string command, JObject result)
+        internal static bool Valid(string command, JObject result, JObject args = null)
         {
             if (result == null || result["success"]?.Type != JTokenType.Boolean || !(bool)result["success"]) return false;
             if (!(Shape(result, "success", "data") ||
                 (Shape(result, "success", "message", "data") && String(result["message"])))) return false;
             var data = result["data"];
+            if (command == "read_console") return ConsolePage(data, args);
             if (command == "manage_material") return Shape(data, "material", "shader", "properties") &&
                 String(data["material"]) && String(data["shader"]) && All(data["properties"], Property);
             if (command == "manage_animation") return Shape(data, "path", "name", "layerCount", "parameterCount", "layers", "parameters") &&
                 String(data["path"]) && String(data["name"]) && Count(data["layerCount"], data["layers"]) &&
                 Count(data["parameterCount"], data["parameters"]) && All(data["layers"], Layer) && All(data["parameters"], Parameter);
             return false;
+        }
+        static bool ConsolePage(JToken data, JObject args)
+        {
+            if (args == null || !Shape(data, "cursor", "pageSize", "nextCursor", "truncated", "total", "items") ||
+                !Bool(data["truncated"]) || data["cursor"]?.Type != JTokenType.Integer ||
+                data["pageSize"]?.Type != JTokenType.Integer || data["total"]?.Type != JTokenType.Integer ||
+                !(data["items"] is JArray items) || data.ToString(Newtonsoft.Json.Formatting.None).Length > 1024 * 1024) return false;
+            long cursor = (long)data["cursor"], size = (long)data["pageSize"], total = (long)data["total"];
+            if (cursor != ((long?)args["cursor"] ?? 0) || size != (long)args["pageSize"] ||
+                cursor < 0 || size < 1 || size > 100 || items.Count > size || total < items.Count) return false;
+            bool truncated = (bool)data["truncated"];
+            // Upstream stops after one extra match; total is a lower bound when truncated.
+            if (truncated)
+            {
+                if (items.Count != size || total != cursor + size + 1 || !String(data["nextCursor"]) ||
+                    (string)data["nextCursor"] != (cursor + size).ToString(System.Globalization.CultureInfo.InvariantCulture)) return false;
+            }
+            else if (!Null(data["nextCursor"]) || total > cursor + size || items.Count != Math.Max(0, total - cursor)) return false;
+            return items.All(item => Shape(item, "type", "message", "file", "line", "stackTrace") &&
+                String(item["type"]) && new[] { "Error", "Warning", "Log", "Exception", "Assert" }.Contains((string)item["type"]) &&
+                String(item["message"]) && NullableString(item["file"]) && item["line"]?.Type == JTokenType.Integer &&
+                NullableString(item["stackTrace"]) && ((bool)args["includeStacktrace"] || Null(item["stackTrace"])));
         }
         static bool Property(JToken property)
         {

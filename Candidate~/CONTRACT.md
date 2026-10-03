@@ -54,6 +54,20 @@ status=paused、reason=plan_paused、当前plan_id。Python仅在这份精确拒
 原映射仍有效时保留它；调用仍是错误/未执行，不伪装成功。其他失败保持原
 撤权语义。没有新增MCP pause/resume/approve/renew工具或Unity远程kind。
 
+
+## 显式实时 Console 读取
+
+`read_console/get`复用固定原生Python wrapper与C# handler，目标必须显式包含`Console`，
+不伪装成资产文件。权限默认关闭；展开原生目录勾选后仍须批准精确任务。
+只接受`action=get`、`format=json`、整数`page_size` 1–100；可选有限types、
+整数cursor、filter_text和布尔include_stacktrace。clear、count、类型转换和未知字段拒绝。
+同一约束在原生发送出口及Unity最终门控分别执行，停止/会话退出沿用精确撤权。
+
+Console属于连接/工程绑定的实时诊断流；日志追加不会撤权，内容不承诺冻结。
+原生分页的total在truncated=true时仅为下界；nextCursor可能受实时变动影响，
+不能把分页遍历当作全工程日志的原子快照。数据形状/长度/游标不符合固定原生
+合同即拒绝并撤权。它不批准任何清空、刷新、执行、保存或其他读取范围。
+
 ## 所有权
 
 并行实现只可写各自目录：

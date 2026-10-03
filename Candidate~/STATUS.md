@@ -2,6 +2,20 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
+## Console 原生只读整合（当前开发）
+
+- 显式Console范围、双侧get参数门控、原生输出合同及中文目录开关已接入；clear仍拒绝。复用固定上游Python/C# reader，不是第二套日志读取实现。实时日志不承诺快照，truncated的total只作下界。
+- Linux原生Hermes/Codex各自批准、分页、跨会话拒绝、停止/拒清空已实际执行；编译C#运行真实上游反射handler，Unity LogEntries与本地批准仍是fixture。原NA/NP/NR回归随同执行，没有模型请求或真实工程操作。
+- 分发清单已刷新到实际实现字节；搬迁Python/Node组合入口能发现Console但无权时拒绝get/clear。初次诊断后端退出非全零失败保留，第二次通过；先补逐子进程退出诊断，不宣称原因已修复。后续稳定性实验、Windows CI与精确提交读回正在进行。
+- 旧认证测试仍断言10个工具，新增Console后实际11，已改成完整精确工具名集合；不是权限放宽。全部自动化与最终独立批准未完成，无VPM/ALCOM交付。
+
+## 自包含诊断分发（当前增量）
+
+- 实现 `f374a9eb1a6e82470246dc9e65f33e77e009b7e1`、验证器修正 `bfc7b1787b0a835381a969ae85dc5c98a4e5f16f` 已推候选分支；独立Node/filesystem及Python组合构建、搬迁、默认相对入口、真实SDK读取/拒写/越界/撤权/篡改拒绝在Linux和Windows完成。固定Node22.23.1及106包npm锁；缺失bundle禁止系统Node/实验目录fallback。
+- Windows组合run `36970356598`，内核/依赖证据分别绑定实现commit；官方artifact digest、完整before/after与git原始字节、后端及许可证payload hash已回读。父级证据 `evidence/diagnostic-combined-windows-acceptance.json`、`diagnostic-implementation-ci-readback.json`。7项HANDLE内核与6项Job归属测试分组通过，不跨组累计。
+- 初次组合失败保留：Linux错误纳入Windows专属控制台测试，改显式平台选择；Windows TEMP 8.3别名比较失败，仅规范化测试自建输出，不放宽生产路径策略。诊断完整旧套件在搬迁backend上Linux复跑，PTY仅为模拟操作者；模块式导入与执行顺序等父级验收修正不冒充生产缺陷。
+- `diagnostic-batch-cleanup.json`核本批记录51个本地PID均消失、组合临时根清理；源码导出树与构建证据保留。尚缺Windows本地审批控制台全链/强杀磁盘清理/完整客户端安装入口，不能称独立诊断整体验收。仍无VPM候选ZIP、ALCOM入口或最终独立批准。
+
 ## Hermes 固定目标连接（候选源码，未安装）
 
 - `clients/hermes_connection.py` 接收可信宿主已交付的内存凭据，固定 `127.0.0.1` HTTPS `/mcp`，独占单叶证书信任并核对输入pin，禁CA授权/环境代理/重定向/SDK流重试与续传。复用安装Hermes的MCP SDK与HTTP库，而非修改原生MCPServerTask的全局行为；原binding/conversation直接复用它的peer接口。

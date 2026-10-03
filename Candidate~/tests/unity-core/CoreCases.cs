@@ -43,6 +43,24 @@ internal static class CoreCases
     static void Denied(JObject result) { Program.Check((bool)result["success"] == false, "must deny: " + result); }
     internal static void Run()
     {
+        Test("UC015 console local capability exact approval and native get", () => {
+            int calls=0;
+            var gate=new CandidateGate(()=>100,()=>"project-A",()=>"connection-A",p=>"bound-scope:"+p,
+                (command,args)=>{calls++;Program.Check(command=="read_console" && (string)args["action"]=="get","wrong native route");
+                    return new JObject{["success"]=true,["data"]=new JObject()};});
+            var prepare=Program.Wire("prepare","");
+            prepare["body"]=JObject.Parse("{\"operations\":[{\"command\":\"read_console\",\"action\":\"get\"}],\"targets\":[\"Console\"],\"ttl_seconds\":60}");
+            Denied(gate.Dispatch(prepare));
+            bool supported=true;try{gate.SetCapability("read_console","get",true);}catch{supported=false;}
+            Program.Check(supported,"UC015 console capability missing");
+            var p=gate.Dispatch(prepare);Program.Check((bool)p["success"],"console prepare");
+            var execute=Program.Wire("execute",(string)p["data"]["plan_id"]);
+            execute["body"]=JObject.Parse("{\"command\":\"read_console\",\"params\":{\"action\":\"get\",\"types\":[\"error\",\"warning\",\"log\"],\"count\":10,\"pageSize\":20,\"cursor\":0,\"format\":\"json\",\"includeStacktrace\":true}}");
+            Program.Check(calls==0,"prepare executed native read");
+            Program.Check(gate.Approve((string)p["data"]["plan_id"],(string)p["data"]["digest"]),"console approve");
+            Program.Check((bool)gate.Dispatch(execute)["success"] && calls==1,"console native read");
+            gate.StopAll("explicit stop");Denied(gate.Dispatch(execute));Program.Check(calls==1,"reuse after stop");
+        });
         Test("UC002 pending cannot execute or approve itself", () => {
             var f = new Fixture(); var p = f.Prepare(); Denied(f.Execute(p));
             Program.Check(f.Calls == 0 && !f.Gate.Approve((string)p["data"]["plan_id"], (string)p["data"]["digest"]), "failed request clears plan"); });

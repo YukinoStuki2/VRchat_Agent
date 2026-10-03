@@ -89,6 +89,25 @@ internal static class AdapterCases
    GUILayout.NextButton="展开操作：manage_material";gui.Invoke(window,null);
    Check(EditorGUILayout.Labels.Exists(s=>s.Contains("set_material_shader_property")&&s.Contains("尚未接通")),"unsupported operation not marked");
    Console.WriteLine("PASS UA008 full shipped catalog shown without authority or native execution");
+   EditorGUILayout.NextToggle="控制台读取与清除  read_console/get";
+   GUILayout.NextButton="展开操作：read_console";gui.Invoke(window,null);
+   Check(gate.Allows("read_console","get"),"console catalog switch must be live");
+   gate.SetCapability("read_console","get",false);
+   // Same real local adapter, only native registry and Unity API are doubles.
+   AdapterOwnedFixture.Begin();gate.SetCapability("read_console","get",true);
+   var cp=Wire("prepare","");cp["body"]=JObject.Parse("{\"operations\":[{\"command\":\"read_console\",\"action\":\"get\"}],\"targets\":[\"Console\"],\"ttl_seconds\":60}");
+   var consolePending=call(cp);Check((bool)consolePending["success"],"UA009 Console scope must not be treated as asset path: "+consolePending);
+   Check(gate.Approve((string)consolePending["data"]["plan_id"],(string)consolePending["data"]["digest"]),"console approval");
+   var cr=Wire("execute",(string)consolePending["data"]["plan_id"]);
+   cr["body"]=JObject.Parse("{\"command\":\"read_console\",\"params\":{\"action\":\"get\",\"types\":[\"error\"],\"count\":10,\"pageSize\":20,\"cursor\":0,\"format\":\"json\",\"includeStacktrace\":true}}");
+   var originalHandler=CommandRegistry.Implementation;
+   try {
+    CommandRegistry.Implementation=(cmd,a)=>new MCPForUnity.Editor.Helpers.SuccessResponse("Retrieved 1 log entries.",
+      new {cursor=0,pageSize=20,nextCursor=(string)null,truncated=false,total=1,items=new[]{new {type="Error",message="fixture compiler error",file="Assets/Fixture.cs",line=3,stackTrace=(string)null}}});
+    Check((bool)call(cr)["success"],"native console response rejected");
+   } finally {CommandRegistry.Implementation=originalHandler;}
+   gate.SetCapability("read_console","get",false);
+   Console.WriteLine("PASS UA009 explicit Console scope through local adapter; logs remain live, native reader doubled");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

@@ -17,7 +17,12 @@ internal static class WirePeer
   var material=new MaterialCandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,backend);
   material.SetCapability("copy",true); material.SetCapability("edit",true);
   var gate=new CandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,
-   p=>"fixture-only-evidence-"+p,(c,p)=>JObject.FromObject(new SuccessResponse("fixture handler",new{fixture_only=true,call=++calls,command=c,path=(string)(p["materialPath"]??p["controllerPath"])})));
+   p=>"fixture-only-evidence-"+p,(c,p)=> {
+    if(c=="read_console"){var r=JObject.FromObject(MCPForUnity.Editor.Tools.ReadConsole.HandleCommand(p));return (bool?)r["success"]==true&&!NativeReadContract.Valid(c,r,p)?new JObject{["success"]=false}:r;}
+    return JObject.FromObject(new SuccessResponse("fixture handler",new{fixture_only=true,call=++calls,command=c,path=(string)(p["materialPath"]??p["controllerPath"])}));
+   });
+  ConsoleNativeCases.Seed();
+  gate.SetCapability("read_console","get",true);
   gate.SetCapability("manage_material","get_material_info",true);
   gate.SetCapability("manage_animation","controller_get_info",true);
   Trace("ready");

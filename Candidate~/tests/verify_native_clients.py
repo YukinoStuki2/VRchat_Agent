@@ -309,7 +309,8 @@ def main():
         assert external_before['codex_binary']=='1748767b230ebfc3d4ab7e4e254920d0c0ad9691fd8c11f190e7d44511a4a92e', 'unreviewed_codex_binary'
         asyncio.run(run(args,report))
         report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty']
-            and (not args.approved_tasks or (report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)] and report.get('native_console_pass_ids')==['NQ001','NQ002'])))
+            and (not args.approved_tasks or (report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)] and report.get('native_console_pass_ids')==['NQ001','NQ002']
+                and report.get('native_scene_pass_ids')==['NE001','NE002'])))
     except BaseException as exc:
         report['error_type']=type(exc).__name__
         import traceback

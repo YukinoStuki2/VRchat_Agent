@@ -484,7 +484,7 @@ async def main():
     doc = json.loads(sys.stdin.readline())
     interactive = doc.get('mode') == 'approved-task'
     assert doc.get('mode') in (None, 'approved-task')
-    allowed = (['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','read_console',
+    allowed = (['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','read_console','manage_scene',
                 'material_prepare','material_execute','material_stop'] if interactive
                else ['agent_status','agent_stop'])
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)

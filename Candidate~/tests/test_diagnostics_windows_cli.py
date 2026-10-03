@@ -78,7 +78,7 @@ class WindowsDiagnosticConsole(unittest.TestCase):
                     if value:
                         return value
                     time.sleep(.02)
-                self.fail(message + '; child exit=' + str(child.poll() if child else None))
+                self.fail(message + '; child exit=' + str(child.poll() if child else None) + '; stderr=' + '\n'.join(stderr))
             def drain(fd):
                 with os.fdopen(fd, 'rb') as stream:
                     for line in stream:
@@ -112,7 +112,11 @@ class WindowsDiagnosticConsole(unittest.TestCase):
                 channels.extend((readin, writein, writeout))
                 worker = threading.Thread(target=drain, args=(readout,))
                 worker.start()
-                attach = '' if mode == 'detached' else 'import win32console;win32console.AttachConsole(' + str(os.getpid()) + ');'
+                attach = ('import win32console,json,sys;'
+                    'print("CONSOLE_FIXTURE_BEFORE="+json.dumps(win32console.GetConsoleProcessList()),file=sys.stderr,flush=True);')
+                if mode != 'detached':
+                    attach += 'win32console.AttachConsole(' + str(os.getpid()) + ');'
+                attach += 'print("CONSOLE_FIXTURE_BOOTSTRAP_READY",file=sys.stderr,flush=True);'
                 bootstrap = (attach + 'import sys,runpy;sys.path.insert(0,' + repr(str(entry.parent)) + ');'
                     'sys.argv=' + repr([str(entry), 'serve', '--root', str(source), '--file', 'Editor.log', '--task', 'windows-console-fixture']) + ';'
                     'runpy.run_path(' + repr(str(entry)) + ',run_name="__main__")')

@@ -1,6 +1,7 @@
 # Preserve reviewed Candidate Windows source bytes on every CI checkout.
 /.gitattributes text eol=lf
 /.github/workflows/candidate-portable.yml text eol=lf
+/.github/workflows/candidate-kernel.yml text eol=lf
 /VPM~/build_repository.py text eol=lf
 # Candidate source snapshots include text fixtures/docs; binary detection stays automatic.
 /Candidate~/** text=auto eol=lf

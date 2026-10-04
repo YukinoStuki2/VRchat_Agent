@@ -48,7 +48,7 @@ class CodexLocal(unittest.TestCase):
             self.assertIn('manage_scene',doc['mcp_servers']['candidate']['enabled_tools'])
             self.assertIn('find_gameobjects',doc['mcp_servers']['candidate']['enabled_tools'])
             self.assertEqual(overrides['mcp_servers.candidate.enabled_tools'],doc['mcp_servers']['candidate']['enabled_tools'])
-            inventory=json.loads((ROOT/'catalog/native-inventory.json').read_text())
+            inventory=json.loads((ROOT/'catalog/native-inventory.json').read_text(encoding='utf-8'))
             expected={row['name'] for row in inventory['tools'] if row.get('implemented_candidate_read_actions')}
             expected.update(row['name'] for row in inventory['resource_facades'])
             expected.update(('agent_status','agent_catalog','agent_prepare','agent_stop','material_prepare','material_execute','material_stop'))

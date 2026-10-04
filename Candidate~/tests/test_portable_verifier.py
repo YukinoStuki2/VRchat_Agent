@@ -68,7 +68,7 @@ class PortableVerifierTests(unittest.TestCase):
             env=workflow_native_inputs(work,fetch)
             native=env['native']
             self.assertEqual(set(payloads),set(env['native_hashes']))
-            self.assertEqual({str(p.relative_to(native)) for p in native.rglob('*') if p.is_file()},set(payloads))
+            self.assertEqual({p.relative_to(native).as_posix() for p in native.rglob('*') if p.is_file()},set(payloads))
             self.assertEqual({p:hashlib.sha256(b).hexdigest() for p,b in payloads.items()},env['native_hashes'])
             assembled=scene.assemble(native,work/'ManageScene.cs')
             self.assertTrue(set(assembled['find_native_sha256'])<=set(payloads))

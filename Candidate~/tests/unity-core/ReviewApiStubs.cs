@@ -3,8 +3,14 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
+ public class AnimationClip:Object {}
+ public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
+ public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
+
  public class Object { public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
- public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; }
+ public class Component : Object {}
+ public class Transform : Component { public int childCount=>0; }
+ public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; public Transform transform=>new Transform(); public T[] GetComponents<T>() where T:Component=>Array.Empty<T>(); }
  public static class Application { public static string dataPath; }
  public struct Vector2 {}
  public static class GUILayout {
@@ -90,4 +96,18 @@ namespace UnityEditor.PackageManager {
   public string resolvedPath;
   public static PackageInfo FindForAssembly(System.Reflection.Assembly a) => TestRoot == null ? null : new PackageInfo {resolvedPath=TestRoot};
  }
+}
+
+namespace MCPForUnity.Editor.Tools.Animation {
+ public static class ManageAnimation {
+  public static int Calls;public static bool WrongName;
+  public static object HandleCommand(JObject args){
+   Calls++;if((string)args["action"]=="animator_get_parameter")return new {success=true,data=(object)new {name=WrongName?"wrong":"Speed",type="Float",value=0.5f}};
+   return new {success=true,data=(object)new {gameObject=WrongName?"wrong":"Avatar",enabled=true,speed=1,hasController=false,controllerName=(string)null,applyRootMotion=false,updateMode="Normal",cullingMode="AlwaysAnimate",parameterCount=0,layerCount=0,parameters=new object[0],layers=new object[0],clips=new object[0]}};
+  }
+ }
+}
+namespace MCPForUnity.Editor.Resources.Scene {
+ public static class GameObjectResource { public static object HandleCommand(JObject args)=>throw new InvalidOperationException("native-object-read-not-in-this-fixture"); }
+ public static class GameObjectComponentsResource { public static object HandleCommand(JObject args)=>throw new InvalidOperationException("native-components-read-not-in-this-fixture"); }
 }

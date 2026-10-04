@@ -149,6 +149,148 @@ internal static class AdapterCases
     go.scene=current;parentCase(false,"main scene not stage parent");
    } finally {CommandRegistry.Implementation=originalHandler;UnityEditor.SceneManagement.PrefabStageUtility.Current=null;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;gate.SetCapability("manage_scene","get_hierarchy",false);}
    Console.WriteLine("PASS UA011 final adapter confines native hierarchy parent to nonpersistent GameObject in exact active scene/stage");
+   AdapterOwnedFixture.Begin();gate.SetCapability("find_gameobjects","find",true);
+   var fp=Wire("prepare","");fp["body"]=JObject.Parse("{\"operations\":[{\"command\":\"find_gameobjects\",\"action\":\"find\"}],\"targets\":[\"Scenes\"],\"ttl_seconds\":60}");
+   originalHandler=CommandRegistry.Implementation;
+   try {
+    CommandRegistry.Implementation=(cmd,a)=>new MCPForUnity.Editor.Helpers.SuccessResponse("find fixture",new {instanceIDs=new[]{123},pageSize=2,cursor=0,nextCursor=(int?)null,totalCount=1,hasMore=false});
+    Action<string,bool,int> findCase=(method,allowed,delta)=>{
+     var pending=call(fp);Check((bool?)pending["success"]==true,"find prepare");Check(gate.Approve((string)pending["data"]["plan_id"],(string)pending["data"]["digest"]),"find approval");
+     var fq=Wire("execute",(string)pending["data"]["plan_id"]);fq["body"]=new JObject{["command"]="find_gameobjects",["params"]=new JObject{["searchMethod"]=method,["searchTerm"]=method=="by_id"?"123":"Root",["includeInactive"]=true,["pageSize"]=2,["cursor"]=0}};
+     int before=CommandRegistry.Calls;Check((bool?)call(fq)["success"]==allowed,"find scope "+method+" "+allowed);Check(CommandRegistry.Calls==before+delta,"find phase "+method);
+    };
+    var current=UnityEditor.SceneManagement.EditorSceneManager.Current;
+    var go=new GameObject{scene=current};MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;
+    findCase("by_id",true,1);findCase("by_name",true,1);
+    foreach(var invalid in new UnityEngine.Object[]{new GameObject{scene=current,Persistent=true},new GameObject{scene=new UnityEngine.SceneManagement.Scene{Id=2,isLoaded=true}},new GameObject{scene=default},new UnityEngine.Object(),null}){
+     MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=invalid;findCase("by_id",false,0);findCase("by_name",false,1);
+    }
+    var stage=new UnityEngine.SceneManagement.Scene{Id=3,isLoaded=true};UnityEditor.SceneManagement.PrefabStageUtility.Current=new UnityEditor.SceneManagement.PrefabStage{scene=stage};
+    MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;findCase("by_id",false,0);go.scene=stage;findCase("by_id",true,1);findCase("by_path",true,1);
+   } finally {CommandRegistry.Implementation=originalHandler;UnityEditor.SceneManagement.PrefabStageUtility.Current=null;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;gate.SetCapability("find_gameobjects","find",false);}
+   Console.WriteLine("PASS UA012 find exact live scene/stage input and output IDs; no asset/component/global lookup disclosure");
+   EditorGUILayout.NextToggle="查找场景对象  find_gameobjects/find";GUILayout.NextButton="展开操作：find_gameobjects";gui.Invoke(window,null);
+   Check(gate.Allows("find_gameobjects","find"),"find no-action tool missing local checkbox");
+   gate.SetCapability("find_gameobjects","find",false);
+   Console.WriteLine("PASS UA013 no-action native tool has explicit candidate permission checkbox, never a remote action argument");
+   foreach(string command in new[]{"get_gameobject","get_gameobject_components"}) {
+    AdapterOwnedFixture.Begin();gate.SetCapability(command,"read",true);
+    var manifest=Wire("prepare","");manifest["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]=command,["action"]="read"}),["targets"]=new JArray("Scenes"),["ttl_seconds"]=60};
+    var args=new JObject{["instanceID"]=123};if(command.EndsWith("_components")){args["pageSize"]=2;args["cursor"]=0;args["includeProperties"]=false;}
+    Action<bool> objectCase=allowed=>{
+     var op=call(manifest);Check((bool)op["success"],"object prepare");Check(gate.Approve((string)op["data"]["plan_id"],(string)op["data"]["digest"]),"object approve");
+     var rq=Wire("execute",(string)op["data"]["plan_id"]);rq["body"]=new JObject{["command"]=command,["params"]=args};
+     int before=MCPForUnity.Editor.Resources.Scene.ResourceFixture.Calls;
+     Check((bool)call(rq)["success"]==allowed,"object scope "+command+" "+allowed);
+     Check(MCPForUnity.Editor.Resources.Scene.ResourceFixture.Calls==before+(allowed?1:0),"object scope check must precede native access");
+    };
+    try {
+     var current=UnityEditor.SceneManagement.EditorSceneManager.Current;var go=new GameObject{scene=current};
+     MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;objectCase(true);
+     foreach(var invalid in new UnityEngine.Object[]{new GameObject{scene=current,Persistent=true},new GameObject{scene=new UnityEngine.SceneManagement.Scene{Id=2,isLoaded=true}},new GameObject{scene=default},new Component(),null}){
+      MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=invalid;objectCase(false);
+     }
+     MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;
+     if(command=="get_gameobject"){
+      go.transform.childCount=1025;objectCase(false);go.transform.childCount=0;
+      go.Components=new Component[257];objectCase(false);go.Components=Array.Empty<Component>();
+     }
+     var stage=new UnityEngine.SceneManagement.Scene{Id=3,isLoaded=true};UnityEditor.SceneManagement.PrefabStageUtility.Current=new UnityEditor.SceneManagement.PrefabStage{scene=stage};
+     objectCase(false);go.scene=stage;objectCase(true);
+     CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable global registry used for object read");objectCase(true);
+    }finally {CommandRegistry.Implementation=originalHandler;UnityEditor.SceneManagement.PrefabStageUtility.Current=null;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;gate.SetCapability(command,"read",false);}
+   }
+   Console.WriteLine("PASS UA014 object resource preguards confine scene/stage and reject large summary before native read; pinned direct handlers not overridable registry");
+   foreach(var pair in new[]{new[]{"get_gameobject","场景对象摘要"},new[]{"get_gameobject_components","组件类型与ID分页"}}){
+    EditorGUILayout.NextToggle=pair[1]+"  "+pair[0]+"/read";GUILayout.NextButton="展开操作："+pair[0];gui.Invoke(window,null);
+    Check(gate.Allows(pair[0],"read"),"resource facade local checkbox missing");gate.SetCapability(pair[0],"read",false);
+   }
+   Console.WriteLine("PASS UA015 native resource facades labelled separately and locally gated, no action forwarded");
+   foreach(string action in new[]{"animator_get_info","animator_get_parameter"}){
+    AdapterOwnedFixture.Begin();gate.SetCapability("manage_animation",action,true);
+    var manifest=Wire("prepare","");manifest["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]="manage_animation",["action"]=action}),["targets"]=new JArray("Scenes"),["ttl_seconds"]=60};
+    var args=new JObject{["action"]=action,["target"]="123",["searchMethod"]="by_id"};if(action=="animator_get_parameter")args["properties"]=new JObject{["parameter_name"]="Speed"};
+    void Case(bool allowed,bool reached=false){
+     var plan=call(manifest);Check((bool)plan["success"],"animator prepare");Check(gate.Approve((string)plan["data"]["plan_id"],(string)plan["data"]["digest"]),"animator approve");
+     var req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]="manage_animation",["params"]=args};
+     int before=MCPForUnity.Editor.Tools.Animation.ManageAnimation.Calls;
+     Check((bool)call(req)["success"]==allowed,"animator adapter "+action+" "+allowed);
+     Check(MCPForUnity.Editor.Tools.Animation.ManageAnimation.Calls==before+((allowed||reached)?1:0),"animator preguard/read order");
+    }
+    try {
+     var animator=new Animator();var go=new GameObject{name="Avatar",scene=UnityEditor.SceneManagement.EditorSceneManager.Current,Components=new Component[]{animator}};
+     MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=go;Case(true);
+     go.Persistent=true;Case(false);go.Persistent=false;
+     var original=go.scene;go.scene=new UnityEngine.SceneManagement.Scene{Id=2,isLoaded=true};Case(false);go.scene=original;
+     go.Components=Array.Empty<Component>();Case(false);go.Components=new Component[]{animator};
+     animator.parameterCount=257;Case(false);animator.parameterCount=0;
+     animator.layerCount=65;Case(false);animator.layerCount=0;
+     if(action=="animator_get_info"){animator.runtimeAnimatorController=new RuntimeAnimatorController{animationClips=new AnimationClip[1025]};Case(false);animator.runtimeAnimatorController=null;}
+     var stage=new UnityEngine.SceneManagement.Scene{Id=3,isLoaded=true};UnityEditor.SceneManagement.PrefabStageUtility.Current=new UnityEditor.SceneManagement.PrefabStage{scene=stage};Case(false);go.scene=stage;Case(true);
+     MCPForUnity.Editor.Tools.Animation.ManageAnimation.WrongName=true;Case(false,true);MCPForUnity.Editor.Tools.Animation.ManageAnimation.WrongName=false;
+     CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable animator handler");Case(true);
+    } finally {CommandRegistry.Implementation=originalHandler;UnityEditor.SceneManagement.PrefabStageUtility.Current=null;MCPForUnity.Editor.Helpers.GameObjectLookup.Fixture=null;MCPForUnity.Editor.Tools.Animation.ManageAnimation.WrongName=false;gate.SetCapability("manage_animation",action,false);}
+   }
+   foreach(string action in new[]{"animator_get_info","animator_get_parameter"}){
+    EditorGUILayout.NextToggle="动画与控制器  manage_animation/"+action;GUILayout.NextButton="展开操作：manage_animation";gui.Invoke(window,null);
+    Check(gate.Allows("manage_animation",action),"animator checkbox "+action);gate.SetCapability("manage_animation",action,false);
+    GUILayout.NextButton="展开操作：manage_animation";gui.Invoke(window,null);
+   }
+   Console.WriteLine("PASS UA016 animator final scope, count preguards, pinned dispatch and returned identity validation");
+   foreach(string command in new[]{"get_project_info","get_tags","get_layers"}){
+    AdapterOwnedFixture.Begin();gate.SetCapability(command,"read",true);
+    var req=Wire("prepare","");req["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]=command,["action"]="read"}),["targets"]=new JArray("ProjectMetadata"),["ttl_seconds"]=60};
+    var plan=call(req);Check((bool)plan["success"],"metadata live evidence missing: "+plan);Check(gate.Approve((string)plan["data"]["plan_id"],(string)plan["data"]["digest"]),"metadata approve");
+    req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]=command,["params"]=new JObject()};
+    int before=MCPForUnity.Editor.Resources.Project.MetadataFixture.Calls;
+    try {CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable metadata registry used");Check((bool)call(req)["success"],"metadata direct dispatch");Check(MCPForUnity.Editor.Resources.Project.MetadataFixture.Calls==before+1,"metadata missing native call");}
+    finally {CommandRegistry.Implementation=originalHandler;gate.SetCapability(command,"read",false);}
+   }
+   foreach(var pair in new[]{new[]{"get_project_info","工程信息（含绝对路径）"},new[]{"get_tags","工程标签列表"},new[]{"get_layers","工程层名称"}}){
+    EditorGUILayout.NextToggle=pair[1]+"  "+pair[0]+"/read";GUILayout.NextButton="展开操作："+pair[0];gui.Invoke(window,null);
+    Check(gate.Allows(pair[0],"read"),"metadata explicit permission missing "+pair[0]);gate.SetCapability(pair[0],"read",false);
+   }
+   Console.WriteLine("PASS UA017 project metadata live evidence avoids asset IO; fixed direct native handlers not global registry");
+   foreach(string command in new[]{"get_selection","get_windows","get_active_tool","get_prefab_stage"}){
+    AdapterOwnedFixture.Begin();gate.SetCapability(command,"read",true);
+    var req=Wire("prepare","");req["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]=command,["action"]="read"}),["targets"]=new JArray("EditorMetadata"),["ttl_seconds"]=60};
+    var plan=call(req);Check((bool)plan["success"],"metadata live evidence missing: "+plan);Check(gate.Approve((string)plan["data"]["plan_id"],(string)plan["data"]["digest"]),"metadata approve");
+    req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]=command,["params"]=new JObject()};
+    int before=MCPForUnity.Editor.Resources.Editor.MetadataFixture.Calls;
+    try {CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable metadata registry used");Check((bool)call(req)["success"],"metadata direct dispatch");Check(MCPForUnity.Editor.Resources.Editor.MetadataFixture.Calls==before+1,"metadata missing native call");}
+    finally {CommandRegistry.Implementation=originalHandler;gate.SetCapability(command,"read",false);}
+   }
+   foreach(var pair in new[]{new[]{"get_selection","编辑器选择摘要"},new[]{"get_windows","编辑器窗口信息"},new[]{"get_active_tool","当前编辑工具"},new[]{"get_prefab_stage","已打开Prefab阶段"}}){
+    EditorGUILayout.NextToggle=pair[1]+"  "+pair[0]+"/read";GUILayout.NextButton="展开操作："+pair[0];gui.Invoke(window,null);
+    Check(gate.Allows(pair[0],"read"),"metadata explicit permission missing "+pair[0]);gate.SetCapability(pair[0],"read",false);
+   }
+   Console.WriteLine("PASS UA018 editor metadata live evidence avoids asset IO; fixed direct native handlers not global registry");
+   foreach(string command in new[]{"get_menu_items"}){
+    AdapterOwnedFixture.Begin();gate.SetCapability(command,"read",true);
+    var req=Wire("prepare","");req["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]=command,["action"]="read"}),["targets"]=new JArray("EditorMetadata"),["ttl_seconds"]=60};
+    var plan=call(req);Check((bool)plan["success"],"metadata live evidence missing: "+plan);Check(gate.Approve((string)plan["data"]["plan_id"],(string)plan["data"]["digest"]),"metadata approve");
+    req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]=command,["params"]=new JObject{["refresh"]=true,["search"]=""}};
+    int before=MCPForUnity.Editor.Resources.MenuItems.GetMenuItems.Calls;
+    try {CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable metadata registry used");Check((bool)call(req)["success"],"metadata direct dispatch");Check(MCPForUnity.Editor.Resources.MenuItems.GetMenuItems.Calls==before+1,"metadata missing native call");}
+    finally {CommandRegistry.Implementation=originalHandler;gate.SetCapability(command,"read",false);}
+   }
+   foreach(var pair in new[]{new[]{"get_menu_items","菜单名称列表"}}){
+    EditorGUILayout.NextToggle=pair[1]+"  "+pair[0]+"/read";GUILayout.NextButton="展开操作："+pair[0];gui.Invoke(window,null);
+    Check(gate.Allows(pair[0],"read"),"metadata explicit permission missing "+pair[0]);gate.SetCapability(pair[0],"read",false);
+   }
+   Console.WriteLine("PASS UA019 menu metadata live evidence avoids asset IO; fixed direct native handlers not global registry");
+   {
+    AdapterOwnedFixture.Begin();gate.SetCapability("manage_packages","get_package_info",true);
+    var req=Wire("prepare","");req["body"]=new JObject{["operations"]=new JArray(new JObject{["command"]="manage_packages",["action"]="get_package_info"}),["targets"]=new JArray("ProjectMetadata"),["ttl_seconds"]=60};
+    var plan=call(req);Check((bool)plan["success"],"package live evidence");Check(gate.Approve((string)plan["data"]["plan_id"],(string)plan["data"]["digest"]),"package approve");
+    req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]="manage_packages",["params"]=new JObject{["action"]="get_package_info",["package"]="com.unity.ugui"}};
+    int before=MCPForUnity.Editor.Tools.ManagePackages.Calls;
+    try {CommandRegistry.Implementation=(cmd,a)=>throw new Exception("overridable package registry used");Check((bool)call(req)["success"],"package direct dispatch");Check(MCPForUnity.Editor.Tools.ManagePackages.Calls==before+1,"package native missing");}
+    finally {CommandRegistry.Implementation=originalHandler;gate.SetCapability("manage_packages","get_package_info",false);}
+    EditorGUILayout.NextToggle="包与注册表管理  manage_packages/get_package_info";GUILayout.NextButton="展开操作：manage_packages";gui.Invoke(window,null);
+    Check(gate.Allows("manage_packages","get_package_info"),"package explicit checkbox");gate.SetCapability("manage_packages","get_package_info",false);
+   }
+   Console.WriteLine("PASS UA020 package metadata exact operation, live evidence, pinned direct dispatch and local checkbox; Unity APIs doubled");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

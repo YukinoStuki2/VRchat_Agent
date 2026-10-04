@@ -1,0 +1,110 @@
+{
+  "status": "L1/L2/L3定向修复并验证通过",
+  "modified_code_sha256": {
+    ".github/workflows/candidate-dependencies.yml": "1095c9f2c3c39c2fe8f66deeddd9510b6a6453f6d9f7cd116d8a64363fee25d6",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "e9ca453e7e2228af97427b2df99bf271deec861d2391d439d4c863aed8eb3bd8",
+    "Candidate~/tests/verify_unity.py": "662694605f73d366783ea9372059d8bd37f36383273f1a02fff817a393712357",
+    "Candidate~/tests/test_portable_verifier.py": "ab19b090f674dc89c168e18e21965b61657be6bdd3c0c018ff6ac08bbb80155c"
+  },
+  "verification": {
+    "portable_verifier_ids": [
+      "VP001",
+      "VP002",
+      "VP003",
+      "VP004",
+      "VP005",
+      "VP006",
+      "VP007",
+      "VP008",
+      "VP009",
+      "VP010",
+      "VP011",
+      "VP012",
+      "VP013",
+      "VP014",
+      "VP015",
+      "VP016",
+      "VP017",
+      "VP018",
+      "VP019"
+    ],
+    "python_exit_code": 0,
+    "compiled_wu_ids": [
+      "WU001",
+      "WU002",
+      "WU003",
+      "WU004",
+      "WU005",
+      "WU006",
+      "WU007",
+      "WU008",
+      "WU009",
+      "WU010",
+      "WU011",
+      "WU012"
+    ],
+    "compiled_ns_ids": [
+      "NS001",
+      "NS002",
+      "NS003",
+      "NS004",
+      "NS005",
+      "NS006",
+      "NS007",
+      "NS008",
+      "NS009",
+      "NS010",
+      "NS011",
+      "NS012",
+      "NS013",
+      "NS014",
+      "NS015",
+      "NS016",
+      "NS017",
+      "NS018"
+    ],
+    "workflow_download_count": 24,
+    "download_source": "固定本地上游字节经workflow真实urlopen/hash/write语句回放；非本轮真实HTTP下载",
+    "every_download_corruption_rejected": true,
+    "actual_wu_output_accepted_by_workflow_ast": true,
+    "main_group_count": 81,
+    "write_unity_report_key": "write_unity",
+    "temporary_root_absent": true,
+    "initial_L1_red_root_absent": true,
+    "compiled_process_groups_and_pids_absent": true,
+    "resource_warnings": [],
+    "compile_warnings": [],
+    "build_inputs_unchanged_during_run": true,
+    "python_working_inputs_unchanged_during_run": true,
+    "python_workflow_steps_parsed": 5,
+    "git_diff_check_exit_code": 0
+  },
+  "parent_actions": {
+    "new_methods": [
+      "test_VP017_workflow_downloads_verified_native_assembly_closure",
+      "test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed",
+      "test_VP018_unity_driver_runs_separate_exact_write_unity_group"
+    ],
+    "verify_portable_auto_discovery": false,
+    "note": "verify_portable.py只有显式suites列表，不含test_portable_verifier.py；父级需加入冻结119基线清单。未改该文件、STATUS或source-inputs。"
+  },
+  "evidence_sha256": {
+    "Candidate~/evidence/review-ci-L1-L2-build-green.json": "cd9cb8bba5366732cfc029835cfcf2e6f5c21c5591e3c577981e9dead0b02c85",
+    "Candidate~/evidence/review-ci-L1-green.json": "9e005560079da55cb3021d350b6fc47ae26f1adfb4ca95587b49deab601bea78",
+    "Candidate~/evidence/review-ci-L1-red.json": "be08e89dbad693e2c10b7df2ecc1abe10fb1f1ef52d8e4d2a02dff88aeb18dd1",
+    "Candidate~/evidence/review-ci-L2-driver-green.json": "7f244bc9f1e12fe6a1b96ffe8d50de118bbe12b267a138eb77315a5d5d87fa94",
+    "Candidate~/evidence/review-ci-L2-driver-red.json": "d39f1bb549474b76165d1c70a582ac4f94923f1426c6a0739162dbdf70646b08",
+    "Candidate~/evidence/review-ci-L3-green.json": "ec5426d61603d8887f5cbaf9dec7486c5d73a288e792d565c9f5961681acaba4",
+    "Candidate~/evidence/review-ci-L3-red.json": "e5f7cfde9c6d11d9b73abb3db097047c73bc87bf985c59488f861934e5078608",
+    "Candidate~/evidence/review-ci-S1-consumer-red.json": "e8f42686771079bf28b88e367b7bfc3f4b72e3aabcbe5b642cdb7be2f532c71c",
+    "Candidate~/evidence/review-ci-targeted-final-green.json": "8e7cea212ff41d0f451c4775186fa073daa4938ffb128af428669256bbeb6d29",
+    "Candidate~/evidence/package-review-ci-wu-red-20261005034355.json": "5d2795b2bd2f0e30f6ea223b69d2cea832a2f067bb2d09b8902f63eb121e7583",
+    "Candidate~/evidence/package-review-ci-wu-red-20261005034355-predicate.json": "a43f3425dae0b2268817e4f2298f915aec09000a4b9951831d6851dbf483675a"
+  },
+  "limitations": [
+    "Linux net8 Unity API doubles，不等于真实Unity/Windows或完整Actions验收",
+    "未跑全量整轮，父级负责冻结重跑",
+    "by_component生产关闭与NS018/RT036来自父级，本分工未改生产/权限",
+    "未提交、推送、安装或改上游快照/Unity/Hermes配置"
+  ]
+}

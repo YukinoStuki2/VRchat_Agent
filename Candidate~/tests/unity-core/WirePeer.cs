@@ -19,10 +19,20 @@ internal static class WirePeer
   var gate=new CandidateGate(()=>timer.Elapsed.TotalSeconds,()=>"fixture-project",()=>connection,
    p=>"fixture-only-evidence-"+p,(c,p)=> {
     // Protocol fixture only. Exact upstream scene methods are exercised separately by SceneNativeCases.
+    if(c=="manage_packages"){var r=JObject.FromObject(MCPForUnity.Editor.Tools.ManagePackages.HandleCommand(p));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};}
+    if(c=="get_menu_items"){var r=JObject.FromObject(MCPForUnity.Editor.Resources.MenuItems.GetMenuItems.HandleCommand(p));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};}
+    if(CandidateGate.EditorCommand(c)){
+     var r=JObject.FromObject(MCPForUnity.Editor.Resources.Editor.MetadataFixture.Read(c));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
+    if(CandidateGate.ProjectCommand(c)){
+     object data=c=="get_tags"?(object)new[]{"Untagged","Player"}:c=="get_layers"?new JObject{["0"]="Default",["5"]="UI"}:(object)new {projectRoot="/Fixture",projectName="Fixture",unityVersion="2022.3",platform="StandaloneWindows64",assetsPath="/Fixture/Assets",renderPipeline="BuiltIn",activeInputHandler="Old",packages=new {ugui=false,textmeshpro=false,inputsystem=false,uiToolkit=true,screenCapture=true}};
+     var r=JObject.FromObject(new SuccessResponse("fixture project metadata",data));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
     if(c=="manage_scene"){
      object data;
      if((string)p["action"]=="get_active")data=new{name="FixtureScene",path="",buildIndex=-1,isDirty=true,isLoaded=true,rootCount=2};
      else if((string)p["action"]=="get_build_settings")data=new[]{new{path="Assets/Fixture.unity",guid="fixture-guid",enabled=true,buildIndex=0}};
+     else if((string)p["action"]=="validate")data=new{sceneName="FixtureScene",totalIssues=0,missingScripts=0,brokenPrefabs=0,repaired=0,issues=new JArray(),truncated=false,note=(string)null};
      else if((string)p["action"]=="get_hierarchy"){
       int total=p.ContainsKey("parent")?1:3,cursor=Math.Min((int?)p["cursor"]??0,total),size=(int)p["pageSize"],end=Math.Min(total,cursor+size);
       var items=new JArray();for(int i=cursor;i<end;i++){
@@ -37,13 +47,40 @@ internal static class WirePeer
      var r=JObject.FromObject(new SuccessResponse("fixture scene metadata",data));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
     }
     if(c=="read_console"){var r=JObject.FromObject(MCPForUnity.Editor.Tools.ReadConsole.HandleCommand(p));return (bool?)r["success"]==true&&!NativeReadContract.Valid(c,r,p)?new JObject{["success"]=false}:r;}
+    if(c=="get_gameobject" || c=="get_gameobject_components") {
+     object d;
+     if(c=="get_gameobject"){
+      var v=new{x=0,y=0,z=0};d=new{instanceID=(int)p["instanceID"],name="fixture",tag="Untagged",layer=0,layerName="Default",active=true,activeInHierarchy=true,isStatic=false,
+       transform=new{position=v,localPosition=v,rotation=v,localRotation=v,scale=v,lossyScale=v},parent=(int?)null,children=new int[0],componentTypes=new[]{"Transform"},path="fixture"};
+     }else{
+      int cursor=(int)p["cursor"],size=(int)p["pageSize"],total=3,end=Math.Min(total,cursor+size);var items=new JArray();
+      for(int i=cursor;i<end;i++)items.Add(new JObject{["typeName"]="FixtureComponent",["instanceID"]=111+i});
+      d=new{gameObjectID=(int)p["instanceID"],gameObjectName="fixture",components=items,cursor,pageSize=size,nextCursor=end<total?(int?)end:null,totalCount=total,hasMore=end<total,includeProperties=false};
+     }
+     var r=JObject.FromObject(new SuccessResponse("synthetic object protocol fixture",d));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
+    if(c=="manage_animation" && CandidateGate.AnimatorAction((string)p["action"])){
+     object data=(string)p["action"]=="animator_get_parameter"?(object)new{name="Speed",type="Float",value=0.5f}:
+      new{gameObject="Avatar",enabled=true,speed=1,hasController=false,controllerName=(string)null,applyRootMotion=false,updateMode="Normal",cullingMode="AlwaysAnimate",parameterCount=0,layerCount=0,parameters=new object[0],layers=new object[0],clips=new object[0]};
+     var r=JObject.FromObject(new SuccessResponse("synthetic animator protocol fixture",data));return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
+    if(c=="find_gameobjects"){
+     int total=3,size=(int)p["pageSize"],cursor=Math.Min((int?)p["cursor"]??0,total),end=Math.Min(total,cursor+size);
+     var ids=new JArray();for(int i=cursor;i<end;i++)ids.Add(11+i);
+     var r=JObject.FromObject(new SuccessResponse("synthetic find protocol fixture",new{instanceIDs=ids,pageSize=size,cursor,nextCursor=end<total?(int?)end:null,totalCount=total,hasMore=end<total}));
+     return NativeReadContract.Valid(c,r,p)?r:new JObject{["success"]=false};
+    }
     return JObject.FromObject(new SuccessResponse("fixture handler",new{fixture_only=true,call=++calls,command=c,path=(string)(p["materialPath"]??p["controllerPath"])}));
    });
   ConsoleNativeCases.Seed();
+  foreach(string command in new[]{"get_project_info","get_tags","get_layers","get_selection","get_windows","get_active_tool","get_prefab_stage","get_menu_items"})gate.SetCapability(command,"read",true);
   gate.SetCapability("read_console","get",true);
-  foreach(string a in new[]{"get_active","get_build_settings","get_loaded_scenes","get_hierarchy"})gate.SetCapability("manage_scene",a,true);
+  gate.SetCapability("find_gameobjects","find",true);
+  gate.SetCapability("get_gameobject","read",true);gate.SetCapability("get_gameobject_components","read",true);
+  foreach(string a in new[]{"get_active","get_build_settings","get_loaded_scenes","get_hierarchy","validate"})gate.SetCapability("manage_scene",a,true);
+  gate.SetCapability("manage_packages","get_package_info",true);
   gate.SetCapability("manage_material","get_material_info",true);
-  gate.SetCapability("manage_animation","controller_get_info",true);
+  foreach(string action in new[]{"controller_get_info","animator_get_info","animator_get_parameter"})gate.SetCapability("manage_animation",action,true);
   Trace("ready");
   if(Environment.GetEnvironmentVariable("VRC_FIXTURE_TRACE")=="1"){Console.WriteLine("{\"fixture_started\":true}");Console.Out.Flush();}
   string line;

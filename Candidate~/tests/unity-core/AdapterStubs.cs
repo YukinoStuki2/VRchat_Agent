@@ -3,8 +3,14 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
+ public class AnimationClip:Object {}
+ public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
+ public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
+
  public class Object { public bool Persistent; public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
- public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; }
+ public class Component : Object {}
+ public class Transform : Component {public int childCount;}
+ public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; public Transform transform=new Transform(); public Component[] Components=Array.Empty<Component>(); public T[] GetComponents<T>() where T:Component=>Array.ConvertAll(Components,x=>(T)x); }
  public static class Application { public static string dataPath; }
  public struct Vector2 {}
  public static class GUILayout {
@@ -96,6 +102,27 @@ namespace MCPForUnity.Editor.Tools {
  }
 }
 
+namespace MCPForUnity.Editor.Tools.Animation {
+ public static class ManageAnimation {
+  public static int Calls;public static bool WrongName;
+  public static object HandleCommand(JObject args){
+   Calls++;if((string)args["action"]=="animator_get_parameter")return new {success=true,data=(object)new {name=WrongName?"wrong":"Speed",type="Float",value=0.5f}};
+   return new {success=true,data=(object)new {gameObject=WrongName?"wrong":"Avatar",enabled=true,speed=1,hasController=false,controllerName=(string)null,applyRootMotion=false,updateMode="Normal",cullingMode="AlwaysAnimate",parameterCount=0,layerCount=0,parameters=new object[0],layers=new object[0],clips=new object[0]}};
+  }
+ }
+}
+namespace MCPForUnity.Editor.Resources.Scene {
+ public static class ResourceFixture {
+  public static int Calls;
+  public static object Read(string command,JObject args){
+   Calls++;if(command=="get_gameobject_components")return new {success=true,data=(object)new {gameObjectID=123,gameObjectName="fixture",components=new object[0],cursor=0,pageSize=2,nextCursor=(int?)null,totalCount=0,hasMore=false,includeProperties=false}};
+   var vector=new {x=0,y=0,z=0};return new {success=true,data=(object)new {instanceID=123,name="fixture",tag="Untagged",layer=0,layerName="Default",active=true,activeInHierarchy=true,isStatic=false,
+    transform=new {position=vector,localPosition=vector,rotation=vector,localRotation=vector,scale=vector,lossyScale=vector},parent=(int?)null,children=new int[0],componentTypes=new[]{"Transform"},path="fixture"}};
+  }
+ }
+ public static class GameObjectResource {public static object HandleCommand(JObject args)=>ResourceFixture.Read("get_gameobject",args);}
+ public static class GameObjectComponentsResource {public static object HandleCommand(JObject args)=>ResourceFixture.Read("get_gameobject_components",args);}
+}
 namespace UnityEditor.PackageManager {
  public sealed class PackageInfo {
   public static string TestRoot;

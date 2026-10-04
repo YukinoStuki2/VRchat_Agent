@@ -169,27 +169,74 @@ namespace Yukino.VRChatAgent
             if ((bool?)result["success"] == true) return new SuccessResponse("受控候选操作", result["data"]);
             return new ErrorResponse((string)result["error"] ?? "candidate_denied", result["data"]);
         }
+        static bool LiveSceneObject(int id)
+        {
+            // Native ID lookup is global; reject assets/components/other scenes without loading.
+            var go = GameObjectLookup.ResolveInstanceID(id) as GameObject;
+            var stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            var scene = stage != null ? stage.scene : UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+            return go != null && !EditorUtility.IsPersistent(go) && scene.IsValid() && scene.isLoaded &&
+                go.scene.IsValid() && go.scene.isLoaded && go.scene == scene;
+        }
         static JObject NativeRead(string command, JObject args)
         {
             // This registry API rejects asynchronous handlers before executing them.
             // CandidateGate restricts command/action/targets; no arbitrary command route.
-            if (command == "manage_scene" && (string)args["action"] == "get_hierarchy" && args.ContainsKey("parent"))
+            if ((command == "manage_scene" && (string)args["action"] == "get_hierarchy" && args.ContainsKey("parent") &&
+                 !LiveSceneObject((int)args["parent"])) ||
+                (command == "find_gameobjects" && (string)args["searchMethod"] == "by_id" &&
+                 !LiveSceneObject(int.Parse((string)args["searchTerm"], System.Globalization.CultureInfo.InvariantCulture))))
+                return new JObject { ["success"] = false };
+            bool animatorRead = command == "manage_animation" && CandidateGate.AnimatorAction((string)args["action"]);
+            int animatorId = 0; GameObject animatorObject = null;
+            if (animatorRead)
             {
-                // Native numeric lookup is global and also resolves components/assets.
-                // Check the same object immediately before synchronous dispatch, without loading assets.
-                var go = GameObjectLookup.ResolveInstanceID((int)args["parent"]) as GameObject;
-                var stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-                var scene = stage != null ? stage.scene : UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
-                if (go == null || EditorUtility.IsPersistent(go) || !scene.IsValid() || !scene.isLoaded ||
-                    !go.scene.IsValid() || !go.scene.isLoaded || go.scene != scene)
+                animatorId = int.Parse((string)args["target"], System.Globalization.CultureInfo.InvariantCulture);
+                if (!LiveSceneObject(animatorId)) return new JObject { ["success"] = false };
+                animatorObject = (GameObject)GameObjectLookup.ResolveInstanceID(animatorId);
+                var animator = animatorObject.GetComponents<Animator>().SingleOrDefault();
+                if (animator == null || animator.parameterCount < 0 || animator.parameterCount > 256 ||
+                    animator.layerCount < 0 || animator.layerCount > 64 ||
+                    ((string)args["action"] == "animator_get_info" && animator.runtimeAnimatorController != null &&
+                     animator.runtimeAnimatorController.animationClips.Length > 1024))
                     return new JObject { ["success"] = false };
             }
-            object response = CommandRegistry.GetHandler(command)(args);
+            bool objectRead = command == "get_gameobject" || command == "get_gameobject_components";
+            if (objectRead)
+            {
+                int id = (int)args["instanceID"];
+                if (!LiveSceneObject(id)) return new JObject { ["success"] = false };
+                var go = (GameObject)GameObjectLookup.ResolveInstanceID(id);
+                if (command == "get_gameobject" && (go.transform.childCount > 1024 || go.GetComponents<Component>().Length > 256))
+                    return new JObject { ["success"] = false };
+            }
+            // Bind these new resource facades directly to pinned native classes:
+            // the global registry permits later same-name overrides by other plugins.
+            object response = animatorRead ? MCPForUnity.Editor.Tools.Animation.ManageAnimation.HandleCommand(args) :
+                command == "manage_packages" ? MCPForUnity.Editor.Tools.ManagePackages.HandleCommand(args) :
+                command == "get_menu_items" ? MCPForUnity.Editor.Resources.MenuItems.GetMenuItems.HandleCommand(args) :
+                command == "get_selection" ? MCPForUnity.Editor.Resources.Editor.Selection.HandleCommand(args) :
+                command == "get_windows" ? MCPForUnity.Editor.Resources.Editor.Windows.HandleCommand(args) :
+                command == "get_active_tool" ? MCPForUnity.Editor.Resources.Editor.ActiveTool.HandleCommand(args) :
+                command == "get_prefab_stage" ? MCPForUnity.Editor.Resources.Editor.GetPrefabStage.HandleCommand(args) :
+                command == "get_project_info" ? MCPForUnity.Editor.Resources.Project.ProjectInfo.HandleCommand(args) :
+                command == "get_tags" ? MCPForUnity.Editor.Resources.Project.Tags.HandleCommand(args) :
+                command == "get_layers" ? MCPForUnity.Editor.Resources.Project.Layers.HandleCommand(args) :
+                command == "get_gameobject" ? MCPForUnity.Editor.Resources.Scene.GameObjectResource.HandleCommand(args) :
+                command == "get_gameobject_components" ? MCPForUnity.Editor.Resources.Scene.GameObjectComponentsResource.HandleCommand(args) :
+                CommandRegistry.GetHandler(command)(args);
             JObject result = response as JObject ?? JObject.FromObject(response);
             // Validate only native success data here; the core sanitizes every
             // failure and revokes. Unknown/partial output is never a success.
             if (result["success"]?.Type == JTokenType.Boolean && (bool)result["success"] &&
-                !NativeReadContract.Valid(command, result, args))
+                (!NativeReadContract.Valid(command, result, args) ||
+                 (objectRead && !LiveSceneObject((int)args["instanceID"])) ||
+                 (animatorRead && (!LiveSceneObject(animatorId) ||
+                    ((string)args["action"] == "animator_get_info" && (string)result["data"]["gameObject"] != animatorObject.name))) ||
+                 (command == "get_gameobject" &&
+                    (!((JArray)result["data"]["children"]).All(id => LiveSceneObject((int)id)) ||
+                     (result["data"]["parent"].Type != JTokenType.Null && !LiveSceneObject((int)result["data"]["parent"])))) ||
+                 (command == "find_gameobjects" && !((JArray)result["data"]["instanceIDs"]).All(id => LiveSceneObject((int)id)))))
                 return new JObject { ["success"] = false };
             return result;
         }
@@ -200,6 +247,8 @@ namespace Yukino.VRChatAgent
             if (assetPath == "Console") return "live-console:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
             // Scene metadata is a live project-scoped read, never a file grant.
             if (assetPath == "Scenes") return "live-scenes:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
+            if (assetPath == "EditorMetadata") return "live-editor-metadata:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
+            if (assetPath == "ProjectMetadata") return "live-project-metadata:" + CoplayProjectIdentity.GetProjectHash() + ":" + LiveConnection();
             string project = Directory.GetParent(Application.dataPath).FullName;
             string full = Path.GetFullPath(Path.Combine(project, assetPath));
             if (!full.StartsWith(Path.GetFullPath(Application.dataPath) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) throw new IOException("target_outside_assets");

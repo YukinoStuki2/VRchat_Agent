@@ -2,6 +2,64 @@
 
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
 
+## 2026-10-05 审查修复冻结（非完整产品批准）
+
+- 冻结标签 `readonly-reconciled-20261005043037`：122个唯一Python方法通过；81个C#主组用例通过，原生NS001–018和独立WU001–012另列，不混入主组。
+- 整个 `find_gameobjects/by_component` 在Python和Unity最终门控关闭，保留另外五种模式；公开描述与门控已同步，RT036防止描述回归。
+- 首轮52文件审查发现S1和L1–L3；S1已有十文件专项复核，本次八文件CI/文案/摘要增量独立复核通过。仅为各自限定范围，不代替完整产品审查。
+- 真实Hermes/Codex原生MCP、聊天/交付/同机真实SSH链路、搬迁和最小导出通过；正常DELETE逐端均确认，报告无残留进程/端口和临时根；固定源摘要一致。Unity仍为fixture，不是实机或真人批准。
+- VP017–019已纳入122方法的完整冻结入口；CI完整24文件原生输入闭包、WriteUnity工程引用和WU001–012精确集合修复已核验。Linux本地workflow字节回放不等于Windows或真实下载验收。
+- 原样插件在现用扫描器被拒；另用官方固定提交 `439334127f012e1ee0685acd5dba288e459af0ec` 的原样v9扫描器隔离复验，仍因`INSTALL.md:40`的`ssh_backdoor`匹配被dangerous拒绝。仅扫描，未安装；未改现用Hermes/QQ/安装器/扫描开关，也未删安全说明。
+- 最新精确提交的Windows验证、其余读取族、计划内编译续接、原样安装、VPM生命周期和独立ALCOM仍未完成。此记录不是可安装交付声明。
+
+## 2026-10-05 菜单与已安装包信息（本地四路冻结通过）
+
+- `get_menu_items`复用固定原生resource facade；严格无客户端参数，原生内部仅`refresh=true,search=""`。TypeCache菜单元数据刷新不是AssetDatabase刷新，不执行菜单；独立EditorMetadata操作批准，保留原生失败可回旧缓存/空列表的限制。RT034/NS016/UA019覆盖。
+- 菜单冻结`menu-metadata-integrated-20261005030919`通过：117唯一Python、80主组唯一C#/协议、另组NS001–016，真实双客户端NMN001/002与搬迁通过；后续以包信息整合的新冻结覆盖当前源码。
+- `manage_packages/get_package_info`复用固定原生Python函数和C#读器；显式ProjectMetadata操作，只准规范已安装包名，拒绝版本/URL/路径、别名、多余参数；不开放Client.List/Search/Resolve、包写入/轮询/注册表。输出包括本地resolved_path，依赖计数/名称/版本及字节预算逐项校验；不是全部包清单。参数范围不支持任意Git版本字符串。
+- 包切片RT035/NS017/UA020的首次失败和修正结果保留；C#原生方法按整文件pin原样抽取，未执行分支抛错，API仍为替身。`package-info-integrated-20261005032156`：118唯一Python、81主组唯一C#/协议、另组NS001–017；真实双客户端NPK001/002及菜单/既有完整回归、portable搬迁均通过。
+- 四报告536/194/440/496条源码映射全部与回读时当前字节一致；两端各2个会话正常DELETE200，运行时会话空，跟踪35后代/5监听无残留，临时根清理。见`evidence/package-info-integrated-20261005032156-checkpoint.json`。
+- 本节时HEAD仍`b0528443ed7b82a4e98610869126e34366659a29`，无新增提交/推送/发布。完整方法族、编译续接、当前源码Windows、扫描允许的实际安装、完整冻结独立复核及VPM/ALCOM仍缺；后续变更不得沿用本冻结作为新源码通过证明。
+
+## 2026-10-05 编辑器元数据切片（本地四路通过，非完整交付）
+
+- 新接入固定上游get_selection/get_windows/get_active_tool/get_prefab_stage；独立EditorMetadata开关/清单、严格无参，选择摘要不授权对象内容，窗口读取不聚焦，不打开Prefab Stage、不调用自定义工具getter。
+- 原生返回形状/空值及选择计数、窗口数量有界；窗口原生异常跳过保留，不能宣称完整窗口清单。目录/本地UI/双客户端allowlist/输出合同/分发载荷均同步；首次目录顺序不一致失败保留，已对齐生成器和运行验证器，不放宽检查。
+- 四路冻结`editor-metadata-integrated-20261004184703`：116唯一Python方法、79唯一主组C#/协议，另组NS001–015；真实双客户端NEM001/002及既有整轮通过，两端各两个session正常DELETE200，运行时session空、跟踪后代/监听/临时根无残留。portable搬迁passed且清理通过。
+- 各报告源码映射（534/192/438/494条）在回读时与当前字节逐一吻合。报告范围不同不互作替代；后续源修改不继承该冻结批准。见`evidence/editor-metadata-integrated-20261004184703-checkpoint.json`。
+- HEAD仍`b0528443ed7b82a4e98610869126e34366659a29`，仅本地候选，无新增提交/推送/发布。完整冻结独立复核、新Windows/真实Unity/真人、编译续接、其余方法族、扫描允许的实际安装与VPM/ALCOM均未完成。
+
+## 2026-10-05 工程元数据切片（本地验收；未完整交付）
+
+- 原生get_project_info/get_tags/get_layers以工具facade接入独立ProjectMetadata范围；参数必须为空、独立能力勾选及任务批准，工程绝对路径披露，本地输出合同有界。不是全包清单，也不继承Scenes/资产权限。
+- SDK union返回result包裹、原生错误模型丢弃暂停data已定向处理：只保留同请求已核对精确plan的暂停回执；异计划/错误撤权，不伪装成功。RT031/032通过。
+- Python `project-metadata-reconciled-20261005020610-all.json`为114个唯一方法全部通过；C#/协议`unity-parent-project-metadata-reconciled-20261005020610.json`为78个唯一主集合、另组NS001–014，源码不变、目录清理。此后仅测试驱动/CI修改；NPC001–004及16项验证器另验。
+- 新增NPC004复现合法拒绝structuredContent=null导致测试TypeError，修正驱动不改产品拒绝语义。原始失败位置独立保留，清理错误不再掩盖定位证据。历史一次Codex DELETE超时仍保留，不归因于读取业务。
+- `project-metadata-native-fixed-20261005022752-native.json`整轮passed，NMD001/002及既有回归、两端各2次正常DELETE200、源码不变、38跟踪后代/5监听无残留、运行时session空和临时根删除。配套portable已在最终驱动上重跑passed，临时根删除。
+- 无真实Unity/真人、Windows新冻结或独立批准；无新增提交/推送/发布。HEAD仍b0528443ed7b82a4e98610869126e34366659a29。完整项目缺口未由本切片抵销。
+
+## 2026-10-04 对象/Animator读取及原生关闭整合（历史切片）
+
+- 关闭阻塞已解决：脱敏观察证实Codex空闲卸载与服务端60秒回收相撞；stdio控制EOF必须先触发原生关闭，再等精确DELETE。固定版本源码核对、NPC001–003以及真实双客户端整轮均通过；未延长服务端TTL、未接受404、未以强制清理代替正常关闭。
+- 固定原生`get_gameobject`对象摘要（含原生世界/局部Transform）与`get_gameobject_components`组件类型/ID分页已按资源工具适配接入；明确不开放任意组件getter/属性反射。独立本地开关/清单批准、当前Scene/Prefab Stage输入输出核验、容量、UI和两端工具目录已同步。
+- 固定原生`manage_animation/animator_get_info|animator_get_parameter`已接入：仅当前场景的精确GameObject ID；参数名显式有界。拒绝查名、资产、控制器变更、播放/赋值/设置参数及隐式刷新。C#上游reader原样编译测试；Unity API仍为测试替身，不是实机。
+- `animator-reconciled-20261004142115-all.json`：112个唯一Python方法全部通过，源码前后不变。`unity-parent-animator-integrated-20261004141536.json`：77个主集合唯一C#/协议ID通过，NS001–013、Console/continuity/binding另列；精确集合一致，自有构建目录删除。不可把分组求和当作产品验收。
+- `animator-reconciled-portable-20261004142753-portable.json`：已同步最终两份测试驱动后重新搬迁通过、源码/载荷不变、临时根删除，6个跟踪后代/2个监听无残留。`animator-reconciled-20261004142115-native.json`：真实Hermes/Codex两端NI001/NI002及NA/NP/NR等完整回归通过，各2个会话创建/正常DELETE200，Unity撤权确认、运行时会话空、临时根删除，35个跟踪后代/5个监听无残留。同机SSH与fixture消息不是跨机可信交付、model turn或真实Unity。
+- 首轮Python旧精确集合、C#测试替身、Unity `-I`路径误用、native驱动`args`覆盖及其启动错误全部保留；新标签修正复跑，不删除断言、不把启动成功或中途NI通过当整轮成功。
+- 原样Hermes候选插件仍被安装扫描判为dangerous（安全说明和source.profile命中）；普通/强制安装均拒绝。未删安全说明、改扫描规则/开关/安装器，未写入现用插件或配置。
+- 验证索引：`evidence/animator-integration-checkpoint-20261004.json`。仍为本地dirty候选，HEAD `b0528443ed7b82a4e98610869126e34366659a29`；没有本轮新增提交/推送/发布。其余原生读取、计划内编译续接、诊断clock精确提交Windows验证、不绕扫描的实际安装、完整冻结独立复核和VPM/ALCOM仍未完成。下方关闭失败为历史，不应重复续作。
+
+## 2026-10-04 查找接入及客户端关闭阻塞（历史快照，已由上节替代）
+
+- 本地候选新增 `find_gameobjects`：复用固定上游，显式参数/页长/当前场景及Prefab Stage范围门控；精确ID及结果ID拒绝资产、组件、其他场景。分页仅限返回量，仍先遍历匹配项。尚不是通用读取方法族全部完成。
+- 已修 Codex 候选独立配置未列入新工具、WirePeer分页输出与原生 `nextCursor` 契约不符；载荷清单的launcher摘要已同步。现用Codex/Hermes/QQ配置未改。
+- 首轮 find-read-20261004114343：运行时88项、C#/协议74唯一ID（另列NS组）、便携通过；这些是该轮源码证据，不是后来所有修改的冻结批准。查找真实双客户端后续NF001/NF002已到达通过点，但整轮仍在NA006关闭环节失败。
+- 关闭测试新增NPC001/NPC002：unsubscribe响应不是DELETE回执，缺失/失败回执保持失败。仅延后stdin关闭、以及按固定版本空闲卸载等待的尝试均未让整轮通过。`find-native-idle-unload-60s.json`为超时失败，不能把60秒/75秒预算当成有效修复；暂停新增原生客户端试跑，待拿到会话/线程关闭关联证据再继续。不能删除精确DELETE断言或将强制安全清理冒充原生正常关闭。
+- 最新本地校验 `find-close-local-green-20261004121655.json`：Codex配置7项、关闭测试2项、目录1项、便携验证器16项共26项通过；先前UA范围11→13的验证器断言过期失败保留，已同步精确集合并要求UA012/013及NPC001/002。
+- 最新搬迁 `find-close-portable-20261004121750.json` passed=true，源码和载荷稳定、临时根清理，6个跟踪后代/2个监听无残留。该结果不覆盖真实Codex正常关闭。
+- 失败原生轮已实证运行时会话为空、临时根删除、19个跟踪后代/3个监听无残留；这是安全清理成功，不是关闭功能验收。全部原始失败证据保留。
+- 本地HEAD为 `b0528443ed7b82a4e98610869126e34366659a29`；clock/validate/find及本轮修改仍在dirty候选，未新提交/推送，未独立冻结批准/最新Windows精确提交验收。其余原生读取、编译续接、安装整合、VPM/ALCOM仍未闭合；main及现用索引/真实头像工程未动。
+
 ## 原生场景层级（已实现，本轮冻结联验进行中）
 
 - 复用固定上游`get_hierarchy`单层分页/子节点/Transform摘要；明确页长1–100、游标0–1000000和非零int32父ID，拒绝名称/路径及其他参数。不刷新、不加载/保存。

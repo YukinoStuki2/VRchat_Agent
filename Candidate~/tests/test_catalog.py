@@ -24,8 +24,9 @@ class CatalogTests(unittest.TestCase):
             self.assertFalse(row['enabled_by_catalog'])
         surface = {(row['name'], action) for row in result['tools']
                    for action in row['implemented_candidate_read_actions']}
-        self.assertEqual(surface, {('manage_material', 'get_material_info'),
-                                   ('manage_animation', 'controller_get_info')})
+        shipped=json.loads((ROOT/'catalog/native-inventory.json').read_text())
+        self.assertEqual(surface, {(row['name'],action) for row in shipped['tools'] for action in row['implemented_candidate_read_actions']})
+        self.assertEqual(result['resource_facades'],shipped['resource_facades'])
         # Read-looking names remain denied; unknown tools must not inherit a label grant.
         fake = {'name': 'read_fake_safely', 'declared_actions': ['read'], 'source': {}}
         from unittest.mock import patch

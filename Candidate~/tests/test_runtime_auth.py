@@ -155,7 +155,7 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
     async def test_AU001_different_signed_principal_cannot_use_or_delete_owner_session(self):
         async with self.fixture() as (url, tokens, server, verifier):
             async with Client(url, auth=tokens['fixture-client-a']) as owner:
-                self.assertEqual({t.name for t in await owner.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','manage_scene','material_prepare','material_execute','material_status','material_stop'})
+                self.assertEqual({t.name for t in await owner.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','material_prepare','material_execute','material_status','material_stop'})
                 headers = {'accept': 'application/json, text/event-stream',
                     'authorization': 'Bearer ' + tokens['fixture-client-b'],
                     'mcp-session-id': owner.transport.get_session_id(),
@@ -169,7 +169,7 @@ class AuthHTTPTests(unittest.IsolatedAsyncioTestCase):
                             self.assertEqual(response.status_code, 404)
                 self.assertTrue(await owner.ping(), 'foreign DELETE must not close owner session')
             async with Client(url, auth=tokens['fixture-client-b']) as other:
-                self.assertEqual({t.name for t in await other.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','manage_scene','material_prepare','material_execute','material_status','material_stop'})
+                self.assertEqual({t.name for t in await other.list_tools()}, {'agent_status','agent_catalog','agent_prepare','agent_stop','manage_animation','manage_material','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','material_prepare','material_execute','material_status','material_stop'})
             self.assertEqual(server._candidate_runtime.plans, {})
             self.assertEqual(server._candidate_runtime.material.plans, {})
 

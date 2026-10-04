@@ -172,7 +172,10 @@ def guarded_container(temp_parent=None):
             outer = root.parent
             outer_identity = _stamp(outer)
         deadline = record['deadline']
-        if not 0 < deadline - time.monotonic() <= TTL or process.poll() is not None:
+        now = time.monotonic()
+        # Compare absolute endpoints: subtracting same-tick floats can round
+        # (created + TTL) - now just above TTL, rejecting a live keeper.
+        if not now < deadline <= now + TTL or process.poll() is not None:
             raise ValueError('guard_not_live')
         sealed = False
         def seal():

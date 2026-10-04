@@ -1,0 +1,78 @@
+{
+  "scope": "local frozen read/CI repair checkpoint; not full Candidate, Windows, Unity, human or VPM acceptance",
+  "label": "readonly-reconciled-20261005043037",
+  "head": "b0528443ed7b82a4e98610869126e34366659a29",
+  "python_unique_methods": 122,
+  "main_csharp_unique_ids": 81,
+  "separate_scene_ids": [
+    "NS001",
+    "NS002",
+    "NS003",
+    "NS004",
+    "NS005",
+    "NS006",
+    "NS007",
+    "NS008",
+    "NS009",
+    "NS010",
+    "NS011",
+    "NS012",
+    "NS013",
+    "NS014",
+    "NS015",
+    "NS016",
+    "NS017",
+    "NS018"
+  ],
+  "separate_write_unity_ids": [
+    "WU001",
+    "WU002",
+    "WU003",
+    "WU004",
+    "WU005",
+    "WU006",
+    "WU007",
+    "WU008",
+    "WU009",
+    "WU010",
+    "WU011",
+    "WU012"
+  ],
+  "source_maps_verified": {
+    "python": 536,
+    "unity": 194,
+    "native": 440,
+    "portable": 496
+  },
+  "native_ssh_source_count": 440,
+  "native_delete_200": {
+    "hermes": 2,
+    "codex": 2
+  },
+  "native_cleanup": {
+    "tracked_descendants": 35,
+    "tracked_listeners": 5,
+    "residual_pids": [],
+    "residual_ports": [],
+    "clean": true,
+    "safety_cleanup_complete": true
+  },
+  "portable_cleanup": {
+    "tracked_descendants": 6,
+    "tracked_listeners": 2,
+    "residual_pids": [],
+    "residual_ports": [],
+    "clean": true,
+    "safety_cleanup_complete": true
+  },
+  "minimal_export_passed": true,
+  "independent_CI_delta_review": "passed within 8-file frozen delta; recorded transcript; not complete product review",
+  "evidence_sha256": {
+    "readonly-reconciled-20261005043037-all.json": "87a5ed010627fa4f512701f9143b86535ef4bf691f6b4dcdcfd0703f4121d070",
+    "unity-parent-readonly-reconciled-20261005043037.json": "e60377e905e5a1c337ab8ee3c4ad63ed87a083f4184237c229b469d58cbb6147",
+    "readonly-reconciled-20261005043037-native.json": "a4b1a97051c2033d35f4e5e152802ec7835750aebdfc1d183f71bc0d8f8f6851",
+    "readonly-reconciled-20261005043037-native-ssh.json": "0d5b9b2b5b1548ddb648b1bfd2826d9b265b1f094963558175226accc6cadff5",
+    "readonly-reconciled-20261005043037-portable.json": "5cc0df93045a2b6ea766c0d258d9fb43524b21e5c70652e345e81cff7a5db4e1",
+    "readonly-reconciled-20261005043037-minimal.json": "7598432e20b136f4121a9409cf691a1e4dfa3ce95ca479834670fe6e72a7e269"
+  }
+}

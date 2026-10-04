@@ -20,6 +20,78 @@ if len(sys.argv) > 2 and sys.argv[1] == '--runtime-root':
 
 
 class CrashSnapshotTests(unittest.TestCase):
+    def test_DX006_same_tick_deadline_rounding_does_not_reject_live_keeper(self):
+        from unittest.mock import patch
+        sys.path.insert(0, str(BASE / 'diagnostics'))
+        import lifetime
+        real_popen = subprocess.Popen
+        tick = 212.007  # Exact same clock sample, but (tick + 300) - tick > 300.
+        self.assertGreater((tick + lifetime.TTL) - tick, lifetime.TTL)
+        keeper_code = ('import sys;sys.path.insert(0,' + repr(str(BASE / 'diagnostics')) + ');'
+                       'import lifetime;lifetime.time.monotonic=lambda:212.007;'
+                       'raise SystemExit(lifetime._worker())')
+        keepers = []
+        def same_tick_keeper(argv, **kwargs):
+            self.assertEqual(Path(argv[-1]), BASE / 'diagnostics/lifetime.py')
+            process = real_popen([argv[0], '-I', '-B', '-c', keeper_code], **kwargs)
+            keepers.append(process)
+            return process
+        with tempfile.TemporaryDirectory(prefix='diagnostic-same-tick-') as temp:
+            home = Path(temp).resolve()
+            with patch.object(lifetime.subprocess, 'Popen', side_effect=same_tick_keeper), \
+                    patch.object(lifetime.time, 'monotonic', return_value=tick):
+                with lifetime.guarded_container(home) as (root, deadline, alive, seal):
+                    self.assertEqual(deadline, tick + lifetime.TTL)
+                    self.assertTrue(alive())
+                    seal()
+            self.assertEqual(list(home.iterdir()), [])
+            self.assertEqual(len(keepers), 1)
+            self.assertEqual(keepers[0].poll(), 0)
+        self.assertFalse(Path(temp).exists())
+
+    def test_DX007_invalid_deadlines_and_expired_seal_remain_denied(self):
+        import math
+        from unittest.mock import patch
+        sys.path.insert(0, str(BASE / 'diagnostics'))
+        import lifetime
+        real_popen = subprocess.Popen
+        tick = 212.007
+        # Synthetic readiness protocol, not a live deadline/Windows clock test.
+        # Every child still owns and cleans a real private temporary container.
+        invalid = [tick, tick - 1, math.nextafter(tick + lifetime.TTL, math.inf),
+                   math.inf, -math.inf, math.nan]
+        with tempfile.TemporaryDirectory(prefix='diagnostic-deadline-boundary-') as temp:
+            home = Path(temp).resolve()
+            for deadline in invalid:
+                processes = []
+                code = ('import sys,json;sys.path.insert(0,' + repr(str(BASE / 'diagnostics')) + ')\n'
+                        'import lifetime\n'
+                        'cfg=json.loads(sys.stdin.buffer.readline())\n'
+                        'with lifetime._retrying_private_container(cfg["temp_parent"]) as root:\n'
+                        ' print(json.dumps({"root":root,"deadline":float(' + repr(str(deadline)) + ')}),flush=True)\n'
+                        ' sys.stdin.buffer.read()\n')
+                def invalid_keeper(argv, **kwargs):
+                    self.assertEqual(Path(argv[-1]), BASE / 'diagnostics/lifetime.py')
+                    process = real_popen([argv[0], '-I', '-B', '-c', code], **kwargs)
+                    processes.append(process)
+                    return process
+                with self.subTest(deadline=deadline), \
+                        patch.object(lifetime.subprocess, 'Popen', side_effect=invalid_keeper), \
+                        patch.object(lifetime.time, 'monotonic', return_value=tick):
+                    with self.assertRaisesRegex(ValueError, 'guard_not_live'):
+                        with lifetime.guarded_container(home):
+                            self.fail('invalid deadline admitted')
+                self.assertEqual(list(home.iterdir()), [])
+                self.assertEqual(len(processes), 1)
+                self.assertEqual(processes[0].poll(), 0)
+            # The unchanged deadline is still enforced immediately before seal.
+            with lifetime.guarded_container(home) as (root, deadline, alive, seal):
+                with patch.object(lifetime.time, 'monotonic', return_value=deadline):
+                    with self.assertRaisesRegex(ValueError, 'snapshot_expired_before_publish'):
+                        seal()
+            self.assertEqual(list(home.iterdir()), [])
+        self.assertFalse(Path(temp).exists())
+
     def test_DX005_default_container_uses_callers_temp_directory(self):
         from unittest.mock import patch
         sys.path.insert(0, str(BASE / 'diagnostics'))

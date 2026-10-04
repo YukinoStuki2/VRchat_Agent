@@ -1,0 +1,43 @@
+{
+  "verdict": "dangerous",
+  "scanner_version": "plugin-guard-v9",
+  "normal_allowed": false,
+  "findings": [
+    {
+      "file": "INSTALL.md",
+      "line": 40,
+      "severity": "critical",
+      "pattern_id": "ssh_backdoor"
+    }
+  ],
+  "upstream_commit": "439334127f012e1ee0685acd5dba288e459af0ec",
+  "upstream_blob_ids": {
+    "tools/plugin_guard.py": "d24e78530356db7562c2006e61e36ff9f4942e39",
+    "tools/plugin_guard_context.py": "211b9c60242d9def3820b8bef83b0f6716638c3c",
+    "tools/skills_guard.py": "90ae1a7da716ae6242a9a336e685d2369b7552a2",
+    "tools/__init__.py": "db946d0e2bc62d468804968c074f844b5fa0cbb3"
+  },
+  "upstream_sha256": {
+    "tools/plugin_guard.py": "101d3e75099c5979d4a9fc7099703aac31e98123aa498c9127280b5b780e48fd",
+    "tools/plugin_guard_context.py": "3756d8190d724ba5a9bec281024433362b2a6d1a5a27bb0f7cd2a840fe18aefe",
+    "tools/skills_guard.py": "0c33d15095cff5f980d02e4f1bf056bf43f39789600604c885c673fb68d9cbb3",
+    "tools/__init__.py": "7bca460f476ac9ace706c8cfd07e98f8aae34d839862f0f68abafc3a8397cf35"
+  },
+  "payload_sha256": {
+    "__init__.py": "7fc868541eae7bf367b8c1ddfed6c106a020b7ea62259c7ad766af5185b4ceaf",
+    "plugin.yaml": "69f0bbcdf2b0e214a8aeff81f87d4023fa2c57bfc5bc9d5c3e1c3914f49c9329",
+    "hermes_binding.py": "c34ecdc766d23a23514bb93160f6132f8a89dcbef8c877f97c55f9a67494bcbc",
+    "hermes_connection.py": "d31e6a92091a8e2c173d3f411b0657ec3262edc49eb55e62b0799add79af25d6",
+    "hermes_conversation.py": "5b5dca081ddc2c3d65c81669f45e802f9200e4d979211dc7fa5cd20aa71d8f2f",
+    "hermes_handoff.py": "02fb33cf766164f1beb92c45113fb60201da4413b84cca42651790d9710eda40",
+    "hermes_handoff_relay.py": "12f98847559c2d8632b292cdb7bd72b36051a947b626fb1a632a59c162b72c39",
+    "hermes_chat.py": "5b01ebfdd4235531672a1c4fe2ac10fc2b416de69272d0c5493e2821754fe0c5",
+    "hermes_gateway.py": "df7d56a7818871386f8a8a0e70f4970cb0a8c33972533fa5cbc0bce49840440b",
+    "README.md": "70212b6c16aa531bc920c6b9a74ddcfdd6d610bbc2d24eef028934102584e603",
+    "INSTALL.md": "eb3c23b1cc265a2334f7d88539fc693634afc84a37d6d6e558b9e240e7d39b81",
+    "LICENSE": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
+    "SHA256SUMS.json": "3b9063f96f4e791c54bc9ca0d27ba741eb175d1b99cc1c5077b37d54e5777f26"
+  },
+  "scope": "official pinned scanner on unchanged payload; scanner-only, not installation; live client untouched",
+  "temporary_root_absent": true
+}

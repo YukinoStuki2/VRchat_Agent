@@ -18,7 +18,137 @@ def driver():
     return module
 
 
+def workflow_step(name):
+    import ast, textwrap
+    workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+    step=workflow.split('      - name: '+name+'\n',1)[1].split('      - name:',1)[0]
+    return ast.parse(textwrap.dedent(step.split('        run: |\n',1)[1]))
+
+
+def workflow_native_inputs(work, opener):
+    """Execute the real CI download/hash/write statements, not a second list."""
+    import ast, hashlib, urllib.request
+    tree=workflow_step('Signed client approval identity and compiled gates (not Unity)')
+    body=next(n for n in ast.walk(tree) if isinstance(n,ast.With)
+        and 'TemporaryDirectory' in ast.unparse(n.items[0].context_expr)).body
+    start=next(i for i,n in enumerate(body) if isinstance(n,ast.Assign)
+        and any(isinstance(t,ast.Name) and t.id=='native' for t in n.targets))
+    end=next(i for i,n in enumerate(body) if isinstance(n,ast.Assign)
+        and any(ast.unparse(t)=="report['native_source_hashes']" for t in n.targets))
+    env={'root':ROOT,'work':work,'report':{},'ast':ast,'hashlib':hashlib,
+         'importlib':importlib,'urllib':urllib}
+    with patch.object(urllib.request,'urlopen',opener):
+        exec(compile(ast.Module(body=body[start:end+1],type_ignores=[]),'ci-native-downloads','exec'),env)
+    return env
+
+
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP017_workflow_downloads_verified_native_assembly_closure(self):
+        import hashlib, io, urllib.request
+        # A supplied pinned snapshot avoids network without faking upstream bytes.
+        snapshot=Path(os.environ.get('CANDIDATE_PINNED_EDITOR_ROOT',
+            '/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor'))
+        prefix='https://raw.githubusercontent.com/CoplayDev/unity-mcp/30d22075093d1d35dfb0091c1c7550e9ad948577/MCPForUnity/Editor/'
+        original=urllib.request.urlopen
+        payloads={}
+        def fetch(url,timeout):
+            self.assertTrue(url.startswith(prefix));self.assertEqual(timeout,30)
+            name=url[len(prefix):]
+            self.assertNotIn(name,payloads,'duplicate download')
+            if snapshot.is_dir():payload=(snapshot/name).read_bytes()
+            else:
+                with original(url,timeout=timeout) as response:payload=response.read()
+            payloads[name]=payload
+            return io.BytesIO(payload)
+        spec=importlib.util.spec_from_file_location('scene_closure',ROOT/'tests/scene_native_source.py')
+        assert spec is not None and spec.loader is not None
+        scene=importlib.util.module_from_spec(spec);spec.loader.exec_module(scene)
+        with tempfile.TemporaryDirectory(prefix='ci-native-closure-') as td:
+            work=Path(td)
+            env=workflow_native_inputs(work,fetch)
+            native=env['native']
+            self.assertEqual(set(payloads),set(env['native_hashes']))
+            self.assertEqual({str(p.relative_to(native)) for p in native.rglob('*') if p.is_file()},set(payloads))
+            self.assertEqual({p:hashlib.sha256(b).hexdigest() for p,b in payloads.items()},env['native_hashes'])
+            assembled=scene.assemble(native,work/'ManageScene.cs')
+            self.assertTrue(set(assembled['find_native_sha256'])<=set(payloads))
+            self.assertTrue((work/'ManageScene.cs.packages.cs').is_file())
+            for name in payloads:
+                with self.subTest(corrupt_download=name), tempfile.TemporaryDirectory(dir=work) as corrupt:
+                    def damaged(url,timeout):
+                        key=url[len(prefix):]
+                        return io.BytesIO(payloads[key]+(b'corrupt' if key==name else b''))
+                    with self.assertRaises(AssertionError):workflow_native_inputs(Path(corrupt),damaged)
+        self.assertFalse(Path(td).exists())
+
+    def test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed(self):
+        import ast, re
+        from types import SimpleNamespace
+        tree=workflow_step('Local task-record UI and reload lifecycle (net8 doubles, not Editor)')
+        checks: list[ast.stmt]=[n for n in ast.walk(tree) if isinstance(n,ast.Assert) and "report['ids']" in ast.unparse(n)]
+        self.assertTrue(checks)
+        code=compile(ast.Module(body=checks,type_ignores=[]),'ci-write-unity-predicate','exec')
+        complete=[f'WU{i:03d}' for i in range(1,13)]
+        for label,ids,exit_code in [('complete',complete,0),('zero',[],0),('missing',complete[:-1],0),
+                ('duplicate',complete+[complete[0]],0),('replacement',complete[:-1]+[complete[0]],0),
+                ('extra',complete+['WU013'],0),('nonzero_exit',complete,1)]:
+            env={'report':{'ids':ids},'result':SimpleNamespace(returncode=exit_code,stdout='',stderr=''),'re':re}
+            with self.subTest(case=label):
+                if label=='complete':exec(code,env)
+                else:
+                    with self.assertRaises(AssertionError):exec(code,env)
+
+    def test_VP018_unity_driver_runs_separate_exact_write_unity_group(self):
+        import ast, copy
+        spec=importlib.util.spec_from_file_location('unity_verifier',ROOT/'tests/verify_unity.py')
+        assert spec is not None and spec.loader is not None
+        unity=importlib.util.module_from_spec(spec);spec.loader.exec_module(unity)
+        tree=ast.parse((ROOT/'tests/verify_unity.py').read_text(encoding='utf-8'))
+        loops=[n for n in ast.walk(tree) if isinstance(n,ast.For) and isinstance(n.iter,ast.Tuple)
+            and any(isinstance(v,ast.Constant) and v.value=='CoreTests' for v in n.iter.elts)]
+        self.assertEqual(len(loops),1)
+        self.assertIn('WriteUnityCases',ast.literal_eval(loops[0].iter))
+        self.assertTrue(callable(getattr(unity,'write_unity_result',None)))
+        complete=[f'WU{i:03d}' for i in range(1,13)]
+        row={'exit_code':0,'stdout':'','stderr':'','timeout':False,'process_group_absent':True,'pid_absent':True}
+        good={'runs':[{**row,'name':'WriteUnityCases-build'},
+            {**row,'name':'WriteUnityCases','stdout':''.join('PASS '+i+' fixture\n' for i in complete)}],
+            'owned_build_directory_removed':True,'pass_ids':['UC001']}
+        for variant in ('complete','zero','missing','duplicate','extra','build_failed','exit_failed',
+                'stdout_warning','stderr_warning','compiler_warning','timeout','process_left','pid_left','directory_left','missing_build','missing_run'):
+            report=copy.deepcopy(good)
+            result=report['runs'][1]
+            if variant in ('zero','missing','duplicate','extra'):
+                ids={'zero':[],'missing':complete[:-1],'duplicate':complete+[complete[0]],'extra':complete+['WU013']}[variant]
+                result['stdout']=''.join('PASS '+i+' fixture\n' for i in ids)
+            elif variant=='build_failed':report['runs'][0]['exit_code']=1
+            elif variant=='exit_failed':result['exit_code']=1
+            elif variant in ('stdout_warning','stderr_warning'):result[variant.split('_')[0]]+='ResourceWarning: fixture\n'
+            elif variant=='compiler_warning':report['runs'][0]['stdout']+='warning CS0000: fixture\n'
+            elif variant=='timeout':result['timeout']=True
+            elif variant=='process_left':result['process_group_absent']=False
+            elif variant=='pid_left':result['pid_absent']=False
+            elif variant=='directory_left':report['owned_build_directory_removed']=False
+            elif variant=='missing_build':report['runs']=report['runs'][1:]
+            elif variant=='missing_run':report['runs']=report['runs'][:1]
+            with self.subTest(case=variant):
+                observed=unity.write_unity_result(report)
+                self.assertEqual(observed['passed'],variant=='complete')
+                self.assertEqual(report['pass_ids'],['UC001'],'WU must not change the main group')
+                if variant=='complete':
+                    self.assertEqual(observed['pass_ids'],complete)
+                    self.assertEqual(observed['unique_pass_count'],12)
+        # The actual main verdict must consume this group, not merely report it.
+        main=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+        returns=[n for n in main.body if isinstance(n,ast.Return)]
+        self.assertEqual(len(returns),1)
+        assert returns[0].value is not None
+        report: dict={name:True for name in ('all_commands_succeeded','source_unchanged','expected_ids_match',
+            'owned_build_directory_removed','clean_warning_free_run','client_binding_ids_match','console_ids_match','scene_ids_match')}
+        for passed in (True,False):
+            report['write_unity']={'passed':passed}
+            self.assertEqual(eval(compile(ast.Expression(returns[0].value),'unity-verdict','eval'),{'report':report}),0 if passed else 1)
+
     def test_VP015_ci_executes_exact_read_method_and_completion_gates(self):
         import ast, textwrap
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
@@ -37,7 +167,7 @@ class PortableVerifierTests(unittest.TestCase):
             exec(compile(ast.Module(body=nodes,type_ignores=[]),'ci-read-execution-gates','exec'),env)
         execute(assignments)
         methods=env['console_methods']
-        expected={f'RT{i:03d}' for i in range(15,25)}
+        expected={f'RT{i:03d}' for i in range(15,37)}
         self.assertEqual(len(methods),len(expected))
         self.assertEqual({m.split('.test_')[1].split('_')[0] for m in methods},expected)
         variants={'complete':methods,'zero':[],'missing':methods[:-1],
@@ -57,12 +187,12 @@ class PortableVerifierTests(unittest.TestCase):
             with self.subTest(gate='completion',case=label):
                 env['report']={'owned_build_directory_absent':True,'rows':[{'passed':True}],
                     'console_native':{'exit_code':0,'ids':[f'NC{i:03d}' for i in range(1,5)]},
-                    'scene_native':{'exit_code':0,'ids':[f'NS{i:03d}' for i in range(1,9)]},
+                    'scene_native':{'exit_code':0,'ids':[f'NS{i:03d}' for i in range(1,19)]},
                     'console_runtime':[{'method':m,'passed':True} for m in completed]}
                 execute(summaries)
                 self.assertEqual(env['report']['passed'],label=='complete')
 
-    def test_VP016_compiled_scene_gates_require_seven_read_combination(self):
+    def test_VP016_compiled_scene_gates_require_eight_read_combination(self):
         import ast, textwrap
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
         step=workflow.split('      - name: Signed client approval identity and compiled gates (not Unity)\n',1)[1].split('      - name:',1)[0]
@@ -73,7 +203,7 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertEqual(len(checks),1)
         self.assertEqual(len(summaries),1)
         from types import SimpleNamespace
-        complete=[f'NS{i:03d}' for i in range(1,9)]
+        complete=[f'NS{i:03d}' for i in range(1,19)]
         for ids in (complete,[],complete[:-1],complete[:-1]+[complete[0]],complete+[complete[0]]):
             env={'result':SimpleNamespace(returncode=0),'report':{'scene_native':{'ids':ids},'scene_pass_ids':ids}}
             with self.subTest(gate='workflow',ids=ids):
@@ -168,7 +298,13 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertIn("['OC001']", workflow)
         self.assertGreaterEqual(workflow.count("'Candidate~/catalog'"),2)
         unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
-        self.assertIn("{f'UA{i:03d}' for i in range(1, 12)}", unity)
+        # UA012/UA013 cover the new find scope and UI gate, not optional IDs.
+        self.assertIn("{f'UA{i:03d}' for i in range(1, 21)}", unity)
+        adapter=(ROOT/'tests/unity-core/AdapterCases.cs').read_text(encoding='utf-8')
+        for identifier in ('UA012','UA013','UA014','UA015','UA016','UA017','UA018','UA019','UA020'):
+            self.assertIn('PASS '+identifier+' ',adapter)
+        self.assertGreaterEqual(workflow.count('tests/test_native_peer_cleanup.py'),3)
+        self.assertIn("['NPC001','NPC002','NPC003','NPC004']",workflow)
 
     def test_VP007_compiled_peer_separates_boot_from_request_deadline(self):
         source=(ROOT/'tests/unity-core/WirePeer.cs').read_text(encoding='utf-8')

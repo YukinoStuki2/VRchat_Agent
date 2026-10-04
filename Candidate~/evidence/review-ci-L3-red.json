@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/home/ubuntu/.cache/uv/archive-v0/7z4PORN2YM2xSubx/bin/python",
+    "-I",
+    "-B",
+    "-W",
+    "always::ResourceWarning",
+    "/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/test_portable_verifier.py",
+    "PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed",
+    "-v"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed (__main__.PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed) ... \n  test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed (__main__.PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed) (case='complete') ... FAIL\n  test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed (__main__.PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed) (case='extra') ... FAIL\n\n======================================================================\nFAIL: test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed (__main__.PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed) (case='complete')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/test_portable_verifier.py\", line 96, in test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed\n    if label=='complete':exec(code,env)\n                         ^^^^^^^^^^^^^^\n  File \"ci-write-unity-predicate\", line 16, in <module>\nAssertionError\n\n======================================================================\nFAIL: test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed (__main__.PortableVerifierTests.test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed) (case='extra')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/test_portable_verifier.py\", line 98, in test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed\n    with self.assertRaises(AssertionError):exec(code,env)\nAssertionError: AssertionError not raised\n\n----------------------------------------------------------------------\nRan 1 test in 0.003s\n\nFAILED (failures=2)\n",
+  "hashes_before": {
+    ".github/workflows/candidate-dependencies.yml": "0770bc23129a303f07b8a3a4f73ce506c7dc8b22c2ef8f8310b773f171e43cf1",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "e9ca453e7e2228af97427b2df99bf271deec861d2391d439d4c863aed8eb3bd8",
+    "Candidate~/tests/verify_unity.py": "d5d1b24cac4325dd1e6ba776e51de048726a1c6bffe9b933ad4233a536eb484c",
+    "Candidate~/tests/test_portable_verifier.py": "54872540aea4ef74f4a3b5bff16aadf32de17dbfbdbe5c60ce864cb8922b79cf"
+  },
+  "hashes_after": {
+    ".github/workflows/candidate-dependencies.yml": "0770bc23129a303f07b8a3a4f73ce506c7dc8b22c2ef8f8310b773f171e43cf1",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "e9ca453e7e2228af97427b2df99bf271deec861d2391d439d4c863aed8eb3bd8",
+    "Candidate~/tests/verify_unity.py": "d5d1b24cac4325dd1e6ba776e51de048726a1c6bffe9b933ad4233a536eb484c",
+    "Candidate~/tests/test_portable_verifier.py": "54872540aea4ef74f4a3b5bff16aadf32de17dbfbdbe5c60ce864cb8922b79cf"
+  },
+  "source_unchanged": true
+}

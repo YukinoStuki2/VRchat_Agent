@@ -3,13 +3,19 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
+ public class AnimationClip:Object {}
+ public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
+ public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
+
  public class Object { public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
  public class TextAsset : Object {}
  public class DefaultAsset : Object {}
  public class Texture : Object {}
  public class Shader : Object {}
- public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene=new UnityEngine.SceneManagement.Scene(); public Renderer Renderer;public T[] GetComponents<T>() where T:Object=>new[]{Renderer as T};public T GetComponent<T>() where T:Object=>Renderer as T; }
- public class Renderer : Object { public GameObject gameObject;public Material[] sharedMaterials=new Material[1]; }
+ public class Component : Object {}
+ public class Transform : Component { public int childCount=>0; }
+ public class GameObject : Object { public Transform transform=>new Transform(); public UnityEngine.SceneManagement.Scene scene=new UnityEngine.SceneManagement.Scene(); public Renderer Renderer;public T[] GetComponents<T>() where T:Object=>new[]{Renderer as T};public T GetComponent<T>() where T:Object=>Renderer as T; }
+ public class Renderer : Component { public GameObject gameObject;public Material[] sharedMaterials=new Material[1]; }
  public class MeshRenderer : Renderer {}
  public class SkinnedMeshRenderer : Renderer {}
  public class Material : Object { public Shader shader=new Shader(); public bool HasProperty(string name)=>true; public Texture Texture;public string[] GetTexturePropertyNames()=>Texture==null?Array.Empty<string>():new[]{"_MainTex"};public Texture GetTexture(string name)=>Texture;public void SetTexture(string name,Texture tex){Texture=tex;}public Color GetColor(string name)=>new Color();public Vector4 GetVector(string name)=>new Vector4();public float GetFloat(string name)=>0.7f; }
@@ -124,4 +130,18 @@ namespace UnityEditor.PackageManager {
   public string resolvedPath;
   public static PackageInfo FindForAssembly(System.Reflection.Assembly a) => TestRoot == null ? null : new PackageInfo {resolvedPath=TestRoot};
  }
+}
+
+namespace MCPForUnity.Editor.Tools.Animation {
+ public static class ManageAnimation {
+  public static int Calls;public static bool WrongName;
+  public static object HandleCommand(JObject args){
+   Calls++;if((string)args["action"]=="animator_get_parameter")return new {success=true,data=(object)new {name=WrongName?"wrong":"Speed",type="Float",value=0.5f}};
+   return new {success=true,data=(object)new {gameObject=WrongName?"wrong":"Avatar",enabled=true,speed=1,hasController=false,controllerName=(string)null,applyRootMotion=false,updateMode="Normal",cullingMode="AlwaysAnimate",parameterCount=0,layerCount=0,parameters=new object[0],layers=new object[0],clips=new object[0]}};
+  }
+ }
+}
+namespace MCPForUnity.Editor.Resources.Scene {
+ public static class GameObjectResource { public static object HandleCommand(JObject args)=>throw new InvalidOperationException("native-object-read-not-in-this-fixture"); }
+ public static class GameObjectComponentsResource { public static object HandleCommand(JObject args)=>throw new InvalidOperationException("native-components-read-not-in-this-fixture"); }
 }

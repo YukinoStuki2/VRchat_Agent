@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -53,7 +54,7 @@ namespace Yukino.VRChatAgent
             EditorGUI.EndDisabledGroup();
             Capability("材质信息读取", "manage_material", "get_material_info");
             Capability("控制器信息读取", "manage_animation", "controller_get_info");
-            EditorGUILayout.HelpBox("旧v1入口保持只读。Scenes范围允许本工程场景元数据与当前场景/Prefab Stage的单层分页摘要；父对象仅精确ID。结果实时变化，组件类型摘要并非完整属性；不加载或保存。候选材质写走下方独立入口；删除、全量刷新/导入、场景保存、包操作、任意执行仍拒绝。", MessageType.Info);
+            EditorGUILayout.HelpBox("旧v1入口保持只读。Scenes范围允许本工程场景元数据与当前场景/Prefab Stage的单层分页摘要；父对象仅精确ID。结果实时变化，组件类型摘要并非完整属性；不加载或保存。validate只在显式auto_repair=false时检查活动场景的缺失脚本/损坏Prefab引用，不修复；最多200条记录，问题总数不等于对象条数，遍历可能耗时。候选材质写走下方独立入口；删除、全量刷新/导入、场景保存、包操作、任意执行仍拒绝。", MessageType.Info);
             if (GUILayout.Button("撤销全部任务权限（不回退文件）"))
             {
                 gate.StopAll("本地已撤销全部任务；不回退文件");
@@ -118,6 +119,16 @@ namespace Yukino.VRChatAgent
                         foreach (JObject row in rows)
                             if ((bool?)row["enabled_by_catalog"] != false || (string)row["default_decision"] != "deny" ||
                                 row["declared_actions"] is not JArray) throw new InvalidDataException();
+                        var facades = doc["resource_facades"] as JArray;
+                        if (facades == null || facades.Count != 10) throw new InvalidDataException();
+                        foreach (JObject row in facades)
+                        {
+                            if ((string)row["provenance_kind"] != "native_resource_tool_facade" ||
+                                !new[] { "get_gameobject", "get_gameobject_components", "get_project_info", "get_tags", "get_layers", "get_selection", "get_windows", "get_active_tool", "get_prefab_stage", "get_menu_items" }.Contains((string)row["name"]) ||
+                                (bool?)row["enabled_by_catalog"] != false || (string)row["default_decision"] != "deny" ||
+                                row["declared_actions"] is not JArray) throw new InvalidDataException();
+                            rows.Add(row.DeepClone());
+                        }
                         catalog = rows; catalogError = "";
                     }
                     catch { catalog = null; catalogError = "随包能力目录缺失或无效，未更改任何权限。"; }
@@ -136,17 +147,26 @@ namespace Yukino.VRChatAgent
                     "scripting_ext" => "脚本", "testing" => "测试", "ui" => "用户界面",
                     "vfx" => "特效", _ => "其他"
                 };
-                EditorGUILayout.LabelField("原生工具", chinese + " / " + (string)row["name_zh"] + "  " + command);
+                EditorGUILayout.LabelField((string)row["provenance_kind"] == "native_resource_tool_facade" ? "原生资源的候选工具入口" : "原生工具", chinese + " / " + (string)row["name_zh"] + "  " + command);
                 if (GUILayout.Button("展开操作：" + command)) catalogTool = catalogTool == command ? "" : command;
                 if (catalogTool != command) continue;
                 var actions = (JArray)row["declared_actions"];
+                if (actions.Count == 0 && (bool?)row["has_action_parameter"] == false &&
+                    row["implemented_candidate_read_actions"] is JArray labels && labels.Count > 0)
+                { actions = labels; EditorGUILayout.LabelField("权限名", "仅用于候选清单；原生工具没有action参数"); }
                 if (actions.Count == 0) EditorGUILayout.LabelField("操作", "无封闭动作清单；尚未接通，拒绝");
                 foreach (JToken item in actions)
                 {
                     string action = (string)item;
                     bool supported = true;
                     try { CandidateSession.Gate.Allows(command, action); } catch { supported = false; }
-                    if (supported) Capability((string)row["name_zh"], command, action);
+                    if (supported)
+                    {
+                        if (CandidateGate.EditorCommand(command)) EditorGUILayout.HelpBox("EditorMetadata会披露全编辑器的选择名称/类型/ID、窗口标题坐标、工具设置或已打开Prefab路径。不是资产正文读取/修改授权；不聚焦窗口、不打开Prefab。", MessageType.Info);
+                        if (command == "manage_packages") EditorGUILayout.HelpBox("仅get_package_info；ProjectMetadata独立批准，披露包作者/描述/来源/绝对路径/依赖。仅读本地已注册元数据，不查询远端、不调用UPM任务；不是包内容或安装权限。", MessageType.Info);
+                        if (command == "get_menu_items") EditorGUILayout.HelpBox("菜单名称仅为TypeCache元数据；内部refresh不刷新资产、不执行菜单。最多4096项，原生扫描失败可返回旧缓存/空列表，不保证穷尽。", MessageType.Info);
+                        Capability((string)row["name_zh"], command, action);
+                    }
                     else
                     {
                         EditorGUI.BeginDisabledGroup(true);

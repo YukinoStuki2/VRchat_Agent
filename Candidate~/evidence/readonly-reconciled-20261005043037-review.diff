@@ -1,0 +1,326 @@
+--- before/.github/workflows/candidate-dependencies.yml
++++ after/.github/workflows/candidate-dependencies.yml
+@@ -89,13 +89,16 @@
+           assert len(methods)==7 and {m.split('.test_')[1].split('_')[0] for m in methods}=={f'CB{i:03d}' for i in range(1,8)}
+           report={'scope':'Signed SDK clients and net8 production gates; fixture backend, not native clients/Unity/human approval','rows':[]}
+           target=pathlib.Path('dependency-evidence/client-binding-results.json')
+-          expected_console_ids={f'RT{i:03d}' for i in range(15,36)}
++          expected_console_ids={f'RT{i:03d}' for i in range(15,37)}
+           dotnet=shutil.which('dotnet');assert dotnet
+           try:
+               with tempfile.TemporaryDirectory(prefix='candidate-client-binding-') as td:
+                   work=pathlib.Path(td).resolve()
+                   native=work/'native';native.mkdir()
+-                  native_hashes={'Tools/ManageScene.cs': '1fc7de5f27d4213bf3f1173cb9589e6056590c70bcb894c4a86483d789ac8e15', 'Helpers/Response.cs': 'a1769de32b9c6824841c070f0590ae7e9f44485d2a6c44a0bce3ed3f68e17391', 'Tools/ReadConsole.cs': '80950f3ff610b845d34644aa0426775c7e1bfc20483c912c004067d43dfb119f', 'Helpers/ToolParams.cs': 'f708345c2913672011a7050ddceb96141a22f0880c9dfea65ebfb5b50c792abc', 'Helpers/ParamCoercion.cs': '69b425c49152a31d68e80d0a6498c78c406989242214a8f9b760b6936b17670b', 'Helpers/StringCaseUtility.cs': '5758c84d56fd4a3420aede775ddd1ca7cc8e0854476bedf65a1a9bca437cd411'}
++                  import importlib.util
++                  spec=importlib.util.spec_from_file_location('scene_native_source',root/'tests/scene_native_source.py')
++                  scene=importlib.util.module_from_spec(spec);spec.loader.exec_module(scene)
++                  native_hashes={**scene.FIND_PINS, 'Tools/ManageScene.cs': scene.PIN, 'Helpers/Response.cs': 'a1769de32b9c6824841c070f0590ae7e9f44485d2a6c44a0bce3ed3f68e17391', 'Tools/ReadConsole.cs': '80950f3ff610b845d34644aa0426775c7e1bfc20483c912c004067d43dfb119f', 'Helpers/ToolParams.cs': 'f708345c2913672011a7050ddceb96141a22f0880c9dfea65ebfb5b50c792abc', 'Helpers/ParamCoercion.cs': '69b425c49152a31d68e80d0a6498c78c406989242214a8f9b760b6936b17670b', 'Helpers/StringCaseUtility.cs': '5758c84d56fd4a3420aede775ddd1ca7cc8e0854476bedf65a1a9bca437cd411'}
+                   for name,digest in native_hashes.items():
+                       with urllib.request.urlopen('https://raw.githubusercontent.com/CoplayDev/unity-mcp/30d22075093d1d35dfb0091c1c7550e9ad948577/MCPForUnity/Editor/'+name,timeout=30) as response:
+                           payload=response.read()
+@@ -137,9 +140,6 @@
+                   report['console_native']={'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,
+                       'ids':sorted(re.findall(r'^PASS (NC[0-9]{3}) ',result.stdout,re.M))}
+                   assert result.returncode==0 and report['console_native']['ids']==[f'NC{i:03d}' for i in range(1,5)]
+-                  import importlib.util
+-                  spec=importlib.util.spec_from_file_location('scene_native_source',root/'tests/scene_native_source.py')
+-                  scene=importlib.util.module_from_spec(spec);spec.loader.exec_module(scene)
+                   report['scene_native_source']=scene.assemble(native,work/'ManageScene.cs')
+                   build=subprocess.run([dotnet,'build',str(root/'tests/unity-core/SceneNativeCases.csproj'),'--configuration','Release',
+                       '--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false',
+@@ -150,7 +150,7 @@
+                   result=subprocess.run([dotnet,str(work/'scene-bin/Release/net8.0/SceneNativeCases.dll')],capture_output=True,text=True,timeout=30)
+                   report['scene_native']={'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr,
+                       'ids':sorted(re.findall(r'^PASS (NS[0-9]{3}) ',result.stdout,re.M))}
+-                  assert result.returncode==0 and report['scene_native']['ids']==[f'NS{i:03d}' for i in range(1,18)]
++                  assert result.returncode==0 and report['scene_native']['ids']==[f'NS{i:03d}' for i in range(1,19)]
+                   console_methods=[cls.name+'.'+m.name for cls in ast.parse((root/'tests/test_runtime.py').read_text(encoding='utf-8')).body
+                       if isinstance(cls,ast.ClassDef) for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_RT') and m.name.split('_')[1] in expected_console_ids]
+                   assert len(console_methods)==len(expected_console_ids) and {m.split('.test_')[1].split('_')[0] for m in console_methods}==expected_console_ids
+@@ -165,7 +165,7 @@
+                   assert all(hashlib.sha256((native/name).read_bytes()).hexdigest()==digest for name,digest in native_hashes.items())
+           finally:
+               report['owned_build_directory_absent']='td' in globals() and not pathlib.Path(td).exists()
+-              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and report.get('scene_native',{}).get('ids')==[f'NS{i:03d}' for i in range(1,18)] and report.get('scene_native',{}).get('exit_code')==0 and sorted(x['method'].split('.test_')[1].split('_')[0] for x in report.get('console_runtime',[]))==sorted(expected_console_ids) and sorted(x['method'] for x in report['console_runtime'])==sorted(console_methods) and all(x['passed'] for x in report['console_runtime'])
++              report['passed']=report['owned_build_directory_absent'] and len(report['rows'])==len(methods) and all(x['passed'] for x in report['rows']) and report.get('console_native',{}).get('exit_code')==0 and report.get('console_native',{}).get('ids')==[f'NC{i:03d}' for i in range(1,5)] and report.get('scene_native',{}).get('ids')==[f'NS{i:03d}' for i in range(1,19)] and report.get('scene_native',{}).get('exit_code')==0 and sorted(x['method'].split('.test_')[1].split('_')[0] for x in report.get('console_runtime',[]))==sorted(expected_console_ids) and sorted(x['method'] for x in report['console_runtime'])==sorted(console_methods) and all(x['passed'] for x in report['console_runtime'])
+               target.write_text(json.dumps(report,indent=2),encoding='utf-8')
+           assert report['passed']
+       - name: Collect actual locked Windows LICENSE and NOTICE files
+@@ -287,7 +287,7 @@
+                   result=subprocess.run(args,capture_output=True,text=True,timeout=120)
+                   report.update({'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
+                   report['ids']=sorted(re.findall(r'^PASS (WU[0-9]{3}) ',result.stdout,re.M))
+-                  assert result.returncode==0 and report['ids']==[f'WU{i:03d}' for i in range(1,14)]
++                  assert result.returncode==0 and report['ids']==[f'WU{i:03d}' for i in range(1,13)]
+                   assert {'WU011','WU012'}<=set(report['ids'])
+                   report['passed']=True
+           finally:
+--- before/Candidate~/tests/unity-core/WriteUnityCases.csproj
++++ after/Candidate~/tests/unity-core/WriteUnityCases.csproj
+@@ -1,6 +1,6 @@
+ <Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation><DefineConstants>UNITY_EDITOR</DefineConstants><CandidateResponseSource Condition="'$(CandidateResponseSource)' == ''">/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor/Helpers/Response.cs</CandidateResponseSource></PropertyGroup>
+-<ItemGroup><Compile Include="AdapterOwnedFixture.cs"/><Compile Include="OwnedTransportDouble.cs"/><Compile Include="../../package/Editor/**/*.cs" Exclude="../../package/Editor/OwnedTransport/**/*.cs"/><Compile Include="WriteUnityStubs.cs"/><Compile Include="WriteUnityCases.cs"/>
++<ItemGroup><Compile Include="AdapterOwnedFixture.cs"/><Compile Include="OwnedTransportDouble.cs"/><Compile Include="../../package/Editor/**/*.cs" Exclude="../../package/Editor/OwnedTransport/**/*.cs"/><Compile Include="WriteUnityStubs.cs"/><Compile Include="ProjectResourceApiStubs.cs"/><Compile Include="WriteUnityCases.cs"/>
+ <Compile Include="$(CandidateResponseSource)" Link="NativeResponse.cs"/>
+ <Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference></ItemGroup>
+ </Project>
+--- before/Candidate~/tests/verify_unity.py
++++ after/Candidate~/tests/verify_unity.py
+@@ -27,6 +27,20 @@
+                 ROOT / 'catalog/native-inventory.json', ROOT / 'tests/test_runtime_lifecycle.py', ROOT / 'tests/test_client_binding.py',
+                 ROOT / 'tests/test_runtime_unity_auth.py', ROOT / 'tests/test_runtime_material.py',
+                 *(ROOT / 'tests/unity-core').glob('*.csproj'), ROOT / 'tests/verify_unity.py', ROOT / 'tests/scene_native_source.py'])}
++
++def write_unity_result(report):
++    """WU is a separate exact group, never part of the main 81 IDs."""
++    rows = [r for r in report['runs'] if r['name'] in ('WriteUnityCases-build', 'WriteUnityCases')]
++    ids = sorted(re.findall(r'^PASS (WU\d{3}) ', '\n'.join(
++        r['stdout'] for r in rows if r['name'] == 'WriteUnityCases'), re.M))
++    warnings = [line for r in rows for line in (r['stdout'] + '\n' + r['stderr']).splitlines()
++        if re.search(r'ResourceWarning|(?i:\bwarning\s+[A-Z]+\d+:)', line)]
++    passed = (sorted(r['name'] for r in rows) == ['WriteUnityCases', 'WriteUnityCases-build']
++        and ids == [f'WU{i:03d}' for i in range(1,13)] and not warnings
++        and all(r['exit_code'] == 0 and not r['timeout'] and r['process_group_absent']
++            and r['pid_absent'] for r in rows) and report['owned_build_directory_removed'])
++    return {'pass_ids': ids, 'unique_pass_count': len(set(ids)), 'warning_lines': warnings, 'passed': passed}
++
+ 
+ def main(label):
+     output = ROOT / 'evidence' / ('unity-parent-' + label + '.json')
+@@ -93,7 +107,7 @@
+             if build('ReviewUpstreamApi'):
+                 build('ReviewExternalAssembly')
+             for name in ('CoreTests', 'AdapterTests', 'ConsoleNativeCases', 'SceneNativeCases', 'FixOutputCases', 'ReviewLeakCases',
+-                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'EditorBootstrapCases', 'WirePeer'):
++                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'WriteUnityCases', 'EditorBootstrapCases', 'WirePeer'):
+                 if not build(name):
+                     continue
+                 if name == 'FixIdentityCases':
+@@ -141,6 +155,7 @@
+             report['source_unchanged'] = report['hashes_before'] == report['hashes_after']
+             save()
+     report['owned_build_directory_removed'] = not Path(td).exists()
++    report['write_unity'] = write_unity_result(report)
+     report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
+         '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
+     assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,11)]
+@@ -163,7 +178,7 @@
+     report['console_pass_ids']=sorted(set(re.findall(r'^PASS (NC\d{3}) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
+     report['console_ids_match']=report['console_pass_ids']==[f'NC{i:03d}' for i in range(1,5)]
+     report['scene_pass_ids']=sorted(set(re.findall(r'^PASS (NS\d{3}) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
+-    report['scene_ids_match']=report['scene_pass_ids']==[f'NS{i:03d}' for i in range(1,18)]
++    report['scene_ids_match']=report['scene_pass_ids']==[f'NS{i:03d}' for i in range(1,19)]
+     report['client_binding_pass_ids'] = sorted(r['name'] for r in report['runs'] if re.fullmatch(r'CB00[1-7]',r['name']) and r['exit_code']==0)
+     report['client_binding_ids_match'] = report['client_binding_pass_ids'] == [f'CB{i:03d}' for i in range(1,8)]
+     expected = ({f'UC{i:03d}' for i in range(1, 16)} | {f'UA{i:03d}' for i in range(1, 21)} |
+@@ -178,7 +193,7 @@
+         'source_unchanged','owned_build_directory_removed','expected_ids_match')}, ensure_ascii=False))
+     return 0 if (report['all_commands_succeeded'] and report['source_unchanged'] and
+                  report['expected_ids_match'] and report['owned_build_directory_removed'] and
+-                 report['clean_warning_free_run'] and report['client_binding_ids_match'] and report['console_ids_match'] and report['scene_ids_match']) else 1
++                 report['clean_warning_free_run'] and report['client_binding_ids_match'] and report['console_ids_match'] and report['scene_ids_match'] and report['write_unity']['passed']) else 1
+ 
+ if __name__ == '__main__':
+     if len(sys.argv) != 2 or re.fullmatch(r'[a-z0-9-]+', sys.argv[1]) is None:
+--- before/Candidate~/tests/test_portable_verifier.py
++++ after/Candidate~/tests/test_portable_verifier.py
+@@ -18,7 +18,137 @@
+     return module
+ 
+ 
++def workflow_step(name):
++    import ast, textwrap
++    workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
++    step=workflow.split('      - name: '+name+'\n',1)[1].split('      - name:',1)[0]
++    return ast.parse(textwrap.dedent(step.split('        run: |\n',1)[1]))
++
++
++def workflow_native_inputs(work, opener):
++    """Execute the real CI download/hash/write statements, not a second list."""
++    import ast, hashlib, urllib.request
++    tree=workflow_step('Signed client approval identity and compiled gates (not Unity)')
++    body=next(n for n in ast.walk(tree) if isinstance(n,ast.With)
++        and 'TemporaryDirectory' in ast.unparse(n.items[0].context_expr)).body
++    start=next(i for i,n in enumerate(body) if isinstance(n,ast.Assign)
++        and any(isinstance(t,ast.Name) and t.id=='native' for t in n.targets))
++    end=next(i for i,n in enumerate(body) if isinstance(n,ast.Assign)
++        and any(ast.unparse(t)=="report['native_source_hashes']" for t in n.targets))
++    env={'root':ROOT,'work':work,'report':{},'ast':ast,'hashlib':hashlib,
++         'importlib':importlib,'urllib':urllib}
++    with patch.object(urllib.request,'urlopen',opener):
++        exec(compile(ast.Module(body=body[start:end+1],type_ignores=[]),'ci-native-downloads','exec'),env)
++    return env
++
++
+ class PortableVerifierTests(unittest.TestCase):
++    def test_VP017_workflow_downloads_verified_native_assembly_closure(self):
++        import hashlib, io, urllib.request
++        # A supplied pinned snapshot avoids network without faking upstream bytes.
++        snapshot=Path(os.environ.get('CANDIDATE_PINNED_EDITOR_ROOT',
++            '/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor'))
++        prefix='https://raw.githubusercontent.com/CoplayDev/unity-mcp/30d22075093d1d35dfb0091c1c7550e9ad948577/MCPForUnity/Editor/'
++        original=urllib.request.urlopen
++        payloads={}
++        def fetch(url,timeout):
++            self.assertTrue(url.startswith(prefix));self.assertEqual(timeout,30)
++            name=url[len(prefix):]
++            self.assertNotIn(name,payloads,'duplicate download')
++            if snapshot.is_dir():payload=(snapshot/name).read_bytes()
++            else:
++                with original(url,timeout=timeout) as response:payload=response.read()
++            payloads[name]=payload
++            return io.BytesIO(payload)
++        spec=importlib.util.spec_from_file_location('scene_closure',ROOT/'tests/scene_native_source.py')
++        assert spec is not None and spec.loader is not None
++        scene=importlib.util.module_from_spec(spec);spec.loader.exec_module(scene)
++        with tempfile.TemporaryDirectory(prefix='ci-native-closure-') as td:
++            work=Path(td)
++            env=workflow_native_inputs(work,fetch)
++            native=env['native']
++            self.assertEqual(set(payloads),set(env['native_hashes']))
++            self.assertEqual({str(p.relative_to(native)) for p in native.rglob('*') if p.is_file()},set(payloads))
++            self.assertEqual({p:hashlib.sha256(b).hexdigest() for p,b in payloads.items()},env['native_hashes'])
++            assembled=scene.assemble(native,work/'ManageScene.cs')
++            self.assertTrue(set(assembled['find_native_sha256'])<=set(payloads))
++            self.assertTrue((work/'ManageScene.cs.packages.cs').is_file())
++            for name in payloads:
++                with self.subTest(corrupt_download=name), tempfile.TemporaryDirectory(dir=work) as corrupt:
++                    def damaged(url,timeout):
++                        key=url[len(prefix):]
++                        return io.BytesIO(payloads[key]+(b'corrupt' if key==name else b''))
++                    with self.assertRaises(AssertionError):workflow_native_inputs(Path(corrupt),damaged)
++        self.assertFalse(Path(td).exists())
++
++    def test_VP019_workflow_write_unity_predicate_is_exact_and_fail_closed(self):
++        import ast, re
++        from types import SimpleNamespace
++        tree=workflow_step('Local task-record UI and reload lifecycle (net8 doubles, not Editor)')
++        checks: list[ast.stmt]=[n for n in ast.walk(tree) if isinstance(n,ast.Assert) and "report['ids']" in ast.unparse(n)]
++        self.assertTrue(checks)
++        code=compile(ast.Module(body=checks,type_ignores=[]),'ci-write-unity-predicate','exec')
++        complete=[f'WU{i:03d}' for i in range(1,13)]
++        for label,ids,exit_code in [('complete',complete,0),('zero',[],0),('missing',complete[:-1],0),
++                ('duplicate',complete+[complete[0]],0),('replacement',complete[:-1]+[complete[0]],0),
++                ('extra',complete+['WU013'],0),('nonzero_exit',complete,1)]:
++            env={'report':{'ids':ids},'result':SimpleNamespace(returncode=exit_code,stdout='',stderr=''),'re':re}
++            with self.subTest(case=label):
++                if label=='complete':exec(code,env)
++                else:
++                    with self.assertRaises(AssertionError):exec(code,env)
++
++    def test_VP018_unity_driver_runs_separate_exact_write_unity_group(self):
++        import ast, copy
++        spec=importlib.util.spec_from_file_location('unity_verifier',ROOT/'tests/verify_unity.py')
++        assert spec is not None and spec.loader is not None
++        unity=importlib.util.module_from_spec(spec);spec.loader.exec_module(unity)
++        tree=ast.parse((ROOT/'tests/verify_unity.py').read_text(encoding='utf-8'))
++        loops=[n for n in ast.walk(tree) if isinstance(n,ast.For) and isinstance(n.iter,ast.Tuple)
++            and any(isinstance(v,ast.Constant) and v.value=='CoreTests' for v in n.iter.elts)]
++        self.assertEqual(len(loops),1)
++        self.assertIn('WriteUnityCases',ast.literal_eval(loops[0].iter))
++        self.assertTrue(callable(getattr(unity,'write_unity_result',None)))
++        complete=[f'WU{i:03d}' for i in range(1,13)]
++        row={'exit_code':0,'stdout':'','stderr':'','timeout':False,'process_group_absent':True,'pid_absent':True}
++        good={'runs':[{**row,'name':'WriteUnityCases-build'},
++            {**row,'name':'WriteUnityCases','stdout':''.join('PASS '+i+' fixture\n' for i in complete)}],
++            'owned_build_directory_removed':True,'pass_ids':['UC001']}
++        for variant in ('complete','zero','missing','duplicate','extra','build_failed','exit_failed',
++                'stdout_warning','stderr_warning','compiler_warning','timeout','process_left','pid_left','directory_left','missing_build','missing_run'):
++            report=copy.deepcopy(good)
++            result=report['runs'][1]
++            if variant in ('zero','missing','duplicate','extra'):
++                ids={'zero':[],'missing':complete[:-1],'duplicate':complete+[complete[0]],'extra':complete+['WU013']}[variant]
++                result['stdout']=''.join('PASS '+i+' fixture\n' for i in ids)
++            elif variant=='build_failed':report['runs'][0]['exit_code']=1
++            elif variant=='exit_failed':result['exit_code']=1
++            elif variant in ('stdout_warning','stderr_warning'):result[variant.split('_')[0]]+='ResourceWarning: fixture\n'
++            elif variant=='compiler_warning':report['runs'][0]['stdout']+='warning CS0000: fixture\n'
++            elif variant=='timeout':result['timeout']=True
++            elif variant=='process_left':result['process_group_absent']=False
++            elif variant=='pid_left':result['pid_absent']=False
++            elif variant=='directory_left':report['owned_build_directory_removed']=False
++            elif variant=='missing_build':report['runs']=report['runs'][1:]
++            elif variant=='missing_run':report['runs']=report['runs'][:1]
++            with self.subTest(case=variant):
++                observed=unity.write_unity_result(report)
++                self.assertEqual(observed['passed'],variant=='complete')
++                self.assertEqual(report['pass_ids'],['UC001'],'WU must not change the main group')
++                if variant=='complete':
++                    self.assertEqual(observed['pass_ids'],complete)
++                    self.assertEqual(observed['unique_pass_count'],12)
++        # The actual main verdict must consume this group, not merely report it.
++        main=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
++        returns=[n for n in main.body if isinstance(n,ast.Return)]
++        self.assertEqual(len(returns),1)
++        assert returns[0].value is not None
++        report: dict={name:True for name in ('all_commands_succeeded','source_unchanged','expected_ids_match',
++            'owned_build_directory_removed','clean_warning_free_run','client_binding_ids_match','console_ids_match','scene_ids_match')}
++        for passed in (True,False):
++            report['write_unity']={'passed':passed}
++            self.assertEqual(eval(compile(ast.Expression(returns[0].value),'unity-verdict','eval'),{'report':report}),0 if passed else 1)
++
+     def test_VP015_ci_executes_exact_read_method_and_completion_gates(self):
+         import ast, textwrap
+         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
+@@ -37,7 +167,7 @@
+             exec(compile(ast.Module(body=nodes,type_ignores=[]),'ci-read-execution-gates','exec'),env)
+         execute(assignments)
+         methods=env['console_methods']
+-        expected={f'RT{i:03d}' for i in range(15,36)}
++        expected={f'RT{i:03d}' for i in range(15,37)}
+         self.assertEqual(len(methods),len(expected))
+         self.assertEqual({m.split('.test_')[1].split('_')[0] for m in methods},expected)
+         variants={'complete':methods,'zero':[],'missing':methods[:-1],
+@@ -57,7 +187,7 @@
+             with self.subTest(gate='completion',case=label):
+                 env['report']={'owned_build_directory_absent':True,'rows':[{'passed':True}],
+                     'console_native':{'exit_code':0,'ids':[f'NC{i:03d}' for i in range(1,5)]},
+-                    'scene_native':{'exit_code':0,'ids':[f'NS{i:03d}' for i in range(1,18)]},
++                    'scene_native':{'exit_code':0,'ids':[f'NS{i:03d}' for i in range(1,19)]},
+                     'console_runtime':[{'method':m,'passed':True} for m in completed]}
+                 execute(summaries)
+                 self.assertEqual(env['report']['passed'],label=='complete')
+@@ -73,7 +203,7 @@
+         self.assertEqual(len(checks),1)
+         self.assertEqual(len(summaries),1)
+         from types import SimpleNamespace
+-        complete=[f'NS{i:03d}' for i in range(1,18)]
++        complete=[f'NS{i:03d}' for i in range(1,19)]
+         for ids in (complete,[],complete[:-1],complete[:-1]+[complete[0]],complete+[complete[0]]):
+             env={'result':SimpleNamespace(returncode=0),'report':{'scene_native':{'ids':ids},'scene_pass_ids':ids}}
+             with self.subTest(gate='workflow',ids=ids):
+--- before/Candidate~/runtime/candidate_runtime.py
++++ after/Candidate~/runtime/candidate_runtime.py
+@@ -733,7 +733,7 @@
+         server.tool(reader, name=name, description='复用固定原生资源，仅空参数{}；需独立本地'+name+'/read和ProjectMetadata批准。项目元数据实时读取：info含绝对工程路径、Unity版本与平台，原生Python模型不输出管线/输入/包标记；tags至多1024条，layers仅0–31。不是资产正文/目录权限，不刷新、不安装包、不执行脚本。')
+     server.tool(get_gameobject, name='get_gameobject', description='复用原生gameobject资源：仅精确规范instance_id字符串，当前场景/Prefab Stage对象摘要、Transform值、子对象ID及组件类型，不读取通用组件属性。需独立本地get_gameobject/read及Scenes批准；子对象超1024或组件超256拒绝，不截断。')
+     server.tool(get_gameobject_components, name='get_gameobject_components', description='复用原生components资源，仅组件类型和ID分页。必须显式include_properties=false、page_size整数1–100和规范instance_id字符串；可选cursor整数0–1000000。只读当前场景/Prefab Stage，需独立本地get_gameobject_components/read及Scenes批准；不调用用户属性getter。')
+-    server.tool(find_gameobjects, description='查找当前场景/Prefab Stage对象ID；须本地批准Scenes及find_gameobjects/find（find仅为清单权限名，不是工具action参数）。必填search_term、search_method、include_inactive=true、page_size整数1–100；可选cursor整数0–1000000。by_id只接收规范非零int32字符串；其他方法by_name/by_tag/by_layer/by_component/by_path。分页只限制响应条数，上游仍先遍历全部匹配项；不是冻结快照。不读取组件属性、不选择对象、不加载资产、不刷新。')
++    server.tool(find_gameobjects, description='查找当前场景/Prefab Stage对象ID；须本地批准Scenes及find_gameobjects/find（find仅为清单权限名，不是工具action参数）。必填search_term、search_method、include_inactive=true、page_size整数1–100；可选cursor整数0–1000000。by_id只接收规范非零int32字符串；其他方法by_name/by_tag/by_layer/by_path；by_component已禁用，避免类型解析触发用户回调。分页只限制响应条数，上游仍先遍历全部匹配项；不是冻结快照。不读取组件属性、不选择对象、不加载资产、不刷新。')
+     server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes（仅action）和get_hierarchy。层级必填page_size整数1–100；可选cursor整数0–1000000、parent非零int32的当前场景/Prefab Stage内GameObject ID、include_transform布尔。拒绝名称/路径、max_depth、加载/保存/刷新/修复。validate必须仅action和显式auto_repair=false，不修复、不Undo、不标脏；问题记录最多200条，totalIssues按脚本/Prefab问题数量统计，非对象记录数，全场景遍历可能耗时。单层实时摘要，非冻结完整树或完整组件属性；childrenPageSizeDefault仅上游提示，不扩大100条上限。')
+     server.tool(manage_animation, description='controller_get_info仅精确批准的controller_path；animator_get_info/animator_get_parameter需独立Scenes批准，必填规范非零int32字符串target与search_method=by_id。get_parameter仅properties字典parameter_name精确名称；get_info不接受properties。仅当前场景/Prefab Stage，参数最多256、层最多64，info含至多1024个已引用clip摘要。Trigger沿用原生GetBool结果，不承诺触发器队列状态。拒绝播放、赋值、修改、刷新与任何其他参数。')
+     server.tool(manage_packages, description='仅get_package_info与规范小写已安装包名package（最长214字符），独立ProjectMetadata清单批准。复用本地GetAllRegisteredPackages，返回版本/描述/作者/来源/绝对路径/依赖元数据；不是包内容授权，不查询远端或触发UPM任务。拒绝其他action及多余参数；依赖超1024/输出预算拒绝。')
+--- before/Candidate~/tests/test_runtime.py
++++ after/Candidate~/tests/test_runtime.py
+@@ -406,6 +406,8 @@
+             self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':['Console']},raise_on_error=False)).is_error)
+ 
+     async def test_RT036_find_component_resolution_is_closed_before_native(self):
++        tool=next(t for t in await self.client.list_tools() if t.name=='find_gameobjects')
++        self.assertIn('by_component已禁用',tool.description)
+         prepare={'task_id':'resolver-risk','operations':[{'command':'find_gameobjects','action':'find'}],
+                  'targets':['Scenes'],'ttl_seconds':60}
+         for term in ('Probe.Component, ReadOnlyProbeMissingAssembly','Transform','UnityEngine.Transform',
+--- before/Candidate~/distribution/source-inputs.json
++++ after/Candidate~/distribution/source-inputs.json
+@@ -306,7 +306,7 @@
+     "package/package.json": "f9d1a28ad6111567de6bf9d574e3d9948dbfe3e5b66b38d904ab9127825f62b8",
+     "runtime/__main__.py": "727394478ec24a5baa55dc9843f836269f1774336f45416ce6d920a9a75be840",
+     "runtime/candidate_auth.py": "f349efd5345385c8d767e71c8bcf1189dacfba62d8473e934134b48407c59ddf",
+-    "runtime/candidate_runtime.py": "a6514b147867c85eb3bcce249c73cee204dd96fbbdba9984ab917724ecfdc601",
++    "runtime/candidate_runtime.py": "499ab23222b327bff783bc58bfa1049727a89acdf87ce4f47153d151df4f2efe",
+     "runtime/material_runtime.py": "319fead5a1907310810e59cef75edee4a456eb90bae8e96e1464970a23e6bc08",
+     "runtime/operation_catalog.py": "ebb0d87ad5c2be60319b7a0139678c2662737d11f60b2c0691b34d5f926364ea",
+     "runtime/owned_probe.py": "e7324a28d05987cb32f8129abda0972a61a707cbe96b5863db5228dfd0da69a7",

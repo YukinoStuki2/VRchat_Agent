@@ -84,8 +84,8 @@ jobs:
           Get-FileHash $sources -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/diagnostic-lifetime-after.json
           if ($result -ne 0) { exit $result }
           $raw = Get-Content evidence/diagnostic-lifetime-windows.txt -Raw
-          if ($raw -notmatch 'Ran 5 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Snapshot lifetime checks incomplete' }
-          foreach ($id in @('DX001','DX002','DX003','DX004','DX005')) { if ($raw -notmatch "test_${id}_") { throw 'Missing lifetime case' } }
+          if ($raw -notmatch 'Ran 7 tests' -or $raw -match '(?i)skipped|FAILED|ResourceWarning') { throw 'Snapshot lifetime checks incomplete' }
+          foreach ($id in @('DX001','DX002','DX003','DX004','DX005','DX006','DX007')) { if ($raw -notmatch "test_${id}_") { throw 'Missing lifetime case' } }
           python -I -B -W always::ResourceWarning tests/test_diagnostics_lifetime_retry.py 2>&1 | Tee-Object evidence/diagnostic-lifetime-retry-windows.txt
           $result = $LASTEXITCODE
           Get-FileHash $sources -Algorithm SHA256 | ConvertTo-Json | Set-Content evidence/diagnostic-lifetime-after.json

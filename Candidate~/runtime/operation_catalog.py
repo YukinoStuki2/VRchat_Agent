@@ -18,13 +18,25 @@ def page(offset=0, limit=12):
                 or len({row['name'] for row in tools}) != len(tools)
                 or [row['name'] for row in tools] != sorted(row['name'] for row in tools)):
             raise ValueError('catalog_invalid')
+        facades = inventory['resource_facades']
+        resource_files={'get_gameobject':'gameobject.py','get_gameobject_components':'gameobject.py',
+                        'get_project_info':'project_info.py','get_tags':'tags.py','get_layers':'layers.py',
+                        'get_selection':'selection.py','get_windows':'windows.py','get_active_tool':'active_tool.py','get_prefab_stage':'prefab_stage.py','get_menu_items':'menu_items.py'}
+        if (type(facades) is not list or len(facades) != len(resource_files) or
+                [row['name'] for row in facades] != list(resource_files) or
+                any(row['provenance_kind'] != 'native_resource_tool_facade' or
+                    row['source']['path'] != 'Server/src/services/resources/'+resource_files[row['name']] or
+                    row['unity_target'] != row['name'] or row['has_action_parameter'] is not False or
+                    row['declared_actions'] != [] or row['implemented_candidate_read_actions'] != ['read']
+                    for row in facades)):
+            raise ValueError('catalog_invalid')
         sources = {}
-        for row in tools:
+        for row in tools + facades:
             if row['enabled_by_catalog'] is not False or row['default_decision'] != 'deny':
                 raise ValueError('catalog_invalid')
             anchor = row['source']
             path = PurePosixPath(anchor['path'])
-            if (not anchor['path'].startswith('Server/src/services/tools/')
+            if (not anchor['path'].startswith('Server/src/services/tools/' if row in tools else 'Server/src/services/resources/')
                     or str(path) != anchor['path'] or '..' in path.parts
                     or '\\' in anchor['path'] or ':' in anchor['path'] or path.suffix != '.py'):
                 raise ValueError('catalog_invalid')
@@ -50,4 +62,4 @@ def page(offset=0, limit=12):
     return {'schema_version': 1, 'permission_grant': False, 'product_ready': False,
             'scope_zh': inventory['scope_zh'], 'total': len(tools), 'offset': offset,
             'returned': len(rows), 'next_offset': next_offset if next_offset < len(tools) else None,
-            'tools': rows}
+            'tools': rows, 'resource_facade_count': len(facades), 'resource_facades': facades}

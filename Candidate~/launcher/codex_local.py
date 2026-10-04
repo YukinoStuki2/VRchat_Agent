@@ -16,7 +16,7 @@ import tomllib
 from .candidate_launch import child_environment
 
 TOKEN_ENV = 'VRCHAT_AGENT_CODEX_TOKEN'
-TOOLS = ('agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene',
+TOOLS = ('agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
          'material_prepare','material_execute','material_stop')
 
 

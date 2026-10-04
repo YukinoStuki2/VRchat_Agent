@@ -54,14 +54,23 @@ namespace Yukino.VRChatAgent
         static string Op(string command, string action)
         {
             Require((command == "manage_material" && action == "get_material_info") ||
-                (command == "manage_animation" && action == "controller_get_info") ||
+                (command == "manage_animation" && (action == "controller_get_info" || AnimatorAction(action))) ||
                 (command == "read_console" && action == "get") ||
-                (command == "manage_scene" && new[] { "get_active", "get_build_settings", "get_loaded_scenes", "get_hierarchy" }.Contains(action)), "operation_not_supported");
+                (command == "manage_packages" && action == "get_package_info") ||
+                (command == "find_gameobjects" && action == "find") ||
+                ((ObjectCommand(command) || ProjectCommand(command) || EditorCommand(command)) && action == "read") ||
+                (command == "manage_scene" && new[] { "get_active", "get_build_settings", "get_loaded_scenes", "get_hierarchy", "validate" }.Contains(action)), "operation_not_supported");
             return command + "/" + action;
         }
         static void SceneParams(JObject args)
         {
             Require(args != null && args["action"]?.Type == JTokenType.String, "invalid_scene_arguments");
+            if ((string)args["action"] == "validate")
+            {
+                Keys(args, "action", "autoRepair");
+                Require(args["autoRepair"]?.Type == JTokenType.Boolean && !(bool)args["autoRepair"], "invalid_scene_arguments");
+                return;
+            }
             if ((string)args["action"] != "get_hierarchy") { Keys(args, "action"); return; }
             string[] allowed = { "action", "pageSize", "cursor", "parent", "includeTransform" };
             Require(args.Properties().All(p => allowed.Contains(p.Name)) &&
@@ -73,6 +82,59 @@ namespace Yukino.VRChatAgent
                 (long)args["parent"] >= int.MinValue && (long)args["parent"] <= int.MaxValue &&
                 (long)args["parent"] != 0, "hierarchy_requires_exact_instance_id");
             if (args.ContainsKey("includeTransform")) Require(args["includeTransform"].Type == JTokenType.Boolean, "invalid_hierarchy_transform");
+        }
+        internal static bool AnimatorAction(string action) => action == "animator_get_info" || action == "animator_get_parameter";
+        static void AnimatorParams(JObject args)
+        {
+            string action = Text(args?["action"]);
+            Require(AnimatorAction(action), "operation_not_supported");
+            if (action == "animator_get_info") Keys(args, "action", "target", "searchMethod");
+            else Keys(args, "action", "target", "searchMethod", "properties");
+            string value = Text(args["target"]);
+            Require(Text(args["searchMethod"]) == "by_id" && int.TryParse(value,
+                System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out int id) &&
+                id != 0 && id != -1 && id.ToString(System.Globalization.CultureInfo.InvariantCulture) == value,
+                "animator_requires_exact_instance_id");
+            if (action == "animator_get_parameter")
+            {
+                var props = args["properties"] as JObject; Keys(props, "parameter_name");
+                string name = Text(props["parameter_name"]);
+                Require(name.Length > 0 && name.Length <= 256 && !name.Any(ch => ch < 32 || (ch >= 127 && ch <= 159)), "invalid_animator_parameter");
+            }
+        }
+        internal static bool PackageName(string value) => value != null && value.Length <= 214 &&
+            System.Text.RegularExpressions.Regex.IsMatch(value, @"\A(?:[a-z0-9][a-z0-9_-]*\.)+[a-z0-9][a-z0-9_-]*\z");
+        static void PackageParams(JObject args)
+        {
+            Keys(args, "action", "package");
+            Require(Text(args["action"]) == "get_package_info" && PackageName(Text(args["package"])), "invalid_package_info_arguments");
+        }
+        internal static bool EditorCommand(string command) => command == "get_selection" || command == "get_windows" || command == "get_active_tool" || command == "get_prefab_stage" || command == "get_menu_items";
+        internal static bool ProjectCommand(string command) => command == "get_project_info" || command == "get_tags" || command == "get_layers";
+        static bool ObjectCommand(string command) => command == "get_gameobject" || command == "get_gameobject_components";
+        static void ObjectParams(string command, JObject args)
+        {
+            Keys(args, command == "get_gameobject" ? new[] { "instanceID" } : new[] { "instanceID", "pageSize", "cursor", "includeProperties" });
+            Require(args["instanceID"]?.Type == JTokenType.Integer && (long)args["instanceID"] >= int.MinValue &&
+                (long)args["instanceID"] <= int.MaxValue && (long)args["instanceID"] != 0 && (long)args["instanceID"] != -1, "invalid_object_id");
+            if (command == "get_gameobject_components") Require(args["includeProperties"]?.Type == JTokenType.Boolean && !(bool)args["includeProperties"] &&
+                args["pageSize"]?.Type == JTokenType.Integer && (long)args["pageSize"] >= 1 && (long)args["pageSize"] <= 100 &&
+                args["cursor"]?.Type == JTokenType.Integer && (long)args["cursor"] >= 0 && (long)args["cursor"] <= 1000000, "invalid_component_metadata_arguments");
+        }
+        static void FindParams(JObject args)
+        {
+            Keys(args, "searchTerm", "searchMethod", "includeInactive", "pageSize", "cursor");
+            string term = Text(args["searchTerm"]), method = Text(args["searchMethod"]);
+            // Caller type names can enter native assembly-resolution callbacks.
+            Require(method != "by_component", "component_type_resolution_not_read_only");
+            Require(new[] { "by_name", "by_tag", "by_layer", "by_path", "by_id" }.Contains(method) &&
+                args["includeInactive"]?.Type == JTokenType.Boolean && (bool)args["includeInactive"] &&
+                args["pageSize"]?.Type == JTokenType.Integer && (long)args["pageSize"] >= 1 && (long)args["pageSize"] <= 100 &&
+                args["cursor"]?.Type == JTokenType.Integer && (long)args["cursor"] >= 0 && (long)args["cursor"] <= 1000000,
+                "invalid_find_arguments");
+            if (method == "by_id") Require(int.TryParse(term, System.Globalization.NumberStyles.AllowLeadingSign,
+                System.Globalization.CultureInfo.InvariantCulture, out int id) && id != 0 &&
+                id.ToString(System.Globalization.CultureInfo.InvariantCulture) == term, "find_requires_exact_instance_id");
         }
         static void ConsoleParams(JObject args)
         {
@@ -94,7 +156,7 @@ namespace Yukino.VRChatAgent
         static string PathValue(JToken token)
         {
             string path = Text(token);
-            if (path == "Console" || path == "Scenes") return path;
+            if (path == "Console" || path == "Scenes" || path == "ProjectMetadata" || path == "EditorMetadata") return path;
             Require(path.StartsWith("Assets/", StringComparison.Ordinal) && path.IndexOfAny(new[] { '\\', ':' }) < 0 &&
                 path.Split('/').All(p => p.Length > 0 && p != "." && p != ".." && p == p.Trim()), "invalid_target");
             Require(path.EndsWith(".mat", StringComparison.Ordinal) || path.EndsWith(".controller", StringComparison.Ordinal), "invalid_target");
@@ -236,7 +298,7 @@ namespace Yukino.VRChatAgent
                         Require((string)r["plan_id"] == "", "unexpected_identity");
                         Keys(body, "operations", "targets", "ttl_seconds");
                         var ops = body["operations"] as JArray; var targets = body["targets"] as JArray;
-                        Require(ops != null && ops.Count > 0 && ops.Count <= 7 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
+                        Require(ops != null && ops.Count > 0 && ops.Count <= 22 && targets != null && targets.Count > 0 && targets.Count <= 64, "invalid_manifest");
                         var seen = new HashSet<string>(StringComparer.Ordinal);
                         foreach (JToken item in ops)
                         {
@@ -252,7 +314,9 @@ namespace Yukino.VRChatAgent
                             Require((path.EndsWith(".mat", StringComparison.Ordinal) && seen.Contains("manage_material/get_material_info")) ||
                                 (path.EndsWith(".controller", StringComparison.Ordinal) && seen.Contains("manage_animation/controller_get_info")) ||
                                 (path == "Console" && seen.Contains("read_console/get")) ||
-                                (path == "Scenes" && seen.Any(op => op.StartsWith("manage_scene/", StringComparison.Ordinal))), "target_operation_mismatch");
+                                (path == "EditorMetadata" && seen.Any(op => new[]{"get_selection/read","get_windows/read","get_active_tool/read","get_prefab_stage/read","get_menu_items/read"}.Contains(op))) ||
+                                (path == "ProjectMetadata" && seen.Any(op => op == "manage_packages/get_package_info" || op == "get_project_info/read" || op == "get_tags/read" || op == "get_layers/read")) ||
+                                (path == "Scenes" && seen.Any(op => op.StartsWith("manage_scene/", StringComparison.Ordinal) || op == "find_gameobjects/find" || op == "get_gameobject/read" || op == "get_gameobject_components/read" || op == "manage_animation/animator_get_info" || op == "manage_animation/animator_get_parameter")), "target_operation_mismatch");
                         }
                         Require(body["ttl_seconds"].Type == JTokenType.Float || body["ttl_seconds"].Type == JTokenType.Integer, "invalid_ttl");
                         double ttl = (double)body["ttl_seconds"];
@@ -282,11 +346,26 @@ namespace Yukino.VRChatAgent
                     { ConsoleParams(args); action = "get"; target = "Console"; }
                     else if (command == "manage_scene")
                     { SceneParams(args); action = Text(args["action"]); target = "Scenes"; }
+                    else if (command == "manage_animation" && AnimatorAction((string)args?["action"]))
+                    { AnimatorParams(args); action = Text(args["action"]); target = "Scenes"; }
+                    else if (command == "manage_packages")
+                    { PackageParams(args); action = "get_package_info"; target = "ProjectMetadata"; }
+                    else if (ProjectCommand(command) || EditorCommand(command))
+                    {
+                        if (command == "get_menu_items")
+                        { Keys(args, "refresh", "search"); Require(args["refresh"]?.Type == JTokenType.Boolean && (bool)args["refresh"] && args["search"]?.Type == JTokenType.String && (string)args["search"] == "", "invalid_menu_arguments"); }
+                        else Keys(args);
+                        action = "read"; target = ProjectCommand(command) ? "ProjectMetadata" : "EditorMetadata";
+                    }
+                    else if (ObjectCommand(command))
+                    { ObjectParams(command, args); action = "read"; target = "Scenes"; }
+                    else if (command == "find_gameobjects")
+                    { FindParams(args); action = "find"; target = "Scenes"; }
                     else
                     {
                         string keyName = command == "manage_material" ? "materialPath" : "controllerPath";
                         Keys(args, "action", keyName); action = Text(args["action"]); target = PathValue(args[keyName]);
-                        Require(target != "Console" && target != "Scenes", "invalid_target");
+                        Require(target != "Console" && target != "Scenes" && target != "ProjectMetadata" && target != "EditorMetadata", "invalid_target");
                     }
                     string operation = Op(command, action);
                     Require(((JArray)active.Manifest["operations"]).Cast<JObject>().Any(x => (string)x["command"] == command && (string)x["action"] == action) &&

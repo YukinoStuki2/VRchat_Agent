@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import math
+import re
 import time
 import weakref
 from collections import deque
@@ -24,16 +25,32 @@ from transport.plugin_hub import PluginHub
 from transport.plugin_registry import PluginRegistry
 from services.tools.manage_animation import manage_animation
 from services.tools.manage_material import manage_material
+from services.tools.manage_packages import manage_packages
 from services.tools.read_console import read_console
 from services.tools.manage_scene import manage_scene
+from services.tools.find_gameobjects import find_gameobjects
+from services.resources.gameobject import get_gameobject, get_gameobject_components
+from services.resources.project_info import get_project_info
+from services.resources.tags import get_tags
+from services.resources.layers import get_layers
+from services.resources.selection import get_selection
+from services.resources.windows import get_windows
+from services.resources.active_tool import get_active_tool
+from services.resources.prefab_stage import get_prefab_stage
+from services.resources.menu_items import get_menu_items
 
 _CURRENT: ContextVar[Any] = ContextVar('candidate_request', default=None)
 SPECS = {
     'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
     'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
 }
-SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes', 'get_hierarchy'}
-READ_TOOLS = SPECS.keys() | {'read_console', 'manage_scene'}
+SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes', 'get_hierarchy', 'validate'}
+ANIMATOR_ACTIONS = {'animator_get_info', 'animator_get_parameter'}
+OBJECT_TOOLS = {'get_gameobject', 'get_gameobject_components'}
+PROJECT_TOOLS = {'get_project_info': get_project_info, 'get_tags': get_tags, 'get_layers': get_layers}
+EDITOR_TOOLS = {'get_selection': get_selection, 'get_windows': get_windows, 'get_active_tool': get_active_tool, 'get_prefab_stage': get_prefab_stage, 'get_menu_items': get_menu_items}
+METADATA_TOOLS = PROJECT_TOOLS | EDITOR_TOOLS
+READ_TOOLS = SPECS.keys() | {'read_console', 'manage_scene', 'find_gameobjects', 'manage_packages'} | OBJECT_TOOLS | METADATA_TOOLS.keys()
 CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
@@ -43,6 +60,10 @@ SESSION_IDLE_TIMEOUT = 60.0
 def scene_params(args):
     if args.get('action') not in SCENE_ACTIONS:
         raise ToolError('operation_not_enabled')
+    if args['action'] == 'validate':
+        if set(args) != {'action', 'auto_repair'} or args['auto_repair'] is not False:
+            raise ToolError('operation_not_enabled')
+        return {'action': 'validate', 'autoRepair': False}
     if args['action'] != 'get_hierarchy':
         if set(args) != {'action'}:
             raise ToolError('unexpected_scene_arguments')
@@ -60,6 +81,81 @@ def scene_params(args):
         raise ToolError('invalid_hierarchy_transform')
     names={'page_size':'pageSize','include_transform':'includeTransform'}
     return {names.get(k,k):v for k,v in args.items()}
+
+
+def find_params(args):
+    required = {'search_term', 'search_method', 'include_inactive', 'page_size'}
+    if not required <= args.keys() or args.keys() - required - {'cursor'}:
+        raise ToolError('invalid_find_arguments')
+    # Native type resolution may invoke AssemblyResolve/GetTypes callbacks.
+    # Keep the whole by_component mode closed until a no-load route is audited.
+    if args['search_method'] == 'by_component':
+        raise ToolError('component_type_resolution_not_read_only')
+    term = args['search_term']
+    if (type(term) is not str or not 1 <= len(term) <= 512 or term != term.strip() or
+            any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in term) or
+            args['search_method'] not in ('by_name','by_tag','by_layer','by_path','by_id') or
+            args['include_inactive'] is not True or type(args['page_size']) is not int or
+            not 1 <= args['page_size'] <= 100 or type(args.get('cursor',0)) is not int or
+            not 0 <= args.get('cursor',0) <= 1000000):
+        raise ToolError('invalid_find_arguments')
+    if args['search_method'] == 'by_id':
+        try: number = int(term)
+        except ValueError: raise ToolError('find_requires_exact_instance_id')
+        if str(number) != term or number == 0 or not -2147483648 <= number <= 2147483647:
+            raise ToolError('find_requires_exact_instance_id')
+    return {'searchTerm':term,'searchMethod':args['search_method'],
+            'includeInactive':True,'pageSize':args['page_size'],'cursor':args.get('cursor',0)}
+
+
+def animator_params(args):
+    action = args.get('action')
+    keys = {'action', 'target', 'search_method'} | ({'properties'} if action == 'animator_get_parameter' else set())
+    if action not in ANIMATOR_ACTIONS or set(args) != keys or args['search_method'] != 'by_id':
+        raise ToolError('invalid_animator_arguments')
+    object_params('get_gameobject', {'instance_id': args['target']})
+    wire = {'action': action, 'target': args['target'], 'searchMethod': 'by_id'}
+    if action == 'animator_get_parameter':
+        props = args['properties']
+        if type(props) is not dict or set(props) != {'parameter_name'}:
+            raise ToolError('invalid_animator_parameter')
+        value = props['parameter_name']
+        if (type(value) is not str or not 1 <= len(value) <= 256 or
+                any(ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in value)):
+            raise ToolError('invalid_animator_parameter')
+        wire['properties'] = props
+    return wire
+
+
+def object_params(name, args):
+    required = {'instance_id'} | ({'page_size', 'include_properties'} if name == 'get_gameobject_components' else set())
+    optional = {'cursor'} if name == 'get_gameobject_components' else set()
+    if not required <= args.keys() or args.keys() - required - optional:
+        raise ToolError('invalid_object_arguments')
+    value = args['instance_id']
+    if type(value) is not str or not 1 <= len(value) <= 11:
+        raise ToolError('object_requires_exact_instance_id')
+    try: number = int(value)
+    except ValueError: raise ToolError('object_requires_exact_instance_id')
+    if str(number) != value or number in (0, -1) or not -2147483648 <= number <= 2147483647:
+        raise ToolError('object_requires_exact_instance_id')
+    wire = {'instanceID': number}
+    if name == 'get_gameobject_components':
+        if (args['include_properties'] is not False or type(args['page_size']) is not int or
+                not 1 <= args['page_size'] <= 100 or type(args.get('cursor', 0)) is not int or
+                not 0 <= args.get('cursor', 0) <= 1000000):
+            raise ToolError('component_properties_not_enabled')
+        wire.update(pageSize=args['page_size'], cursor=args.get('cursor', 0), includeProperties=False)
+    return wire
+
+
+def package_params(args):
+    value = args.get('package')
+    if (set(args) != {'action', 'package'} or args['action'] != 'get_package_info' or
+            type(value) is not str or len(value) > 214 or
+            re.fullmatch(r'(?:[a-z0-9][a-z0-9_-]*\.)+[a-z0-9][a-z0-9_-]*', value) is None):
+        raise ToolError('invalid_package_info_arguments')
+    return dict(args)
 
 
 def exact_id(value):
@@ -130,6 +226,7 @@ class Invocation:
     cancelled: bool = False
     revoked_plan: Plan | None = None
     approval_client: str = ''
+    paused_receipt: dict | None = None
 
 
 class Runtime(Middleware):
@@ -299,6 +396,21 @@ class Runtime(Middleware):
                 elif name == 'manage_scene':
                     scene_params(args)
                     action, target = args['action'], 'Scenes'
+                elif name == 'manage_animation' and args.get('action') in ANIMATOR_ACTIONS:
+                    animator_params(args)
+                    action, target = args['action'], 'Scenes'
+                elif name == 'manage_packages':
+                    package_params(args)
+                    action, target = 'get_package_info', 'ProjectMetadata'
+                elif name in METADATA_TOOLS:
+                    if args: raise ToolError('invalid_project_metadata_arguments')
+                    action, target = 'read', 'ProjectMetadata' if name in PROJECT_TOOLS else 'EditorMetadata'
+                elif name in OBJECT_TOOLS:
+                    object_params(name, args)
+                    action, target = 'read', 'Scenes'
+                elif name == 'find_gameobjects':
+                    find_params(args)
+                    action, target = 'find', 'Scenes'  # Permission label; NOT a native argument.
                 else:
                     action, key, _, extension = SPECS[name]
                     if set(args) != {'action', key} or args['action'] != action:
@@ -328,9 +440,13 @@ class Runtime(Middleware):
                 if ctx.session in self.closed_sessions:
                     raise ToolError('session_closed')  # Never return a late session result.
                 data = result.structured_content
+                if name in METADATA_TOOLS and isinstance(data, dict) and set(data) == {'result'}:
+                    data = data['result']  # Pinned SDK union-return envelope; not recursive unwrapping.
                 read_succeeded = (not result.is_error and isinstance(data, dict)
                                   and data.get('success') is True)
                 paused = self.paused_response(invocation, data)
+                if name in METADATA_TOOLS and isinstance(data, dict) and data.get('success') is False and data.get('error') == 'plan_paused':
+                    paused = self.paused_response(invocation, invocation.paused_receipt)
                 if paused:
                     result.is_error = True
             return result
@@ -383,6 +499,11 @@ class Runtime(Middleware):
 
     def command_failed(self, result=None):
         invocation = _CURRENT.get()
+        # The native resource model omits error data; retain only an exact pause
+        # receipt, then recheck plan identity and expiry after wrapper completion.
+        if (invocation is not None and invocation.owner is self and invocation.name in METADATA_TOOLS
+                and self.paused_response(invocation, result)):
+            invocation.paused_receipt = snapshot(result)
         if (invocation is not None and invocation.owner is self and invocation.name in READ_TOOLS
                 and self.plans.get(invocation.client_id) is invocation.plan
                 and not self.paused_response(invocation, result)):
@@ -412,6 +533,16 @@ class Runtime(Middleware):
                 expected = console_params(invocation.arguments)
             elif command == 'manage_scene':
                 expected = scene_params(invocation.arguments)
+            elif command == 'manage_animation' and invocation.arguments.get('action') in ANIMATOR_ACTIONS:
+                expected = animator_params(invocation.arguments)
+            elif command == 'manage_packages':
+                expected = package_params(invocation.arguments)
+            elif command in METADATA_TOOLS:
+                expected = {'refresh': True, 'search': ''} if command == 'get_menu_items' else {}
+            elif command in OBJECT_TOOLS:
+                expected = object_params(command, invocation.arguments)
+            elif command == 'find_gameobjects':
+                expected = find_params(invocation.arguments)
             else:
                 action, key, wire_key, _ = SPECS[command]
                 expected = {'action': action, wire_key: invocation.arguments[key]}
@@ -444,14 +575,18 @@ class Runtime(Middleware):
         exact_id(task_id)
         if type(ttl_seconds) not in (int, float) or not math.isfinite(ttl_seconds) or not 0 < ttl_seconds <= 900:
             raise ToolError('invalid_ttl')
-        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS) + 1 + len(SCENE_ACTIONS):
+        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS) + 3 + len(SCENE_ACTIONS) + len(OBJECT_TOOLS) + len(ANIMATOR_ACTIONS) + len(METADATA_TOOLS):
             raise ToolError('invalid_operations')
         pairs = []
         for operation in operations:
             if type(operation) is not dict or set(operation) != {'command', 'action'}:
                 raise ToolError('invalid_operations')
             command = operation['command']
-            allowed = (SCENE_ACTIONS if command == 'manage_scene' else
+            allowed = (ANIMATOR_ACTIONS | {'controller_get_info'} if command == 'manage_animation' else
+                       {'get_package_info'} if command == 'manage_packages' else
+                       SCENE_ACTIONS if command == 'manage_scene' else
+                       {'read'} if command in OBJECT_TOOLS | METADATA_TOOLS.keys() else
+                       {'find'} if command == 'find_gameobjects' else
                        {'get'} if command == 'read_console' else
                        {SPECS[command][0]} if command in SPECS else set())
             if type(operation['action']) is not str or operation['action'] not in allowed:
@@ -463,10 +598,14 @@ class Runtime(Middleware):
         for target in targets:
             if target == 'Console' and ('read_console', 'get') in pairs:
                 continue
-            if target == 'Scenes' and any(command == 'manage_scene' for command, _ in pairs):
+            if target == 'Scenes' and any(command in {'manage_scene','find_gameobjects'} | OBJECT_TOOLS or
+                                          (command == 'manage_animation' and action in ANIMATOR_ACTIONS) for command, action in pairs):
+                continue
+            if ((target == 'ProjectMetadata' and any(command in PROJECT_TOOLS or command == 'manage_packages' for command, action in pairs)) or
+                    (target == 'EditorMetadata' and any(command in EDITOR_TOOLS for command, action in pairs))):
                 continue
             target_path(target)
-            if not any(c in SPECS and target.endswith(SPECS[c][3]) for c, _ in pairs):
+            if not any(c in SPECS and a == SPECS[c][0] and target.endswith(SPECS[c][3]) for c, a in pairs):
                 raise ToolError('invalid_target')
         # Bound idle session storage. Expiry removes mapping, never renews Unity approval.
         self.plans = {k: p for k, p in self.plans.items() if p.expires_at > time.monotonic()}
@@ -529,10 +668,10 @@ async def scene_read_preflight(ctx, **_options):
     """
     invocation = _CURRENT.get()
     if (invocation is None or not invocation.active or invocation.cancelled or
-            invocation.name != 'manage_scene' or ctx.session_id != invocation.client_id or
-            invocation.arguments.get('action') not in SCENE_ACTIONS):
+            invocation.name not in ('manage_scene','find_gameobjects') or ctx.session_id != invocation.client_id):
         raise ToolError('request_not_bound')
-    scene_params(invocation.arguments)
+    if invocation.name == 'find_gameobjects': find_params(invocation.arguments)
+    else: scene_params(invocation.arguments)
     invocation.owner.check_plan(invocation)
     return None
 
@@ -584,8 +723,20 @@ def create_server(project_id, *, mcp_auth=None):
     # Module-local adapter: installed only by this candidate server factory.
     import importlib
     importlib.import_module('services.tools.manage_scene').preflight = scene_read_preflight
-    server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes（仅action）和get_hierarchy。层级必填page_size整数1–100；可选cursor整数0–1000000、parent非零int32的当前场景/Prefab Stage内GameObject ID、include_transform布尔。拒绝名称/路径、max_depth、加载/保存/刷新/修复。单层实时摘要，非冻结完整树或完整组件属性；childrenPageSizeDefault仅上游提示，不扩大100条上限。')
-    server.tool(manage_animation, description='仅已批准controller_get_info；其他操作拒绝。')
+    importlib.import_module('services.tools.find_gameobjects').preflight = scene_read_preflight
+    for name, reader in EDITOR_TOOLS.items():
+        if name == 'get_menu_items':
+            server.tool(reader, name=name, description='固定原生菜单名称资源facade，仅空参数{}，独立get_menu_items/read与EditorMetadata批准；内部refresh=true仅重建TypeCache菜单元数据缓存，不是资产刷新，不执行菜单方法。至多4096项，原生扫描失败可能返回旧缓存或空列表，不承诺穷尽。')
+            continue
+        server.tool(reader, name=name, description='复用固定原生编辑器资源；仅空参数{}，独立'+name+'/read和EditorMetadata本地清单批准。披露当前选择的名称/类型/ID、窗口标题与坐标、当前工具设置或已打开Prefab Stage路径。不是对象内容权限，不选择/聚焦/打开Prefab、不刷新。选择最多1024项、窗口最多256个；原生窗口异常可跳过，不保证穷尽。')
+    for name, reader in PROJECT_TOOLS.items():
+        server.tool(reader, name=name, description='复用固定原生资源，仅空参数{}；需独立本地'+name+'/read和ProjectMetadata批准。项目元数据实时读取：info含绝对工程路径、Unity版本与平台，原生Python模型不输出管线/输入/包标记；tags至多1024条，layers仅0–31。不是资产正文/目录权限，不刷新、不安装包、不执行脚本。')
+    server.tool(get_gameobject, name='get_gameobject', description='复用原生gameobject资源：仅精确规范instance_id字符串，当前场景/Prefab Stage对象摘要、Transform值、子对象ID及组件类型，不读取通用组件属性。需独立本地get_gameobject/read及Scenes批准；子对象超1024或组件超256拒绝，不截断。')
+    server.tool(get_gameobject_components, name='get_gameobject_components', description='复用原生components资源，仅组件类型和ID分页。必须显式include_properties=false、page_size整数1–100和规范instance_id字符串；可选cursor整数0–1000000。只读当前场景/Prefab Stage，需独立本地get_gameobject_components/read及Scenes批准；不调用用户属性getter。')
+    server.tool(find_gameobjects, description='查找当前场景/Prefab Stage对象ID；须本地批准Scenes及find_gameobjects/find（find仅为清单权限名，不是工具action参数）。必填search_term、search_method、include_inactive=true、page_size整数1–100；可选cursor整数0–1000000。by_id只接收规范非零int32字符串；其他方法by_name/by_tag/by_layer/by_path；by_component已禁用，避免类型解析触发用户回调。分页只限制响应条数，上游仍先遍历全部匹配项；不是冻结快照。不读取组件属性、不选择对象、不加载资产、不刷新。')
+    server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes（仅action）和get_hierarchy。层级必填page_size整数1–100；可选cursor整数0–1000000、parent非零int32的当前场景/Prefab Stage内GameObject ID、include_transform布尔。拒绝名称/路径、max_depth、加载/保存/刷新/修复。validate必须仅action和显式auto_repair=false，不修复、不Undo、不标脏；问题记录最多200条，totalIssues按脚本/Prefab问题数量统计，非对象记录数，全场景遍历可能耗时。单层实时摘要，非冻结完整树或完整组件属性；childrenPageSizeDefault仅上游提示，不扩大100条上限。')
+    server.tool(manage_animation, description='controller_get_info仅精确批准的controller_path；animator_get_info/animator_get_parameter需独立Scenes批准，必填规范非零int32字符串target与search_method=by_id。get_parameter仅properties字典parameter_name精确名称；get_info不接受properties。仅当前场景/Prefab Stage，参数最多256、层最多64，info含至多1024个已引用clip摘要。Trigger沿用原生GetBool结果，不承诺触发器队列状态。拒绝播放、赋值、修改、刷新与任何其他参数。')
+    server.tool(manage_packages, description='仅get_package_info与规范小写已安装包名package（最长214字符），独立ProjectMetadata清单批准。复用本地GetAllRegisteredPackages，返回版本/描述/作者/来源/绝对路径/依赖元数据；不是包内容授权，不查询远端或触发UPM任务。拒绝其他action及多余参数；依赖超1024/输出预算拒绝。')
     server.tool(manage_material, description='仅已批准get_material_info；其他操作拒绝。')
     from material_runtime import register
     register(server, runtime.material)

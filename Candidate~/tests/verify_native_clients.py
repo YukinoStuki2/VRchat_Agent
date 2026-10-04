@@ -40,7 +40,7 @@ async def run(args, report):
                 mcp_auth,unity_auth = child.verifiers()
                 mcp = create_server(owner.project,mcp_auth=mcp_auth)
                 app = create_app(mcp,unity_auth=unity_auth)
-                created={}; deleted={}; request_counts={}; tool_calls={}
+                created={}; deleted={}; request_counts={}; tool_calls={}; response_counts={}
                 async def recording(scope, receive, send):
                     role='anonymous'
                     if scope['type']=='http':
@@ -49,6 +49,9 @@ async def run(args, report):
                             if bearer==('Bearer '+credential.token).encode():role=label
                         key=role+':'+scope['method'];request_counts[key]=request_counts.get(key,0)+1
                     async def recorded(message):
+                        if message['type']=='http.response.start':
+                            key=role+':'+scope['method']+':'+str(message['status'])
+                            response_counts[key]=response_counts.get(key,0)+1
                         if message['type']=='http.response.start' and message['status']==200:
                             sid=dict(message.get('headers',[])).get(b'mcp-session-id')
                             if scope['method']=='POST' and sid:created.setdefault(role,set()).add(sid)
@@ -222,6 +225,10 @@ async def run(args, report):
                                                    for role in (('hermes','codex','probe') if args.hermes_owned or args.hermes_binding or (args.hermes_conversation or args.hermes_connection) else ('hermes','codex'))}
                     report['requests']=request_counts
                 finally:
+                    report['requests']=dict(request_counts)
+                    report['response_codes_before_safety_cleanup']=dict(response_counts)
+                    report['session_counts_before_safety_cleanup']={role:{'created':len(created.get(role,set())),
+                        'deleted':len(deleted.get(role,set()))} for role in ('hermes','codex')}
                     for process in processes:
                         if process.returncode is None:
                             process.kill();await process.communicate()
@@ -293,7 +300,7 @@ def main():
         native_element=ET.parse(ROOT/'tests/unity-core/WirePeer.csproj').find('.//CandidateNativeRoot')
         assert native_element is not None and native_element.text
         native=Path(native_element.text)
-        for name in ('Tools/ReadConsole.cs','Tools/ManageScene.cs','Helpers/ToolParams.cs','Helpers/ParamCoercion.cs','Helpers/StringCaseUtility.cs'):
+        for name in ('Tools/ReadConsole.cs','Tools/ManageScene.cs','Tools/ManagePackages.cs','Helpers/ToolParams.cs','Helpers/ParamCoercion.cs','Helpers/StringCaseUtility.cs'):
             external['upstream_'+name]=native/name
     external_before={k:hashlib.sha256(p.read_bytes()).hexdigest() for k,p in external.items()}
     report['native_inputs']=external_before
@@ -311,6 +318,14 @@ def main():
         report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty']
             and (not args.approved_tasks or (report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)] and report.get('native_console_pass_ids')==['NQ001','NQ002']
                 and report.get('native_scene_pass_ids')==['NE001','NE002']
+                and report.get('native_validate_pass_ids')==['NV001','NV002']
+                and report.get('native_find_pass_ids')==['NF001','NF002']
+                and report.get('native_object_pass_ids')==['NO001','NO002']
+                and report.get('native_animator_pass_ids')==['NI001','NI002']
+                and report.get('native_project_metadata_pass_ids')==['NMD001','NMD002']
+                and report.get('native_editor_metadata_pass_ids')==['NEM001','NEM002']
+                and report.get('native_menu_metadata_pass_ids')==['NMN001','NMN002']
+                and report.get('native_package_metadata_pass_ids')==['NPK001','NPK002']
                 and report.get('native_hierarchy_pass_ids')==['NH001','NH002'])))
     except BaseException as exc:
         report['error_type']=type(exc).__name__

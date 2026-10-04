@@ -118,8 +118,8 @@ def main():
                 env=env,capture_output=True,text=True,timeout=90)
             report['diagnostic_lifetime']={'exit_code':lifetime_run.returncode,'stdout':lifetime_run.stdout,'stderr':lifetime_run.stderr}
             lifetime_log=lifetime_run.stdout+lifetime_run.stderr
-            assert lifetime_run.returncode==0 and 'Ran 5 tests' in lifetime_log
-            assert all('test_DX'+str(i).zfill(3)+'_' in lifetime_log for i in range(1,6))
+            assert lifetime_run.returncode==0 and 'Ran 7 tests' in lifetime_log
+            assert all('test_DX'+str(i).zfill(3)+'_' in lifetime_log for i in range(1,8))
             assert not any(mark in lifetime_log for mark in ('ResourceWarning','skipped','FAILED'))
             retry_run=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning',
                 str(ROOT/'tests/test_diagnostics_lifetime_retry.py'),'--runtime-root',str(relocated/'package/Runtime~')],
@@ -143,7 +143,22 @@ def main():
             '  for action in ("get_active","get_build_settings","get_loaded_scenes","save","validate"):\n'
             '   r=await client.call_tool("manage_scene",{"action":action},raise_on_error=False);assert r.is_error\n'
             '  r=await client.call_tool("manage_scene",{"action":"get_hierarchy","page_size":2},raise_on_error=False);assert r.is_error\n'
-            'asyncio.run(check());print("PASS relocated-console-discovery-default-deny");print("PASS relocated-scene-discovery-default-deny");print("PASS relocated-hierarchy-default-deny")')
+            '  assert "get_gameobject" in tools and "get_gameobject_components" in tools\n'
+            '  for name,params in [("get_gameobject",{"instance_id":"11"}),("get_gameobject_components",{"instance_id":"11","page_size":2,"include_properties":False})]:\n'
+            '   r=await client.call_tool(name,params,raise_on_error=False);assert r.is_error\n'
+            '  for action in ("animator_get_info","animator_get_parameter"):\n'
+            '   args={"action":action,"target":"11","search_method":"by_id"}\n'
+            '   if action=="animator_get_parameter":args["properties"]={"parameter_name":"Speed"}\n'
+            '   r=await client.call_tool("manage_animation",args,raise_on_error=False);assert r.is_error\n'
+            '  for name in ("get_project_info","get_tags","get_layers","get_selection","get_windows","get_active_tool","get_prefab_stage","get_menu_items"):\n'
+            '   assert name in tools\n'
+            '   r=await client.call_tool(name,{},raise_on_error=False);assert r.is_error\n'
+            '  assert "manage_packages" in tools\n'
+            '  r=await client.call_tool("manage_packages",{"action":"get_package_info","package":"com.unity.ugui"},raise_on_error=False);assert r.is_error\n'
+            '  assert "find_gameobjects" in tools\n'
+            '  r=await client.call_tool("find_gameobjects",{"search_term":"Root","search_method":"by_name","include_inactive":True,"page_size":2},raise_on_error=False);assert r.is_error\n'
+            '  r=await client.call_tool("manage_scene",{"action":"validate","auto_repair":False},raise_on_error=False);assert r.is_error\n'
+            'asyncio.run(check());print("PASS relocated-console-discovery-default-deny");print("PASS relocated-scene-discovery-default-deny");print("PASS relocated-hierarchy-default-deny");print("PASS relocated-find-default-deny");print("PASS relocated-validate-default-deny")')
         probe=subprocess.run([str(executable),'-I','-B','-W','always::ResourceWarning','-c',read_probe],
             env=env,capture_output=True,text=True,timeout=30)
         report['console_payload']={'exit_code':probe.returncode,'stdout':probe.stdout,'stderr':probe.stderr}
@@ -152,6 +167,9 @@ def main():
         assert report['scene_payload']['default_denied']
         report['hierarchy_payload']={'default_denied':'PASS relocated-hierarchy-default-deny' in probe.stdout}
         assert report['hierarchy_payload']['default_denied']
+        report['find_payload']={'default_denied':'PASS relocated-find-default-deny' in probe.stdout}
+        report['validate_payload']={'default_denied':'PASS relocated-validate-default-deny' in probe.stdout}
+        assert report['find_payload']['default_denied'] and report['validate_payload']['default_denied']
         out=work/'dotnet';csproj=ROOT/'tests/unity-core/EditorBootstrapCases.csproj'
         command=[str(args.dotnet),'build',str(csproj),'-c','Release','--disable-build-servers','-p:UseSharedCompilation=false','-p:NuGetAudit=false','-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),'-p:BaseIntermediateOutputPath='+str(work/'obj')+os.sep,'-o',str(out)]
         build=compile_fixture(command,env,report)

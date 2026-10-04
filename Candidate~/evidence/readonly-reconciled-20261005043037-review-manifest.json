@@ -1,0 +1,14 @@
+{
+  "scope": "L1–L3 consumer fixes plus S1 description delta; not full product",
+  "files": {
+    ".github/workflows/candidate-dependencies.yml": "1095c9f2c3c39c2fe8f66deeddd9510b6a6453f6d9f7cd116d8a64363fee25d6",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "e9ca453e7e2228af97427b2df99bf271deec861d2391d439d4c863aed8eb3bd8",
+    "Candidate~/tests/verify_unity.py": "662694605f73d366783ea9372059d8bd37f36383273f1a02fff817a393712357",
+    "Candidate~/tests/test_portable_verifier.py": "ab19b090f674dc89c168e18e21965b61657be6bdd3c0c018ff6ac08bbb80155c",
+    "Candidate~/runtime/candidate_runtime.py": "499ab23222b327bff783bc58bfa1049727a89acdf87ce4f47153d151df4f2efe",
+    "Candidate~/tests/test_runtime.py": "72d3d979a6e7e5809b7e47a1a3dbae7122788458984b558246d363841b25ea1a",
+    "Candidate~/distribution/source-inputs.json": "1ce0642882f3f150c38272f32121a712b3a6d5e87e59170835279b94e7c46143",
+    "Candidate~/evidence/run-readonly-reconciled-20261005043037.py": "398633e4dc2b49e26479ba68be0b097a5155a5cd1e95c0cb6abbffb8b6db56cb"
+  },
+  "head": "b0528443ed7b82a4e98610869126e34366659a29"
+}

@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/home/ubuntu/.cache/uv/archive-v0/7z4PORN2YM2xSubx/bin/python",
+    "-I",
+    "-B",
+    "-W",
+    "always::ResourceWarning",
+    "/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/test_portable_verifier.py",
+    "PortableVerifierTests.test_VP017_workflow_downloads_verified_native_assembly_closure",
+    "-v"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "test_VP017_workflow_downloads_verified_native_assembly_closure (__main__.PortableVerifierTests.test_VP017_workflow_downloads_verified_native_assembly_closure) ... ERROR\n\n======================================================================\nERROR: test_VP017_workflow_downloads_verified_native_assembly_closure (__main__.PortableVerifierTests.test_VP017_workflow_downloads_verified_native_assembly_closure)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/test_portable_verifier.py\", line 72, in test_VP017_workflow_downloads_verified_native_assembly_closure\n    assembled=scene.assemble(native,work/'ManageScene.cs')\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/scene_native_source.py\", line 38, in assemble\n    if any(hashlib.sha256((Path(editor_root)/p).read_bytes()).hexdigest()!=h for p,h in find_pins.items()):\n       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/VRchat_Agent-p0-work/Candidate~/tests/scene_native_source.py\", line 38, in <genexpr>\n    if any(hashlib.sha256((Path(editor_root)/p).read_bytes()).hexdigest()!=h for p,h in find_pins.items()):\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/pathlib.py\", line 1050, in read_bytes\n    with self.open(mode='rb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/pathlib.py\", line 1044, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/tmp/ci-native-closure-52pnugz5/native/Tools/ManagePackages.cs'\n\n----------------------------------------------------------------------\nRan 1 test in 0.023s\n\nFAILED (errors=1)\n",
+  "hashes_before": {
+    ".github/workflows/candidate-dependencies.yml": "d0272c196c4853f04b95e325cfc98543777a066bcae43e95189eb34c1345bbc1",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "0bdc6b1419e36c3a3a182553977a4b4b66bc3699a2c2601a7d98985da86b9131",
+    "Candidate~/tests/verify_unity.py": "164e61f4a1c803f32d62752d54923981742ea21eeaa765634c31a851c0b31933",
+    "Candidate~/tests/test_portable_verifier.py": "d4bf06b38b0ea180b174d24ffb2d51dcf13c309c6348bdeb1d28acd2014255e8"
+  },
+  "hashes_after": {
+    ".github/workflows/candidate-dependencies.yml": "d0272c196c4853f04b95e325cfc98543777a066bcae43e95189eb34c1345bbc1",
+    "Candidate~/tests/unity-core/WriteUnityCases.csproj": "0bdc6b1419e36c3a3a182553977a4b4b66bc3699a2c2601a7d98985da86b9131",
+    "Candidate~/tests/verify_unity.py": "164e61f4a1c803f32d62752d54923981742ea21eeaa765634c31a851c0b31933",
+    "Candidate~/tests/test_portable_verifier.py": "d4bf06b38b0ea180b174d24ffb2d51dcf13c309c6348bdeb1d28acd2014255e8"
+  },
+  "source_unchanged": true
+}

@@ -80,6 +80,8 @@ class UnityPeerFixture:
         self.prepare_success = True
         self.hook = None
         self.sequence = 0
+        self.execute_data = {"fixture_only": True}
+        self.execute_response = None
 
     async def send_json(self, payload):
         self.events.append(payload)
@@ -92,7 +94,8 @@ class UnityPeerFixture:
             response = {"success": self.prepare_success, "data": {
                 "plan_id": "fixture-plan-" + str(self.sequence), "status": "pending"}}
         elif kind == "execute":
-            response = {"success": self.approved, "data": {"fixture_only": True}}
+            response = {"success": self.approved, "data": self.execute_data}
+            if self.execute_response is not None: response = self.execute_response
             if not self.approved:
                 response["error"] = "fixture_pending_not_approved"
         else:
@@ -182,16 +185,324 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             state.assert_not_awaited()
             refresh.assert_not_awaited()
 
-    async def test_RT024_seven_read_manifest_matches_final_gate_capacity(self):
-        reads=[('manage_animation',READ),
+    async def test_RT035_package_info_native_only_no_upm_or_aliases(self):
+        from services.tools.manage_packages import manage_packages
+        prepare={'task_id':'package-metadata','operations':[{'command':'manage_packages','action':'get_package_info'}],'targets':['ProjectMetadata'],'ttl_seconds':60}
+        args={'action':'get_package_info','package':'com.unity.ugui'}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,'installed-package operation missing')
+        self.assertIs((await self.server.get_tool('manage_packages')).fn,manage_packages)
+        self.peer.approved=True
+        result=await self.client.call_tool('manage_packages',args)
+        self.assertTrue(result.structured_content['success'])
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_packages','params':args})
+        for bad in ({'action':a,'package':'com.unity.ugui'} for a in ('list_packages','search_packages','status','ping','add_package','remove_package','resolve_packages','embed_package','list_registries','add_registry','remove_registry','GET_PACKAGE_INFO')):
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+            self.assertTrue((await self.client.call_tool('manage_packages',bad,raise_on_error=False)).is_error)
+            self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+        for bad in ({**args,'force':False},{**args,'query':None},{'action':'get_package_info'},*({**args,'package':p} for p in ('com.unity.ugui@1.0.0','https://example.invalid/pkg','file:../pkg','COM.unity.ugui',' com.unity.ugui','com..ugui','com.unity/ugui','x'*215,None,True))):
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+            self.assertTrue((await self.client.call_tool('manage_packages',bad,raise_on_error=False)).is_error)
+            self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+        for target in ('Scenes','EditorMetadata','Console',CONTROLLER):
+            self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)).is_error)
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        self.peer.execute_response={'success':False,'error':'plan_paused','data':{'status':'paused','reason':'plan_paused','plan_id':'fixture-plan-'+str(self.peer.sequence)}}
+        paused=await self.client.call_tool('manage_packages',args,raise_on_error=False)
+        self.assertTrue(paused.is_error)
+        self.assertEqual(paused.structured_content['error'],'plan_paused')
+        self.peer.execute_response=None
+        self.assertTrue((await self.client.call_tool('manage_packages',args)).structured_content['success'])
+        await self.client.call_tool('agent_stop',{'task_id':'package-metadata'})
+        self.assertTrue((await self.client.call_tool('manage_packages',args,raise_on_error=False)).is_error)
+
+    async def test_RT034_menu_metadata_native_refresh_is_not_asset_refresh(self):
+        from services.resources.menu_items import get_menu_items
+        prepare={'task_id':'menu-metadata','operations':[{'command':'get_menu_items','action':'read'}],'targets':['EditorMetadata'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,'menu metadata operation missing')
+        self.assertIs((await self.server.get_tool('get_menu_items')).fn,get_menu_items)
+        self.peer.approved=True;self.peer.execute_data=['Assets/Create','Tools/Fixture']
+        result=await self.client.call_tool('get_menu_items',{})
+        self.assertEqual(result.structured_content['result']['data'],self.peer.execute_data)
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'get_menu_items','params':{'refresh':True,'search':''}})
+        for bad in ({'refresh':True},{'search':'Assets'},{'action':'read'},{'execute':'Tools/Fixture'}):
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+            self.assertTrue((await self.client.call_tool('get_menu_items',bad,raise_on_error=False)).is_error)
+            self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+        for target in ('ProjectMetadata','Scenes','Console',CONTROLLER):
+            self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)).is_error)
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        self.peer.execute_response={'success':False,'error':'plan_paused','data':{'status':'paused','reason':'plan_paused','plan_id':'fixture-plan-'+str(self.peer.sequence)}}
+        before=sum(e['params']['kind']=='stop' for e in self.peer.events)
+        self.assertTrue((await self.client.call_tool('get_menu_items',{},raise_on_error=False)).is_error)
+        self.assertEqual(sum(e['params']['kind']=='stop' for e in self.peer.events),before)
+        self.peer.execute_response=None
+        self.assertTrue((await self.client.call_tool('get_menu_items',{})).structured_content['result']['success'])
+        await self.client.call_tool('agent_stop',{'task_id':'menu-metadata'})
+        self.assertTrue((await self.client.call_tool('get_menu_items',{},raise_on_error=False)).is_error)
+
+    async def test_RT033_editor_metadata_native_facades_and_scope(self):
+        from services.resources.selection import get_selection
+        from services.resources.windows import get_windows
+        from services.resources.active_tool import get_active_tool
+        from services.resources.prefab_stage import get_prefab_stage
+        rows=[('get_selection',get_selection,{'activeObject':None,'activeGameObject':None,'activeTransform':None,'activeInstanceID':0,'count':0,'objects':[],'gameObjects':[],'assetGUIDs':[]}),
+              ('get_windows',get_windows,[]),
+              ('get_active_tool',get_active_tool,{'activeTool':'Move','isCustom':False,'pivotMode':'Center','pivotRotation':'Global','handleRotation':{'x':0.0,'y':0.0,'z':0.0},'handlePosition':{'x':0.0,'y':0.0,'z':0.0}}),
+              ('get_prefab_stage',get_prefab_stage,{'isOpen':False,'assetPath':None,'prefabRootName':None,'mode':None,'isDirty':False})]
+        for name,reader,data in rows:
+            prepare={'task_id':'editor-metadata','operations':[{'command':name,'action':'read'}],'targets':['EditorMetadata'],'ttl_seconds':60}
+            prepared=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+            self.assertFalse(prepared.is_error,'editor metadata missing')
+            self.assertIs((await self.server.get_tool(name)).fn,reader)
+            self.peer.approved=True;self.peer.execute_data=data
+            result=await self.client.call_tool(name,{})
+            self.assertEqual(result.structured_content['result']['data'],data)
+            self.assertEqual(self.peer.events[-1]['params']['body'],{'command':name,'params':{}})
+            for target in ('ProjectMetadata','Scenes','Console',CONTROLLER,'EditorMetadata/'):
+                self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)).is_error)
+            for bad in ({'refresh':True},{'action':'read'},{'path':'Assets/Other.prefab'},{'select':True}):
+                await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+                self.assertTrue((await self.client.call_tool(name,bad,raise_on_error=False)).is_error)
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            self.peer.execute_response={'success':False,'error':'plan_paused','data':{'status':'paused','reason':'plan_paused','plan_id':'fixture-plan-'+str(self.peer.sequence)}}
+            before=sum(e['params']['kind']=='stop' for e in self.peer.events)
+            self.assertTrue((await self.client.call_tool(name,{},raise_on_error=False)).is_error)
+            self.assertEqual(sum(e['params']['kind']=='stop' for e in self.peer.events),before)
+            self.peer.execute_response=None
+            self.assertTrue((await self.client.call_tool(name,{})).structured_content['result']['success'])
+            await self.client.call_tool('agent_stop',{'task_id':'editor-metadata'})
+            self.assertTrue((await self.client.call_tool(name,{},raise_on_error=False)).is_error)
+
+    async def test_RT032_project_resource_pause_receipt_survives_typed_error(self):
+        prepare={'task_id':'metadata-pause','operations':[{'command':'get_tags','action':'read'}],
+                 'targets':['ProjectMetadata'],'ttl_seconds':60}
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        self.peer.execute_data=['Untagged']
+        response={'success':False,'error':'plan_paused','data':{'status':'paused','reason':'plan_paused','plan_id':'fixture-plan-1'}}
+        self.peer.execute_response=response
+        paused=await self.client.call_tool('get_tags',{},raise_on_error=False)
+        self.assertTrue(paused.is_error,'typed resource pause must remain a rejected call')
+        self.assertFalse(any(e['params']['kind']=='stop' for e in self.peer.events),'valid pause must not revoke')
+        self.peer.execute_response=None
+        good=await self.client.call_tool('get_tags',{})
+        self.assertTrue(good.structured_content['result']['success'])
+        self.peer.execute_response={**response,'data':{**response['data'],'plan_id':'foreign-plan'}}
+        await self.client.call_tool('get_tags',{},raise_on_error=False)
+        self.assertTrue(any(e['params']['kind']=='stop' for e in self.peer.events),'invalid pause must revoke')
+        self.peer.execute_response=None
+        self.assertTrue((await self.client.call_tool('get_tags',{},raise_on_error=False)).is_error)
+
+    async def test_RT031_project_metadata_native_facades_scoped_no_args(self):
+        from services.resources.project_info import get_project_info
+        from services.resources.tags import get_tags
+        from services.resources.layers import get_layers
+        rows=[('get_project_info',get_project_info,{'projectRoot':'/Fixture','projectName':'Fixture','unityVersion':'2022.3','platform':'StandaloneWindows64','assetsPath':'/Fixture/Assets'}),
+              ('get_tags',get_tags,['Untagged','Player']),('get_layers',get_layers,{'0':'Default','5':'UI'})]
+        for name,native,data in rows:
+            prepare={'task_id':'metadata-task','operations':[{'command':name,'action':'read'}],
+                     'targets':['ProjectMetadata'],'ttl_seconds':60}
+            prepared=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+            self.assertFalse(prepared.is_error,'metadata not admitted')
+            self.assertIs((await self.server.get_tool(name)).fn,native)
+            self.peer.execute_data=data;self.peer.approved=True
+            result=await self.client.call_tool(name,{})
+            self.assertEqual(set(result.structured_content),{'result'})
+            payload=result.structured_content['result']
+            self.assertTrue(payload['success'])
+            self.assertEqual(payload['data'],data)
+            self.assertEqual(self.peer.events[-1]['params']['body'],{'command':name,'params':{}})
+            for bad in ({'action':'read'},{'refresh':True},{'path':'Assets'},{'approved':True}):
+                await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+                self.assertTrue((await self.client.call_tool(name,bad,raise_on_error=False)).is_error)
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+            for target in ('Scenes','Console',CONTROLLER,'ProjectMetadata/','EditorMetadata'):
+                self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':[target]},raise_on_error=False)).is_error)
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            await self.client.call_tool('agent_stop',{'task_id':'metadata-task'})
+            self.assertTrue((await self.client.call_tool(name,{},raise_on_error=False)).is_error)
+        self.assertEqual(await self.client.list_resources(),[])
+        self.assertEqual(await self.client.list_resource_templates(),[])
+
+    async def test_RT030_animator_exact_native_read_and_denials(self):
+        from services.tools.manage_animation import manage_animation
+        for action in ('animator_get_info','animator_get_parameter'):
+            args={'action':action,'target':'11','search_method':'by_id'}
+            if action=='animator_get_parameter':args['properties']={'parameter_name':'Speed'}
+            prepare={'task_id':'animator-task','operations':[{'command':'manage_animation','action':action}],
+                     'targets':['Scenes'],'ttl_seconds':60}
+            prepared=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+            self.assertFalse(prepared.is_error,'animator read missing')
+            self.assertIs((await self.server.get_tool('manage_animation')).fn,manage_animation)
+            self.peer.approved=True
+            result=await self.client.call_tool('manage_animation',args)
+            self.assertTrue(result.structured_content['success'])
+            wire={'action':action,'target':'11','searchMethod':'by_id'}
+            if 'properties' in args:wire['properties']=args['properties']
+            self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_animation','params':wire})
+            await self.client.call_tool('agent_stop',{'task_id':'animator-task'})
+            self.assertTrue((await self.client.call_tool('manage_animation',args,raise_on_error=False)).is_error)
+            bad=[{**args,'target':v} for v in (11,True,'0','-1','011','+11','2147483648','Assets/a.prefab','Root')]
+            bad += [{**args,'search_method':'by_name'},{**args,'controller_path':CONTROLLER},{**args,'action':'animator_play'}]
+            bad += [{**args,'properties':v} for v in ({'parameterName':'Speed'},'{"parameter_name":"Speed"}',{'parameter_name':'Speed','value':1},None,{'parameter_name':''})]
+            if action=='animator_get_info':bad.append({**args,'properties':{'parameter_name':'Speed'}})
+            for params in bad:
+                await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+                self.assertTrue((await self.client.call_tool('manage_animation',params,raise_on_error=False)).is_error,repr(params))
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+            await self.client.call_tool('agent_prepare',PREPARE);self.peer.approved=True
+            self.assertTrue((await self.client.call_tool('manage_animation',args,raise_on_error=False)).is_error)
+
+    async def test_RT028_native_object_resource_facades_exact_wire(self):
+        from services.resources.gameobject import get_gameobject, get_gameobject_components
+        rows=[('get_gameobject',get_gameobject,{'instance_id':'11'},{'instanceID':11}),
+              ('get_gameobject_components',get_gameobject_components,
+               {'instance_id':'11','page_size':2,'include_properties':False},
+               {'instanceID':11,'pageSize':2,'cursor':0,'includeProperties':False})]
+        for name,native,args,wire in rows:
+            with self.subTest(name=name):
+                prepare={'task_id':'object-task','operations':[{'command':name,'action':'read'}],
+                         'targets':['Scenes'],'ttl_seconds':60}
+                prepared=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+                self.assertFalse(prepared.is_error,'native object operation missing')
+                tool=await self.server.get_tool(name)
+                self.assertIs(tool.fn,native,'must reuse native resource coroutine, not a new reader')
+                self.peer.approved=True
+                result=await self.client.call_tool(name,args)
+                self.assertTrue(result.structured_content['success'])
+                self.assertEqual(self.peer.events[-1]['params']['body'],{'command':name,'params':wire})
+                await self.client.call_tool('agent_stop',{'task_id':'object-task'})
+                self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
+
+    async def test_RT029_object_facades_reject_properties_coercion_and_scope(self):
+        rows=[('get_gameobject',{'instance_id':'11'}),
+              ('get_gameobject_components',{'instance_id':'11','page_size':2,'include_properties':False})]
+        for name,args in rows:
+            prepare={'task_id':'object-task','operations':[{'command':name,'action':'read'}],
+                     'targets':['Scenes'],'ttl_seconds':60}
+            bad=[{**args,'instance_id':v} for v in (11,True,None,'0','-1','+11','011','11.0','2147483648','11 ','Assets/a.prefab')]
+            bad += [{**args,'id':11},{**args,'action':'read'},{**args,'component_name':'Camera'}]
+            bad += [{k:v for k,v in args.items() if k!=key} for key in args]
+            if name.endswith('_components'):
+                bad += [{**args,'include_properties':v} for v in (True,0,'false',None)]
+                bad += [{**args,'page_size':v} for v in (0,101,True,2.0,'2')]
+                bad += [{**args,'cursor':v} for v in (-1,1000001,True,0.0,'0')]
+            for params in bad:
+                await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+                result=await self.client.call_tool(name,params,raise_on_error=False)
+                self.assertTrue(result.is_error,repr(params))
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+            await self.client.call_tool('agent_prepare',PREPARE);self.peer.approved=True
+            self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
+            self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':['Console']},raise_on_error=False)).is_error)
+
+    async def test_RT036_find_component_resolution_is_closed_before_native(self):
+        tool=next(t for t in await self.client.list_tools() if t.name=='find_gameobjects')
+        self.assertIn('by_component已禁用',tool.description)
+        prepare={'task_id':'resolver-risk','operations':[{'command':'find_gameobjects','action':'find'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        for term in ('Probe.Component, ReadOnlyProbeMissingAssembly','Transform','UnityEngine.Transform',
+                     'Probe.Generic`1[[Probe.Value, ReadOnlyProbeMissingAssembly]]'):
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+            result=await self.client.call_tool('find_gameobjects',{'search_term':term,
+                'search_method':'by_component','include_inactive':True,'page_size':2},raise_on_error=False)
+            self.assertTrue(result.is_error,'by_component can enter native type resolution')
+            self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before)
+
+    async def test_RT026_find_native_read_no_refresh_exact_wire_and_stop(self):
+        from unittest.mock import patch, AsyncMock
+        prepare={'task_id':'find-task','operations':[{'command':'find_gameobjects','action':'find'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        args={'search_term':'Root','search_method':'by_name','include_inactive':True,'page_size':2}
+        async with Client(self.server) as client:
+            with patch('services.resources.editor_state.get_editor_state',new=AsyncMock(side_effect=AssertionError('ungranted editor read'))), \
+                 patch('services.tools.refresh_unity.refresh_unity',new=AsyncMock(side_effect=AssertionError('ungranted refresh'))):
+                await client.call_tool('agent_prepare',prepare)
+                self.peer.approved=True
+                result=await client.call_tool('find_gameobjects',args)
+                self.assertFalse(result.is_error)
+                body=self.peer.events[-1]['params']['body']
+                self.assertEqual(body,{'command':'find_gameobjects','params':{'searchTerm':'Root','searchMethod':'by_name','includeInactive':True,'pageSize':2,'cursor':0}})
+                await client.call_tool('agent_stop',{'task_id':'find-task'})
+                with self.assertRaises(Exception): await client.call_tool('find_gameobjects',args)
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),1)
+
+    async def test_RT027_find_rejects_coercion_aliases_and_unbound_preflight(self):
+        from candidate_runtime import scene_read_preflight
+        from types import SimpleNamespace
+        with self.assertRaises(Exception): await scene_read_preflight(SimpleNamespace(session_id='foreign'))
+        prepare={'task_id':'find-task','operations':[{'command':'find_gameobjects','action':'find'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        args={'search_term':'Root','search_method':'by_name','include_inactive':True,'page_size':2}
+        bad=[{**args,'page_size':v} for v in (True,'2',2.0,0,101)]
+        bad += [{**args,'include_inactive':v} for v in (False,'true',1,None)]
+        bad += [{**args,'cursor':v} for v in (True,'0',-1,1000001)]
+        bad += [{**args,'search_term':v} for v in ('',' Root','Root\n','x'*513)]
+        bad += [{**args,'search_method':'by_id','search_term':v} for v in ('0','+11','011','11.0','2147483648','Assets/a.prefab')]
+        bad += [{**args,'action':'find'},{**args,'target':'Root'},{**args,'search_method':'BY_NAME'}]
+        bad += [{k:v for k,v in args.items() if k!=key} for key in args]
+        async with Client(self.server) as client:
+            for params in bad:
+                await client.call_tool('agent_prepare',prepare);self.peer.approved=True
+                before=sum(e['params']['kind']=='execute' for e in self.peer.events)
+                with self.assertRaises(Exception): await client.call_tool('find_gameobjects',params)
+                self.assertEqual(sum(e['params']['kind']=='execute' for e in self.peer.events),before,params)
+
+    async def test_RT025_scene_validate_requires_explicit_no_repair_and_exact_scope(self):
+        from unittest.mock import patch, AsyncMock
+        prepare={'task_id':'validate-task','operations':[{'command':'manage_scene','action':'validate'}],
+                 'targets':['Scenes'],'ttl_seconds':60}
+        args={'action':'validate','auto_repair':False}
+        prepared=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(prepared.is_error, 'safe native validate scope missing')
+        self.assertFalse((await self.client.call_tool('manage_scene',args)).data['success'])
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        with patch('services.resources.editor_state.get_editor_state',new=AsyncMock()) as state, \
+             patch('services.tools.refresh_unity.refresh_unity',new=AsyncMock()) as refresh:
+            result=await self.client.call_tool('manage_scene',args)
+            self.assertTrue(result.data['success'])
+            self.assertEqual(self.peer.events[-1]['params']['body'],
+                {'command':'manage_scene','params':{'action':'validate','autoRepair':False}})
+            state.assert_not_awaited();refresh.assert_not_awaited()
+        for bad in ({'action':'validate'},*[{'action':'validate','auto_repair':v} for v in (True,0,1,'false',None)],
+                    {**args,'path':'Assets/Other.unity'},{**args,'cursor':0},{**args,'autoRepair':False}):
+            await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+            before=len(self.peer.events)
+            self.assertTrue((await self.client.call_tool('manage_scene',bad,raise_on_error=False)).is_error,repr(bad))
+            self.assertFalse(any(e['params']['kind']=='execute' for e in self.peer.events[before:]))
+        await self.client.call_tool('agent_prepare',{**prepare,'operations':[{'command':'manage_scene','action':'get_active'}]})
+        self.peer.approved=True
+        self.assertTrue((await self.client.call_tool('manage_scene',args,raise_on_error=False)).is_error)
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        await self.client.call_tool('agent_stop',{'task_id':prepare['task_id']})
+        self.assertTrue((await self.client.call_tool('manage_scene',args,raise_on_error=False)).is_error)
+
+    async def test_RT024_nine_read_manifest_matches_final_gate_capacity(self):
+        reads=[('manage_packages',{'action':'get_package_info','package':'com.unity.ugui'}),('get_menu_items',{}),('get_selection',{}),('get_windows',{}),('get_active_tool',{}),('get_prefab_stage',{}),('get_project_info',{}),('get_tags',{}),('get_layers',{}),('manage_animation',READ),
+               ('manage_animation',{'action':'animator_get_info','target':'11','search_method':'by_id'}),
+               ('manage_animation',{'action':'animator_get_parameter','target':'11','search_method':'by_id','properties':{'parameter_name':'Speed'}}),
                ('manage_material',{'action':'get_material_info','material_path':MATERIAL}),
                ('read_console',{'action':'get','page_size':2,'format':'json'}),
                ('manage_scene',{'action':'get_active'}),
                ('manage_scene',{'action':'get_build_settings'}),
                ('manage_scene',{'action':'get_loaded_scenes'}),
-               ('manage_scene',{'action':'get_hierarchy','page_size':2})]
-        operations=[{'command':name,'action':args['action']} for name,args in reads]
-        prepare={**PREPARE,'operations':operations,'targets':[CONTROLLER,MATERIAL,'Console','Scenes']}
+               ('manage_scene',{'action':'get_hierarchy','page_size':2}),
+               ('manage_scene',{'action':'validate','auto_repair':False}),
+               ('get_gameobject',{'instance_id':'11'}),
+               ('get_gameobject_components',{'instance_id':'11','page_size':2,'include_properties':False}),
+               ('find_gameobjects',{'search_term':'Root','search_method':'by_name','include_inactive':True,'page_size':2})]
+        operations=[{'command':name,'action':args.get('action','find' if name=='find_gameobjects' else 'read')} for name,args in reads]
+        prepare={**PREPARE,'operations':operations,'targets':[CONTROLLER,MATERIAL,'Console','Scenes','ProjectMetadata','EditorMetadata']}
         for name,args in reads:
             self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
         self.assertEqual(self.peer.events,[])
@@ -200,15 +511,18 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(pending.data['data']['status'],'pending')
             self.assertEqual(self.peer.events[-1]['params']['body'],{k:v for k,v in prepare.items() if k!='task_id'})
             denied=await self.client.call_tool(name,args,raise_on_error=False)
-            self.assertFalse(denied.data['success'],'pending must not approve any of the seven reads')
+            payload=denied.structured_content['result'] if name in ('get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items') else denied.structured_content
+            self.assertFalse(payload['success'],'pending must not approve any read')
         await self.client.call_tool('agent_prepare',prepare)
         self.peer.approved=True  # Peer substitute; real final gate is covered by NS008.
         before=len(self.peer.events)
         for name,args in reads:
+            self.peer.execute_data=[] if name in ('get_tags','get_windows','get_menu_items') else {} if name in ('get_layers','get_selection','get_active_tool','get_prefab_stage','get_menu_items') else {'fixture_only':True}
             result=await self.client.call_tool(name,args)
-            self.assertTrue(result.data['success'])
+            payload=result.structured_content['result'] if name in ('get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items') else result.structured_content
+            self.assertTrue(payload['success'])
         executed=[e['params']['body'] for e in self.peer.events[before:] if e['params']['kind']=='execute']
-        self.assertEqual([(e['command'],e['params']['action']) for e in executed],
+        self.assertEqual([(e['command'],e['params'].get('action','find' if e['command']=='find_gameobjects' else 'read')) for e in executed],
                          [(r['command'],r['action']) for r in operations])
         await self.client.call_tool('agent_stop',{'task_id':prepare['task_id']})
         before=len(self.peer.events)
@@ -218,7 +532,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         for invalid in ([],operations+[operations[0]],operations[:-1]+[operations[0]],
                         operations[:-1]+[{'command':'manage_scene','action':'save'}]):
             result=await self.client.call_tool('agent_prepare',{**prepare,'operations':invalid},raise_on_error=False)
-            self.assertTrue(result.is_error,'invalid seven-operation manifest accepted')
+            self.assertTrue(result.is_error,'invalid nine-operation manifest accepted')
         self.assertEqual(len(self.peer.events),before,'invalid manifest reached peer')
 
     async def test_RT023_hierarchy_rejects_coercion_unbounded_and_cross_scope(self):
@@ -472,7 +786,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RT007_surface_and_unmanaged_paths_are_closed(self):
         names = {t.name for t in await self.client.list_tools()}
-        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene',
+        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene', 'find_gameobjects', 'get_gameobject', 'get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
             'material_prepare', 'material_execute', 'material_status', 'material_stop'})
         for name, args in [('agent_approve', {}), ('execute_custom_tool', {}),
                            ('manage_animation', {**READ, 'client_id': 'fake'}),

@@ -1,0 +1,16 @@
+{
+  "scope": "S1 resolver callback fix only, follow-up to 52-file review; not CI or product approval",
+  "files": {
+    "Candidate~/CONTRACT.md": "6db4f4ab9fb969e27eb3ed5922a3f092d04d2fd55c7af761f0169d27213a10d7",
+    "Candidate~/runtime/candidate_runtime.py": "a6514b147867c85eb3bcce249c73cee204dd96fbbdba9984ab917724ecfdc601",
+    "Candidate~/package/Editor/Core/CandidateGate.cs": "1d24f90f80bd0ef19897db5e6aeb9b649dc92ed480998ad56690c8ee1613927f",
+    "Candidate~/catalog/native-inventory.json": "293b2d34a4c08787f5e26ad8ed2869e71495e0fa541c9356c1ebd1e23a582433",
+    "Candidate~/distribution/source-inputs.json": "9e1d7f7d42a16115450f573da17892de5812c3e6ea60c21469969b7d2a23d240",
+    "Candidate~/tests/test_runtime.py": "a966e4b699d6472cce57a964f39c87144dfdf29c08c9a8ff14d45d623081565d",
+    "Candidate~/tests/native_approved_tasks.py": "35b6e9d338d1e6d9ca59927b77264f965f50df0075004af294e18ac8165304bb",
+    "Candidate~/tests/scene_native_source.py": "36e0ae030e6bec9ba700e4bb42e1a2006fe988a1673b79c68f14dd25c49f8e6e",
+    "Candidate~/tests/unity-core/SceneNativeCases.cs": "f664fce1815a4dd5fe6b753ebb8fa2a73541bc09d3917095d2b0a0a0ecfbdc8c",
+    "Candidate~/tests/unity-core/SceneNativeCases.csproj": "e3af3463864ca297e9d8fe6a57dde43150cf04c893b2241218784b7e6e96cf9a"
+  },
+  "old_review_manifest_sha256": "5d5e4a8f57a3dd569ce8bb06f57c6d3b67c1a6777619179727083dd30fc0f389"
+}

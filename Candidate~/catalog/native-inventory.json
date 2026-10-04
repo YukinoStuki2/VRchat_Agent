@@ -297,8 +297,10 @@
       "name_zh": "查找场景对象",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "find"
+      ],
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选仅开放by_name/by_tag/by_layer/by_path/by_id；by_component可能触发原生程序集解析回调，保持禁用。候选实机可信绑定未完成。"
     },
     {
       "name": "find_in_file",
@@ -798,7 +800,9 @@
       "default_decision": "deny",
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [
-        "controller_get_info"
+        "controller_get_info",
+        "animator_get_info",
+        "animator_get_parameter"
       ],
       "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
     },
@@ -1692,8 +1696,10 @@
       "name_zh": "包与注册表管理",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "get_package_info"
+      ],
+      "audit_note_zh": "仅get_package_info+规范小写已安装包名；ProjectMetadata独立操作批准，披露作者/描述/来源/绝对路径/依赖。只读已注册信息，不触发UPM网络/任务，不授权包内容。原生先取全部注册信息再精确匹配；依赖超1024/输出预算拒绝，非包清单分页。"
     },
     {
       "name": "manage_physics",
@@ -2300,9 +2306,10 @@
         "get_active",
         "get_build_settings",
         "get_loaded_scenes",
-        "get_hierarchy"
+        "get_hierarchy",
+        "validate"
       ],
-      "audit_note_zh": "场景元数据和层级摘要读取需本地开关及Scenes实时范围清单。层级只允许page_size整数1–100、cursor整数0–1000000、parent精确整数ID及include_transform布尔；父对象必须是当前场景/Prefab Stage内非持久化GameObject。名称/路径、加载/保存/刷新/修复/视角仍拒绝。分页是单层实时摘要，非冻结完整树；childrenPageSizeDefault为上游提示，不扩大100条上限；组件类型摘要不等于完整组件属性。构建列表索引包含禁用项。"
+      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
     },
     {
       "name": "manage_script",
@@ -2908,7 +2915,9 @@
       "name_zh": "控制台读取与清除",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
+      "implemented_candidate_read_actions": [
+        "get"
+      ],
       "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
     },
     {
@@ -3211,6 +3220,228 @@
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [],
       "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+    }
+  ],
+  "resource_facades": [
+    {
+      "name": "get_gameobject",
+      "name_zh": "场景对象摘要",
+      "unity_target": "get_gameobject",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://scene/gameobject/{instance_id}",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "复用固定原生资源，候选以工具入口复用任务/撤权链；不是上游原生工具。当前场景/Prefab Stage限定，组件属性只允许显式false；read仅为候选清单权限名。",
+      "source": {
+        "path": "Server/src/services/resources/gameobject.py",
+        "start_line": 1,
+        "end_line": 243,
+        "sha256": "58796215858c7aec555ca40150fa93fbc699a9888ade68387f2859da74b22958"
+      }
+    },
+    {
+      "name": "get_gameobject_components",
+      "name_zh": "组件类型与ID分页",
+      "unity_target": "get_gameobject_components",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://scene/gameobject/{instance_id}/components",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "复用固定原生资源，候选以工具入口复用任务/撤权链；不是上游原生工具。当前场景/Prefab Stage限定，组件属性只允许显式false；read仅为候选清单权限名。",
+      "source": {
+        "path": "Server/src/services/resources/gameobject.py",
+        "start_line": 1,
+        "end_line": 243,
+        "sha256": "58796215858c7aec555ca40150fa93fbc699a9888ade68387f2859da74b22958"
+      }
+    },
+    {
+      "name": "get_project_info",
+      "name_zh": "工程信息（含绝对路径）",
+      "unity_target": "get_project_info",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://project/info",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立ProjectMetadata任务批准；读取实时工程元数据，不授权资产正文。info原生Python模型只保留工程路径/名称、Unity版本、平台、Assets路径，不代表完整包清单。",
+      "source": {
+        "path": "Server/src/services/resources/project_info.py",
+        "start_line": 1,
+        "end_line": 40,
+        "sha256": "c2a1ba9c0fceaedb72d31dd147497858db7129949238624973848052b2ad4d0e"
+      }
+    },
+    {
+      "name": "get_tags",
+      "name_zh": "工程标签列表",
+      "unity_target": "get_tags",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://project/tags",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立ProjectMetadata任务批准；读取实时工程元数据，不授权资产正文。info原生Python模型只保留工程路径/名称、Unity版本、平台、Assets路径，不代表完整包清单。",
+      "source": {
+        "path": "Server/src/services/resources/tags.py",
+        "start_line": 1,
+        "end_line": 31,
+        "sha256": "e3924e6c78302100b65c0fc378b19cfd4f4624143a0aca039a799845e7dc4ae8"
+      }
+    },
+    {
+      "name": "get_layers",
+      "name_zh": "工程层名称",
+      "unity_target": "get_layers",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://project/layers",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立ProjectMetadata任务批准；读取实时工程元数据，不授权资产正文。info原生Python模型只保留工程路径/名称、Unity版本、平台、Assets路径，不代表完整包清单。",
+      "source": {
+        "path": "Server/src/services/resources/layers.py",
+        "start_line": 1,
+        "end_line": 30,
+        "sha256": "f096e90a869bbbfcf4f3379b1ecc66e158d284b93a1756b47b57ef24f0397185"
+      }
+    },
+    {
+      "name": "get_selection",
+      "name_zh": "编辑器选择摘要",
+      "unity_target": "get_selection",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://editor/selection",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立EditorMetadata批准。披露全编辑器选择/窗口标题坐标/当前工具/当前Prefab Stage路径；不是资产正文权限，不选择/聚焦/打开Prefab。选择和窗口原生无分页、输出超预算拒绝；窗口读取异常可能跳过。",
+      "source": {
+        "path": "Server/src/services/resources/selection.py",
+        "start_line": 1,
+        "end_line": 56,
+        "sha256": "ce4004e5fb6cc0f13caa5eba42c93f1bfafc28592c2bbc3272dbea19a036b326"
+      }
+    },
+    {
+      "name": "get_windows",
+      "name_zh": "编辑器窗口信息",
+      "unity_target": "get_windows",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://editor/windows",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立EditorMetadata批准。披露全编辑器选择/窗口标题坐标/当前工具/当前Prefab Stage路径；不是资产正文权限，不选择/聚焦/打开Prefab。选择和窗口原生无分页、输出超预算拒绝；窗口读取异常可能跳过。",
+      "source": {
+        "path": "Server/src/services/resources/windows.py",
+        "start_line": 1,
+        "end_line": 48,
+        "sha256": "81dc18dd802190e94a56eaf85414821a9b12bdd5d230f2edcbb1f6223374b327"
+      }
+    },
+    {
+      "name": "get_active_tool",
+      "name_zh": "当前编辑工具",
+      "unity_target": "get_active_tool",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://editor/active-tool",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立EditorMetadata批准。披露全编辑器选择/窗口标题坐标/当前工具/当前Prefab Stage路径；不是资产正文权限，不选择/聚焦/打开Prefab。选择和窗口原生无分页、输出超预算拒绝；窗口读取异常可能跳过。",
+      "source": {
+        "path": "Server/src/services/resources/active_tool.py",
+        "start_line": 1,
+        "end_line": 48,
+        "sha256": "8479ac00a9272c647dd645dea0c54ad4a4a7bfdcec534e58a8375c4134c3d371"
+      }
+    },
+    {
+      "name": "get_prefab_stage",
+      "name_zh": "已打开Prefab阶段",
+      "unity_target": "get_prefab_stage",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://editor/prefab-stage",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立EditorMetadata批准。披露全编辑器选择/窗口标题坐标/当前工具/当前Prefab Stage路径；不是资产正文权限，不选择/聚焦/打开Prefab。选择和窗口原生无分页、输出超预算拒绝；窗口读取异常可能跳过。",
+      "source": {
+        "path": "Server/src/services/resources/prefab_stage.py",
+        "start_line": 1,
+        "end_line": 40,
+        "sha256": "c081429cbda091d1981f46a75a579b33baeef474c5b19f7068e918b5497f60cc"
+      }
+    },
+    {
+      "name": "get_menu_items",
+      "name_zh": "菜单名称列表",
+      "unity_target": "get_menu_items",
+      "group": "core",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "upstream_uri": "mcpforunity://menu-items",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "仅空参数，独立EditorMetadata/get_menu_items/read批准；原生refresh=true只重建TypeCache菜单元数据缓存，不刷新资产/执行菜单。原生扫描异常会保留旧缓存/空列表，不承诺穷尽；无分页，输出超4096项/预算拒绝。",
+      "source": {
+        "path": "Server/src/services/resources/menu_items.py",
+        "start_line": 1,
+        "end_line": 35,
+        "sha256": "36e6f8bc14ec1bb391e6015c26d1b9846344877d324ae78c6f43a87ffdf566e8"
+      }
     }
   ],
   "scope_zh": "离线原生能力目录；材质候选写另走专用受限入口，不开放原生泛用写工具。"

@@ -172,7 +172,11 @@ async def run(args):
     if editor_control is not None:
         result['editor_control_cleanup_complete']=editor_control.closed.is_set() and editor_worker.done()
         if editor_control.failed.is_set():result.update(phase='blocked',code='EDITOR_CONTROL_CLOSED')
-    if not legacy_detached:emit({'kind':'stopped',**result})
+    # A detached private stop may finish before the async legacy EOF poll runs.
+    # Its receipt belongs to the held private channel, not the retired CLR pipe.
+    private_detached_stop=(editor_control is not None and editor_control.legacy_eof_allowed
+        and editor_control.private_stop_wait)
+    if not legacy_detached and not private_detached_stop:emit({'kind':'stopped',**result})
     return 0 if result['phase']=='stopped' else 1
 
 

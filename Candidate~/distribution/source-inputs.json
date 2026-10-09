@@ -141,7 +141,7 @@
     "launcher/cli.py": "adbfcd180bffc9f96697fb3c50b482eadc682f830854440e4ac237f21cffcb8f",
     "launcher/codex_local.py": "2bf57cf516287abeb6ec2aae827d29207e33f7a63f3afae6074ae1790263a1f1",
     "launcher/direct_python.py": "a3a3ab277d097e94bd172657a0b0042a7e75a251ce1c4770be71ae37ab4b3e62",
-    "launcher/editor_owner.py": "24845e4483f951677137287870a522d87e5a2003a5608ddff21ce8f07ff5c51a",
+    "launcher/editor_owner.py": "c1ded3da0201dec2cabd55a2e0c1f4884932653825b6138a322b8ea3e3ecd2bc",
     "launcher/editor_reload.py": "318bd4587e810c9631b83ab0c49b83975946279d85218be8cb864671ecb6e58b",
     "launcher/hermes_delivery.py": "993b928b9e2b7c1bf8d0758182955e2bb4751d78f860521d4fc3d7e6560e6f80",
     "launcher/linux_processes.py": "44f5f9d7e28c255933949ca0bb0abad3d421bb5f5d69244b06c3fec0fe50d6d8",

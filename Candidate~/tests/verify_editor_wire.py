@@ -9,7 +9,7 @@ sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'tests'))
 import verify_peer
 from source_native_source import PINS
 from distribution.assemble_source import collect
-SUITES={'rw':('test_reload_wire.py','WirePeer','RW',3),'ep':('test_editor_peer.py','EditorPeerCases','EP',6),'ce':('test_editor_control.py','EditorBootstrapCases','CE',4),'er':('test_editor_reload.py','WirePeer','ER',4),'ec':('test_editor_orchestration.py','WriteUnityCases','EC',7)}
+SUITES={'rw':('test_reload_wire.py','WirePeer','RW',3),'ep':('test_editor_peer.py','EditorPeerCases','EP',6),'ce':('test_editor_control.py','EditorBootstrapCases','CE',4),'er':('test_editor_reload.py','WirePeer','ER',5),'ec':('test_editor_orchestration.py','WriteUnityCases','EC',7)}
 NATIVE_LOCAL=Path('/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor')
 NATIVE_URL='https://raw.githubusercontent.com/CoplayDev/unity-mcp/30d22075093d1d35dfb0091c1c7550e9ad948577/MCPForUnity/Editor/'
 

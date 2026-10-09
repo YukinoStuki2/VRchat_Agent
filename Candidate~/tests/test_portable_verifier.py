@@ -584,7 +584,7 @@ class PortableVerifierTests(unittest.TestCase):
         self.assertTrue(path.is_file(),'compiled wire verifier missing')
         spec=importlib.util.spec_from_file_location('compiled_wire_verifier',path)
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-        self.assertEqual(module.SUITES,{'rw':('test_reload_wire.py','WirePeer','RW',3),'ep':('test_editor_peer.py','EditorPeerCases','EP',6),'ce':('test_editor_control.py','EditorBootstrapCases','CE',4),'er':('test_editor_reload.py','WirePeer','ER',4),'ec':('test_editor_orchestration.py','WriteUnityCases','EC',7)})
+        self.assertEqual(module.SUITES,{'rw':('test_reload_wire.py','WirePeer','RW',3),'ep':('test_editor_peer.py','EditorPeerCases','EP',6),'ce':('test_editor_control.py','EditorBootstrapCases','CE',4),'er':('test_editor_reload.py','WirePeer','ER',5),'ec':('test_editor_orchestration.py','WriteUnityCases','EC',7)})
         for suite,(_,_,prefix,count) in module.SUITES.items():
             methods=module.select_methods(suite,())
             self.assertEqual(sorted(m.split('.test_')[1].split('_')[0] for m in methods),[f'{prefix}{i:03}' for i in range(1,count+1)])

@@ -38,6 +38,15 @@ def tapped(row):
   row={**row,'fixture_sdk':held[0].owner.identity.credentials['hermes'].token,'fixture_certificate':held[0].owner.tls.certificate.decode('ascii')}
  emit(row)
 editor_owner.emit=tapped
+if sys.argv[2]=='delay-legacy-eof':
+ read_control=editor_owner.read_control
+ async def delayed_control(*args,**kwargs):
+  value=await read_control(*args,**kwargs)
+  if value==b'':
+   import asyncio
+   await asyncio.Future()  # Simulate an EOF callback delayed until final cancellation.
+  return value
+ editor_owner.read_control=delayed_control
 sys.argv=['editor_owner.py','--project','fixture-project','--parent-pid',str(os.getppid()),'--client','hermes','--reload-control']
 raise SystemExit(editor_owner.main())
 '''
@@ -52,7 +61,8 @@ class EditorReloadTests(unittest.IsolatedAsyncioTestCase):
     @asynccontextmanager
     async def ready(self):
         self.use_core=True;compiled.WIRE_DLL=WIRE_DLL;compiled.DOTNET=DOTNET
-        process=await asyncio.create_subprocess_exec(EXECUTABLE,'-I','-B','-c',CHILD,str(ROOT),env=environment(),
+        process=await asyncio.create_subprocess_exec(EXECUTABLE,'-I','-B','-c',CHILD,str(ROOT),
+            'delay-legacy-eof' if getattr(self,'delay_legacy_eof',False) else 'normal',env=environment(),
             stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
         self.channels=[]
         try:
@@ -155,6 +165,10 @@ class EditorReloadTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(final['phase'],'stopped');self.assertEqual(process.returncode,0,err.decode())
             self.assertTrue(final['process_cleanup_complete']);self.assertTrue(final['editor_control_cleanup_complete'])
             self.assertTrue(final['probe_session_cleanup_confirmed'])
+
+    async def test_ER005_private_cancel_does_not_wait_for_legacy_eof_poll(self):
+        self.delay_legacy_eof=True
+        await self.test_ER004_detached_cancel_stops_without_reauthorizing_unity()
 
     async def test_ER004_detached_cancel_stops_without_reauthorizing_unity(self):
         async with self.ready() as (process,bundle,request,ch,channel,exchange,editor,client,stack,pa,pm):

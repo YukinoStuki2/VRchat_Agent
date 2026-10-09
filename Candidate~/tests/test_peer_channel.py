@@ -192,6 +192,53 @@ with PeerProcess(os.getppid()) as parent:
             with self.assertRaises(WinError):_win_io(object(),lambda _:0,object(),1,threading.Event())
         self.assertEqual(events,['cancel','drain','close'])
 
+    def test_OS010_windows_drain_errors_keep_public_failure_contract(self):
+        # Control-flow double; Windows CI below still exercises the actual pipe.
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from launcher.peer_channel import _win_io
+        class WinError(Exception):
+            def __init__(self,code):self.winerror=code
+        for code in (109,5):
+            for phase in ('invoke','result'):
+                with self.subTest(code=code,phase=phase):
+                    events=[]
+                    event=SimpleNamespace(Close=lambda:events.append('close'))
+                    def invoke(operation):
+                        events.append('invoke')
+                        if phase=='invoke':raise WinError(code)
+                        return 0
+                    def result(handle,operation,wait):
+                        events.append('drain' if wait else 'result')
+                        raise WinError(code)
+                    def cancel(handle):events.append('cancel')
+                    modules={
+                        'pywintypes':SimpleNamespace(OVERLAPPED=SimpleNamespace,error=WinError),
+                        'win32event':SimpleNamespace(CreateEvent=lambda *args:event,WaitForSingleObject=lambda *args:0),
+                        'win32file':SimpleNamespace(CancelIo=cancel,GetOverlappedResult=result)}
+                    error_type,message=(EOFError,'local_channel_closed') if code==109 else (OSError,'local_channel_io_failed')
+                    with patch.dict(sys.modules,modules),patch('launcher.peer_channel._remaining',return_value=.02):
+                        with self.assertRaisesRegex(error_type,'^'+message+'$') as caught:
+                            _win_io(object(),invoke,object(),1,threading.Event())
+                    self.assertIs(type(caught.exception),error_type)
+                    self.assertEqual(events,['invoke','close'] if phase=='invoke' else
+                        ['invoke','result','cancel','drain','close'])
+
+    def test_OS011_closed_pipe_never_returns_a_truncated_frame(self):
+        Listener,Channel=self.api()
+        import struct
+        for prefix in (b'',b'\x00\x00',struct.pack('!I',5)+b'ab'):
+            with self.subTest(prefix=prefix),Listener() as listener,PeerProcess(os.getpid()) as own:
+                deadline=time.monotonic()+3
+                with Channel.connect(listener.address,own,deadline=deadline) as client:
+                    with listener.accept(own,deadline=deadline) as server:
+                        if prefix:self.assertEqual(server._io(prefix,write=True),len(prefix))
+                    with self.assertRaises((EOFError,OSError)) as caught:client.receive()
+                    # Closed endpoints may fail the kernel identity recheck first.
+                    self.assertIn(type(caught.exception),(EOFError,OSError,PermissionError))
+                    self.assertIsNone(client._handle)
+                self.assertTrue(listener.closed)
+
     def test_OS009_control_transport_deadline_may_cover_finite_run_not_task(self):
         Listener,_=self.api()
         with Listener() as listener:

@@ -146,7 +146,7 @@
     "launcher/hermes_delivery.py": "993b928b9e2b7c1bf8d0758182955e2bb4751d78f860521d4fc3d7e6560e6f80",
     "launcher/linux_processes.py": "44f5f9d7e28c255933949ca0bb0abad3d421bb5f5d69244b06c3fec0fe50d6d8",
     "launcher/owned_run.py": "11c9b84a83e42ab94bef3859aa8605275e13574a90645d03a175bb66a96ee63f",
-    "launcher/peer_channel.py": "dc935726a45a7b19e3837850daec834424d7a9ee0c98527ae63de0f3c77f9d11",
+    "launcher/peer_channel.py": "e31c665825627e56d2fe0a3266d00ddbb80cc77fa282918e425fbb2cf3e48d34",
     "launcher/peer_identity.py": "74fc06412c8300eb948f338534f633432ba3231c3d567120e5e567fc9149f3ed",
     "launcher/reload_owner.py": "65dcc5caa9ec3f8da559e8610d7c81af31ae44546ca26c75889198f779353017",
     "launcher/windows_processes.py": "e2a1282a7f5ac291a9602ceac0c321bbdb460fec1def5b38ca4b712e93fd909b",

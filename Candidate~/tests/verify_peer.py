@@ -20,7 +20,7 @@ SOURCES=['launcher/peer_identity.py','launcher/peer_channel.py','launcher/window
     'launcher/linux_processes.py','launcher/candidate_launch.py','launcher/direct_python.py',
     'launcher/cli.py','tests/test_peer_identity.py','tests/test_peer_channel.py','tests/verify_peer.py',
     'evidence/runtime-fix-run.py']
-SUITES={'test_peer_identity.py':('PI',4),'test_peer_channel.py':('OS',9),'test_reload_control.py':('OC',15)}
+SUITES={'test_peer_identity.py':('PI',4),'test_peer_channel.py':('OS',11),'test_reload_control.py':('OC',15)}
 
 SOURCES=sorted(set(SOURCES)|{'distribution/source-inputs.json','tests/test_reload_control.py',
     'tests/test_runtime_handoff.py','tests/test_runtime_unity_auth.py','tests/test_runtime_http.py'}|

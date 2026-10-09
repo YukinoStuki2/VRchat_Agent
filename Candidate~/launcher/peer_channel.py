@@ -69,6 +69,8 @@ def _win_io(handle, invoke, peer, deadline, stop):
     except pywintypes.error as error:
         if error.winerror == 535 and not issued:
             return None, 0
+        if error.winerror == 109:  # ERROR_BROKEN_PIPE
+            raise EOFError('local_channel_closed') from None
         raise OSError('local_channel_io_failed') from None
     finally:
         try:
@@ -84,8 +86,10 @@ def _win_io(handle, invoke, peer, deadline, stop):
                     try:
                         win32file.GetOverlappedResult(handle, operation, True)
                     except pywintypes.error as error:
+                        if error.winerror == 109:  # ERROR_BROKEN_PIPE
+                            raise EOFError('local_channel_closed') from None
                         if error.winerror != 995:
-                            raise
+                            raise OSError('local_channel_io_failed') from None
         finally:
             event.Close()
 

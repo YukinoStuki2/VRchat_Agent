@@ -43,6 +43,67 @@ def workflow_native_inputs(work, opener):
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP031_failed_job_snapshot_is_read_only_and_handles_close(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        spec=importlib.util.spec_from_file_location('peer_diagnostic',ROOT/'tests/verify_peer.py')
+        assert spec is not None and spec.loader is not None
+        m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        self.assertTrue(hasattr(m,'failed_job_snapshot'),'missing failure-only job evidence')
+        log=[]
+        def open_process(access,inherit,pid):
+            log.append(('open',access,inherit,pid));return pid+100
+        def assign(job,handle):
+            log.append(('membership',job,handle))
+            if handle==102:raise OSError('fixture foreign PID; no process reads permitted')
+        def query(job,kind):
+            return {'ActiveProcesses':2,'TotalProcesses':4,'TotalTerminatedProcesses':0} if kind==1 else (1,2)
+        api=SimpleNamespace(w=SimpleNamespace(OpenProcess=open_process,
+            WaitForSingleObject=lambda handle,timeout:log.append(('wait',handle,timeout)) or 258,
+            GetExitCodeProcess=lambda handle:259),assign=assign,
+            close_handle=lambda handle:log.append(('close',handle)))
+        with patch.dict(sys.modules,{'win32job':SimpleNamespace(QueryInformationJobObject=query,
+                JobObjectBasicAccountingInformation=1,JobObjectBasicProcessIdList=3)}):
+            result=m.failed_job_snapshot(SimpleNamespace(api=api,job=77))
+        self.assertEqual(result['accounting']['ActiveProcesses'],2)
+        self.assertEqual(result['members'][0],{'pid':1,'member_verified':True,'wait':258,'exit_code':259})
+        self.assertEqual(result['members'][1],{'pid':2,'error_type':'OSError'})
+        self.assertEqual(log,[('open',0x101000,False,1),('membership',77,101),('wait',101,0),('close',101),
+            ('open',0x101000,False,2),('membership',77,102),('close',102)])
+        # Native/import/query failures retain only a type, not sensitive messages.
+        with patch.dict(sys.modules,{'win32job':SimpleNamespace(QueryInformationJobObject=Mock(side_effect=OSError('private')),
+                JobObjectBasicAccountingInformation=1,JobObjectBasicProcessIdList=3)}):
+            result=m.failed_job_snapshot(SimpleNamespace(api=api,job=77))
+        self.assertEqual(result,{'error_type':'OSError'})
+
+    def test_VP032_failure_snapshot_cannot_turn_tree_failure_into_pass(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        spec=importlib.util.spec_from_file_location('peer_diagnostic',ROOT/'tests/verify_peer.py')
+        assert spec is not None and spec.loader is not None
+        m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        self.assertTrue(hasattr(m,'failed_job_snapshot'),'missing failure-only job evidence')
+        for natural in (False,True):
+            with self.subTest(natural=natural):
+                close=Mock(return_value=True)
+                owner=SimpleNamespace(spawn=Mock(return_value=SimpleNamespace(poll=lambda:0)),close=close)
+                modules={'launcher.candidate_launch':SimpleNamespace(make_owner=lambda pid:owner,child_environment=lambda:{}),
+                    'launcher.direct_python':SimpleNamespace(current=lambda:{'executable':sys.executable},environment_hint=lambda:{})}
+                snapshot=Mock(return_value={'accounting':{'ActiveProcesses':0},'members':[]})
+                # Patch only m's OS view, not stdlib tempfile/path platform state.
+                with patch.dict(sys.modules,modules),patch.object(m,'os',SimpleNamespace(name='nt',getpid=os.getpid,devnull=os.devnull)),\
+                        patch.object(m,'natural_tree_exit',return_value=natural),patch.object(m,'failed_job_snapshot',snapshot):
+                    row=m.run_case(Path('fixture.py'),'fixture-not-executed')
+                self.assertIs(row['natural_tree_exit'],natural)
+                self.assertTrue(row['cleanup_complete']);self.assertTrue(row['temporary_home_absent'])
+                self.assertEqual(close.call_count,2)
+                self.assertEqual(snapshot.call_count,0 if natural else 1)
+                self.assertEqual('failed_job_snapshot' in row,not natural)
+                row['result']={'ids':['fixture.method'],'tests':1,'skipped':[],'errors':[],'failures':[]}
+                self.assertEqual(m.case_passed(row,['fixture.method']),natural)
+
     def test_VP023_handoff_suite_inventory_and_explicit_utf8(self):
         import ast
         tree=workflow_step('Real Windows owned handoff pipes and editor delivery contracts')

@@ -57,6 +57,34 @@ def natural_tree_exit(owner, child):
     return True
 
 
+def failed_job_snapshot(owner):
+    """Failure-only observation before cleanup; never changes the verdict.
+
+    Reuse the owned Job and query-only process HANDLEs, not names or argv.
+    PID races/query failures are evidence, never authority for termination.
+    """
+    try:
+        import win32job
+        accounting=win32job.QueryInformationJobObject(owner.job,win32job.JobObjectBasicAccountingInformation)
+        result={'accounting':{k:accounting[k] for k in ('ActiveProcesses','TotalProcesses','TotalTerminatedProcesses')},'members':[]}
+        pids=win32job.QueryInformationJobObject(owner.job,win32job.JobObjectBasicProcessIdList)
+        for pid in pids:
+            row={'pid':pid};handle=None
+            try:
+                handle=owner.api.w.OpenProcess(0x101000,False,pid) # SYNCHRONIZE + QUERY_LIMITED_INFORMATION
+                owner.api.assign(owner.job,handle) # Existing IsProcessInJob check, not assignment.
+                row.update(member_verified=True,wait=owner.api.w.WaitForSingleObject(handle,0),
+                    exit_code=owner.api.w.GetExitCodeProcess(handle))
+            except Exception as error:
+                row['error_type']=type(error).__name__
+            finally:
+                if handle is not None:owner.api.close_handle(handle)
+            result['members'].append(row)
+        return result
+    except Exception as error:
+        return {'error_type':type(error).__name__}
+
+
 def run_case(script, child_code, *, filters=()):
     from launcher.candidate_launch import make_owner,child_environment
     from launcher.direct_python import current,environment_hint
@@ -80,6 +108,8 @@ def run_case(script, child_code, *, filters=()):
                     row['exit_code']=child.poll()
                     row['timed_out']=row['exit_code'] is None
                     row['natural_tree_exit']=natural_tree_exit(owner,child)
+                    if os.name=='nt' and not row['natural_tree_exit']:
+                        row['failed_job_snapshot']=failed_job_snapshot(owner)
                     row['cleanup_complete']=owner.close()
                     stdout.seek(0)
                     row['stdout']=stdout.read().decode('utf-8','replace')

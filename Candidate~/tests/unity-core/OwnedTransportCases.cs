@@ -16,7 +16,8 @@ class OwnedTransportCases {
   Check(original.Assembly==typeof(WebSocketTransportClient).Assembly && original.Assembly!=typeof(OwnedTransportCases).Assembly,"OD003 asmref boundary not represented");
   if(args.Length==0){Console.WriteLine("PASS OT001");return;}
   int calls=0;
-  Func<string,JObject,object> handler=(name,p)=>{calls++; return new {success=true,data=new {probe="owned-native-wire"}};};
+  async Task<object> Delayed(){await Task.Delay(25);return new {success=true,data=new {probe="owned-native-wire"}};}
+  Func<string,JObject,object> handler=(name,p)=>{calls++; return Delayed();};
   byte[] pin=Convert.FromHexString(args[1]);
   var client=(WebSocketTransportClient)ctor.Invoke(new object[]{new Uri(args[0]),Environment.GetEnvironmentVariable("FIXTURE_UNITY_BEARER") ?? "fixture-bearer-not-real",pin,handler});
   Array.Clear(pin,0,pin.Length); // original array must not change the captured pin

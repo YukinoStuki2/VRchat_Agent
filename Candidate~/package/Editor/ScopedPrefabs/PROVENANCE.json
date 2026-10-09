@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "upstream_commit": "30d22075093d1d35dfb0091c1c7550e9ad948577",
+  "input_hashes": {
+    "Editor/Tools/Prefabs/ManagePrefabs.cs": "24c4a1c342c96169cd2c8fcc67c776c0737d5cdd542efdf48d343dba26dba77a",
+    "Editor/Helpers/PrefabUtilityHelper.cs": "4435daae74b7efe335c6db4189b35ac7d10f308dd79cfe3700a72b4f3b6bf95b"
+  },
+  "method_hashes_before_adaptation": {
+    "GetInfo": "5de14e250c494068f8b4d1d25e98d458289c4ad94c742915083569184b46be69",
+    "GetHierarchy": "4ebad7880ede1271f6ff5b821ac6f33e48d0cb4bed5eb035f5622f723a83c324",
+    "BuildHierarchyItems": "334ca0bae12c6219af7c4b1b8af80d5bcd8094c068ae02971b5e43a245f1c8ab",
+    "BuildHierarchyItemsRecursive": "dcf0c21b9ceff7290636be26013d74e84b3cf7bbc30c25809ba7925c7ef48fde",
+    "GetPrefabGUID": "0295e76fad569a60eed02f67f289d027a80ab567f44c47f1cbe1187824fa92d3",
+    "GetVariantInfo": "259716e09ac16d587ba3d4211617e99d53c2d83ad9d9241ee381e87330152ace",
+    "GetComponentTypeNames": "1ac4acadd63e9689cd0bc6e4dfd71177590bedce455ea3e779ebb3609ed3c1b4",
+    "CountChildrenRecursive": "6645b3c6f9ebf46a597428c9eecbf15a417d51918614683ce9b51f11ac38407e",
+    "GetNestedPrefabPath": "cd6e0849dfb95dc9300b262e4b4102a67e567ce64db977ad646db5f0ff717270",
+    "GetPrefabNestingDepth": "b47934e86e3dfb1cb084e9ef907691abc95037e2e264c2fb29dda45b9700df46",
+    "GetParentPrefabPath": "bdebd4ebf9e52ddf5620fa68418d8ba5da8f13664a55698161059ca0a6a82788"
+  },
+  "source_sha256": "8760f11ff8096d6cbff4284d4916ca33b73efecca33272e0fecd86f1b547af65",
+  "registered_tool": false,
+  "installed_upstream_files_modified": false,
+  "not_a_callback_sandbox": true
+}

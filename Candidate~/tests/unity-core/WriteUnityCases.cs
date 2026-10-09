@@ -9,7 +9,7 @@ static class WriteUnityCases
 {
  static void Check(bool v,string s){if(!v)throw new Exception(s);}
  static JObject Manifest()=>new JObject{["source"]="Assets/source.mat",["candidate"]="Assets/candidate.mat",["operations"]=new JArray("copy","edit"),["references"]=new JArray(),["ttl_seconds"]=300};
- static int Main(){string root=Path.Combine(Path.GetTempPath(),"vragent-write-unity-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root+"/Assets");string previous=Directory.GetCurrentDirectory();try{
+ static int Main(string[] args){if(args.Length>0)return EditorOrchestrationCases.Run(args);string root=Path.Combine(Path.GetTempPath(),"vragent-write-unity-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root+"/Assets");string previous=Directory.GetCurrentDirectory();try{
   Application.dataPath=root+"/Assets";Directory.SetCurrentDirectory(root);
   File.WriteAllText(root+"/Assets/source.mat","original");File.WriteAllText(root+"/Assets/source.mat.meta","source-guid");
   var backend=new UnityMaterialCandidateBackend();var m=Manifest();
@@ -44,15 +44,28 @@ static class WriteUnityCases
   var wire=new JObject{["protocol"]=1,["kind"]="prepare",["project_id"]="project-A",["client_id"]="client-A",["connection_id"]="conn-A",["task_id"]="task-A",["plan_id"]="",["body"]=Manifest()};wire["body"]["candidate"]="Assets/candidate2.mat";
   var prepared=JObject.FromObject(AdapterOwnedFixture.Material(wire));Check((bool?)prepared["success"]==true,prepared.ToString());Check(gate.Approve((string)prepared["data"]["plan_id"],(string)prepared["data"]["digest"]),"approve");
   wire["plan_id"]=prepared["data"]["plan_id"];wire["kind"]="execute";wire["body"]=new JObject{["action"]="copy",["arguments"]=new JObject()};var copied=JObject.FromObject(AdapterOwnedFixture.Material(wire));Check((bool?)copied["success"]==true,copied.ToString());
+  wire["body"]=new JObject{["action"]="edit",["arguments"]=new JObject{["property"]="_Glossiness",["value"]=0.5}};
+  var historyEdit=JObject.FromObject(AdapterOwnedFixture.Material(wire));Check((bool?)historyEdit["success"]==true,"history_edit_failed");
   var window=new CandidateWindow();typeof(CandidateWindow).GetMethod("OnGUI",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(window,null);Check(EditorGUILayout.Labels.Exists(s=>s.Contains("候选材质修改")),"write UI absent");
   AssemblyReloadEvents.Reload();
   Check(gate.LocalPlans().Count==0,"reload_did_not_revoke");
   string recordKey="Yukino.VRChatAgent.material-tasks.v1.project-A";
   var stored=SessionState.GetString(recordKey,"");Check(stored!="","reload_task_history_missing");
+  string historyKey="Yukino.VRChatAgent.material-transactions.v1.project-A";
+  Check(SessionState.GetString(historyKey,"")!="","reload_transaction_history_missing");
   var restored=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"new-connection",new UnityMaterialCandidateBackend());
   var loader=typeof(MaterialCandidateSession).GetMethod("LoadTaskRecords",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
   Check(loader!=null,"reload_loader_missing");loader.Invoke(null,new object[]{restored});
   Check(restored.ExportTaskRecords().Count==1 && restored.LocalPlans().Count==0 && !restored.Allows("edit"),"reload_history_became_grant");
+  var historyLoader=typeof(MaterialCandidateSession).GetMethod("LoadTransactionHistory",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+  Check(historyLoader!=null,"history_loader_missing");historyLoader.Invoke(null,new object[]{restored});
+  Check(restored.LocalTransactions().Count==2 && (bool?)restored.LocalTransactions()[0]["withdrawal_available"]==false && restored.LocalPlans().Count==0,"reload_transactions_lost_or_granted");
+  Check(SessionState.GetString(historyKey,"")=="","history_not_consumed");
+  var historyDrawer=typeof(MaterialCandidateSession).GetMethod("DrawTransactions",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+  Check(historyDrawer!=null,"history_drawer_missing");
+  GUILayout.NextButton="明确撤回此步骤 "+(string)restored.LocalTransactions()[1]["transaction"]["id"];
+  string queued=GUILayout.NextButton;historyDrawer.Invoke(null,new object[]{restored});Check(GUILayout.NextButton==queued,"archived_withdrawal_button_enabled");GUILayout.NextButton=null;
+  Check(EditorGUILayout.Labels.Exists(s=>s.Contains("重载前记录：无撤回检查点")),"lost_checkpoint_not_visible");
   var originalWire=(JObject)wire.DeepClone();
   AdapterOwnedFixture.Begin("conn-B");wire["kind"]="prepare";wire["plan_id"]="";wire["client_id"]="client-B";wire["connection_id"]="conn-B";
   wire["body"]=Manifest();wire["body"]["candidate"]="Assets/candidate2.mat";wire["body"]["operations"]=new JArray("edit");
@@ -60,7 +73,26 @@ static class WriteUnityCases
   GUILayout.NextButton="核验记录并重新批准此绑定 "+(string)recovery["data"]["plan_id"];
   MaterialCandidateSession.Draw();Check((bool?)gate.LocalPlans()[0]["approved"]==true,"local_recovery_button_missing");
   Console.WriteLine("PASS WU012 explicit_local_recovery_button");wire=originalWire;
-  EditorApplication.Quit();Check(gate.LocalPlans().Count==0 && SessionState.GetString(recordKey,"")=="","quit_kept_recovery_ticket");
+  // Failed export must remain visible in the next domain; never silently vanish.
+  var journalField=typeof(MaterialCandidateGate).GetField("journal",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+  var journals=(System.Collections.IList)journalField.GetValue(gate);var item=journals[0];
+  var reportField=item.GetType().GetField("Report",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+  var originalReport=(JObject)((JObject)reportField.GetValue(item)).DeepClone();
+  try
+  {
+   ((JObject)reportField.GetValue(item))["before"]["fixture_oversize"]=new string('x',65536);AssemblyReloadEvents.Reload();
+   Check(SessionState.GetString(historyKey,"")!="","failed_history_export_silent");
+   var failedHistory=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"new",new UnityMaterialCandidateBackend());historyLoader.Invoke(null,new object[]{failedHistory});
+   Check(failedHistory.LastReason.Contains("上次交易历史保存失败") && failedHistory.LocalTransactions().Count==0,"failed_history_export_not_visible_after_reload");
+  }
+  finally{reportField.SetValue(item,originalReport);}
+  // Malformed SessionState never imports authority/history and is consumed once.
+  foreach(string invalid in new[]{"[", "[] []", "[{\"a\":1,\"a\":2}]", "["+new string('[',20)+"0"+new string(']',20)+"]"})
+  {
+   SessionState.SetString(historyKey,invalid);var badHistory=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"new",new UnityMaterialCandidateBackend());historyLoader.Invoke(null,new object[]{badHistory});
+   Check(badHistory.LocalTransactions().Count==0 && badHistory.LocalPlans().Count==0 && SessionState.GetString(historyKey,"")=="" && badHistory.LastReason.Contains("交易历史无效"),"malformed_history_not_closed");
+  }
+  SessionState.SetString(historyKey,"[]");EditorApplication.Quit();Check(gate.LocalPlans().Count==0 && SessionState.GetString(recordKey,"")=="" && SessionState.GetString(historyKey,"")=="","quit_kept_recovery_ticket");
   Console.WriteLine("PASS WU011 reload_history_no_authority_quit_clears");
   Console.WriteLine("PASS WU006 separate_wire_local_ui_lifecycle");
   AssetDatabase.Dependencies=Array.Empty<string>();var cg=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"conn-A",new UnityMaterialCandidateBackend());cg.SetCapability("copy",true);cg.SetCapability("edit",true);wire["kind"]="prepare";wire["plan_id"]="";wire["body"]=Manifest();wire["body"]["candidate"]="Assets/candidate3.mat";
@@ -77,6 +109,14 @@ static class WriteUnityCases
   File.CreateSymbolicLink("Assets/dangling.mat",Path.Combine(root,"missing-target.mat"));var dangling=Manifest();dangling["candidate"]="Assets/dangling.mat";bool linkDenied=false;try{backend.Capture(dangling,null);}catch(InvalidOperationException){linkDenied=true;}Check(linkDenied,"dangling symlink accepted");
   Console.WriteLine("PASS WU009 dangling_reparse_rejected");
   wire["kind"]="prepare";wire["plan_id"]="";wire["body"]=Manifest();wire["body"]["candidate"]="Assets/candidate4.mat";TypeCache.Unknown=true;var knownDenial=cg.Dispatch(wire);TypeCache.Unknown=false;Check((string)knownDenial["error"]=="unknown_asset_callbacks","safe rejection reason hidden");
-  Console.WriteLine("PASS WU010 callback_reason_is_actionable");return 0;
+  Console.WriteLine("PASS WU010 callback_reason_is_actionable");
+  var reloadType=typeof(CandidateSession).Assembly.GetType("Yukino.VRChatAgent.CandidateReload");
+  Check(reloadType!=null,"planned_reload_orchestrator_missing");
+  var begin=reloadType.GetMethod("BeginAsync",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic);
+  Check(begin!=null,"local_planned_reload_entry_missing");
+  Check(!((System.Threading.Tasks.Task<bool>)begin.Invoke(null,null)).GetAwaiter().GetResult(),"cold_editor_started_reload");
+  new CandidateWindow().GetType().GetMethod("OnGUI",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(new CandidateWindow(),null);
+  Check(EditorGUILayout.Labels.Exists(s=>s.Contains("一次计划内编译续接")),"planned_reload_ui_missing");
+  Console.WriteLine("PASS WU013 reload_explicit_ui_cold_start_inert");return 0;
  }catch(Exception e){Console.WriteLine("FAIL "+e);return 1;}finally{Directory.SetCurrentDirectory(previous);Directory.Delete(root,true);}}
 }

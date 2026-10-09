@@ -50,6 +50,8 @@ class CodexLocal(unittest.TestCase):
             self.assertEqual(overrides['mcp_servers.candidate.enabled_tools'],doc['mcp_servers']['candidate']['enabled_tools'])
             inventory=json.loads((ROOT/'catalog/native-inventory.json').read_text(encoding='utf-8'))
             expected={row['name'] for row in inventory['tools'] if row.get('implemented_candidate_read_actions')}
+            self.assertIn('get_test_job',doc['mcp_servers']['candidate']['enabled_tools'])
+            expected.update(('get_test_job','manage_asset','manage_prefabs','get_tests'))  # Explicit reviewed effectful surface.
             expected.update(row['name'] for row in inventory['resource_facades'])
             expected.update(('agent_status','agent_catalog','agent_prepare','agent_stop','material_prepare','material_execute','material_stop'))
             self.assertEqual(set(doc['mcp_servers']['candidate']['enabled_tools']),expected)

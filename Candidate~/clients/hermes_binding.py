@@ -141,6 +141,15 @@ async def bind(peer, registry, *, conversation_id, include):
         schemas = []
         for i, raw in enumerate(include):
             schema = _convert_mcp_schema('candidate', tools[raw])
+            # Preserve the actual MCP contract (including nullable branches).
+            # The native host repairs top-level typed properties before dispatch.
+            # Equivalent standard allOf schemas keep raw JSON for final authority;
+            # no host patch, disabled guard, or broadened accepted input types.
+            parameters = json.loads(json.dumps(tools[raw].input_schema))
+            if 'properties' in parameters:
+                parameters['properties'] = {key: {'allOf': [value]}
+                    for key, value in parameters['properties'].items()}
+            schema['parameters'] = parameters
             name = 'vrc_' + generation + '_' + str(i)
             schema['name'] = name
             if registry.get_entry(name, scope=binding._scope) is not None:

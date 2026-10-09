@@ -8,6 +8,31 @@ from test_launcher_candidate import ROOT, module
 
 
 class ReusedOwnership(unittest.TestCase):
+    def test_L025_windows_pid_reaches_reload_supervisor_and_cleanup(self):
+        import socket,threading
+        from unittest.mock import patch
+        from launcher import windows_processes as windows
+        m=module(self)
+        api=Mock();api.w.WaitForSingleObject.return_value=258
+        child=windows.NativeProcess(api,404,303,None,None,pid=4242)
+        self.assertEqual(child.pid,4242)
+        owner=Mock();owner.spawn.return_value=child;owner.close.side_effect=lambda:child.close() or True
+        control=Mock();stop=threading.Event();binding=m.RuntimeBinding({'VRCHAT_AGENT_TEST':'fixture'},threading.Event())
+        binding.reload_control=control
+        control.bind.side_effect=lambda pid:binding.ready.set()
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        raw={'project':'win-pid-adapter','parent_pid':os.getpid(),'local_port':port}
+        def report(value):
+            if value['phase']=='running':stop.set()
+        with patch.object(m,'make_owner',return_value=owner):
+            result=m.supervise(raw,binding=binding,stop=stop,report=report)
+        control.bind.assert_called_once_with(4242);control.close.assert_called_once()
+        self.assertEqual(result['code'],'STOPPED',result)
+        self.assertTrue(result['process_cleanup_complete'])
+        self.assertEqual(child.pid,4242)
+        self.assertIsNone(child.handle)
+
     def test_L020_windows_assign_before_resume_characterization(self):
         from launcher import windows_processes as m
         api = Mock()
@@ -51,7 +76,7 @@ class ReusedOwnership(unittest.TestCase):
             with self.subTest(size=len(data)):
                 readfd, writefd = os.pipe()
                 lines = []
-                child = m.NativeProcess(Mock(), None, None, readfd, lines.append)
+                child = m.NativeProcess(Mock(), None, None, readfd, lines.append, pid=1)
                 child.start_reader()
                 try:
                     os.write(writefd, data)

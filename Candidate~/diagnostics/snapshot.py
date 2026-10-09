@@ -129,10 +129,12 @@ def linux_read_lease(fd):
         raise ValueError('source write lease interrupted')
 
 
-def read_selected(root, name):
+def read_selected(root, name, *, limit=MAX_FILE_BYTES):
+    if type(limit) is not int or not 0 < limit <= MAX_FILE_BYTES:
+        raise ValueError('file byte limit')
     if sys.platform == 'win32':
         from windows_handles import read_selected as windows_read
-        return windows_read(os.fspath(root), relative_name(name), MAX_FILE_BYTES)
+        return windows_read(os.fspath(root), relative_name(name), limit)
     if sys.platform != 'linux':
         raise OSError('platform boundary not implemented')
     absolute = os.fspath(root)
@@ -152,13 +154,13 @@ def read_selected(root, name):
         before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
             raise ValueError('selected file must be regular and singly linked')
-        if before.st_size > MAX_FILE_BYTES:
+        if before.st_size > limit:
             raise ValueError('file byte limit')
         stack.enter_context(linux_read_lease(fd))
         # Read the very descriptor that was validated, never reopen a pathname.
         with os.fdopen(os.dup(fd), 'rb') as stream:
-            data = stream.read(MAX_FILE_BYTES + 1)
-        if len(data) > MAX_FILE_BYTES:
+            data = stream.read(limit + 1)
+        if len(data) > limit:
             raise ValueError('file byte limit')
         after = os.fstat(fd)
         named = os.stat(components[-1], dir_fd=parent, follow_symlinks=False)

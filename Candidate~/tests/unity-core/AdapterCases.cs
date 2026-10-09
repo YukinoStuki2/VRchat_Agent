@@ -291,6 +291,28 @@ internal static class AdapterCases
     Check(gate.Allows("manage_packages","get_package_info"),"package explicit checkbox");gate.SetCapability("manage_packages","get_package_info",false);
    }
    Console.WriteLine("PASS UA020 package metadata exact operation, live evidence, pinned direct dispatch and local checkbox; Unity APIs doubled");
+   {
+    AdapterOwnedFixture.Begin();gate.StopAll("job fixture");
+    const string job="0123456789abcdef0123456789abcdef";
+    Check(!gate.ProjectJobMaintenanceAllowed,"effect switch defaults closed");
+    EditorGUILayout.NextToggle="允许本工程测试作业状态维护（独立副作用）";gui.Invoke(window,null);
+    Check(gate.ProjectJobMaintenanceAllowed,"UA021 independent local effect switch missing");
+    EditorGUILayout.NextToggle="测试任务查询  get_test_job/observe";GUILayout.NextButton="展开操作：get_test_job";gui.Invoke(window,null);
+    Check(gate.Allows("get_test_job","observe"),"job operation checkbox missing");
+    int before=MCPForUnity.Editor.Tools.GetTestJob.Calls,assets=AssetDatabase.SourceReads;
+    var req=Wire("prepare","");req["body"]=JObject.Parse("{operations:[{command:'get_test_job',action:'observe'}],targets:['TestJobs/"+job+"'],ttl_seconds:60,effects:[{kind:'project_test_job_maintenance',version:1}]}");
+    var plan=call(req);Check((bool)plan["success"] && MCPForUnity.Editor.Tools.GetTestJob.Calls==before && AssetDatabase.SourceReads==assets,"live job prepare ran effects or file reads: "+plan);
+    EditorGUILayout.Labels.Clear();GUILayout.NextButton="批准此清单";gui.Invoke(window,null);
+    Check(EditorGUILayout.Labels.Exists(x=>x.Contains("project_test_job_maintenance")) && EditorGUILayout.Labels.Exists(x=>x.Contains("其他过期作业")),"effect scope not displayed in exact approval");
+    req=Wire("execute",(string)plan["data"]["plan_id"]);req["body"]=new JObject{["command"]="get_test_job",["params"]=new JObject{["job_id"]=job}};
+    try {CommandRegistry.Implementation=(c,a)=>throw new Exception("overridable job registry used");
+     var resultJob=call(req);Check((bool)resultJob["success"] && (string)resultJob["data"]["candidate_effects"]["persistence"]=="not_claimed","job dispatch/receipt missing: "+resultJob);
+     Check(MCPForUnity.Editor.Tools.GetTestJob.Calls==before+1,"native job not reached");
+     EditorGUILayout.NextToggle="允许本工程测试作业状态维护（独立副作用）";gui.Invoke(window,null);
+     Check(!gate.ProjectJobMaintenanceAllowed && !(bool)call(req)["success"] && MCPForUnity.Editor.Tools.GetTestJob.Calls==before+1,"effect revoke ineffective");
+    } finally {CommandRegistry.Implementation=originalHandler;gate.SetProjectJobMaintenance(false);gate.SetCapability("get_test_job","observe",false);}
+   }
+   Console.WriteLine("PASS UA021 job live scope -> local effect UI -> exact approval -> direct native adapter -> receipt and revoke; Unity and job handler doubled");
    return 0;
   } catch(Exception e){Console.Error.WriteLine("FAIL "+e);return 1;}
   finally {if(Directory.Exists(directory))Directory.Delete(directory,true);Check(!Directory.Exists(directory),"fixture residue");}

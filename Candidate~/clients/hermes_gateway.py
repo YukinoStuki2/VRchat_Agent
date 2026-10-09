@@ -59,8 +59,16 @@ class GatewayPlugin:
         source = getattr(event, 'source', None)
         if self.closing or source is None:
             return skipped
-        route = (getattr(getattr(source, 'platform', None), 'value', None),
-                 source.user_id, source.chat_id, source.profile, source.thread_id)
+        try:
+            identity = source.to_dict()
+            # Hermes omits false-valued profile fields; do not turn an invalid
+            # empty profile into the authorized default (None) route.
+            if identity.get('profile') != getattr(source, 'profile'):
+                return skipped
+            route = (identity['platform'], identity['user_id'], identity['chat_id'],
+                     identity.get('profile'), identity['thread_id'])
+        except Exception:
+            return skipped  # incomplete/failed source serialization grants nothing
         if (route not in self.routes or source.chat_type != 'dm' or source.is_bot
                 or source.profile_route_rejected
                 or getattr(event, 'user_id', None) not in (None, source.user_id)):

@@ -69,6 +69,31 @@ class HandoffTests(unittest.IsolatedAsyncioTestCase):
         reply = json.loads(await asyncio.wait_for(reader.readline(),2))
         return reader, writer, reply
 
+    async def test_HD020_effectful_status_can_be_claimed_without_grant(self):
+        for effect in ('asset_load_callbacks','prefab_contents_callbacks','test_discovery_callbacks','project_test_job_maintenance'):
+            async def status(peer,name,arguments):
+                return types.CallToolResult(content=[],structuredContent={'success':True,
+                    'data':{'project_id':'fixture-project','read_only':False,effect:True}})
+            with self.subTest(effect=effect),patch.object(Peer,'call_tool',status):
+                async with self.module.Receiver(self.path) as receiver:
+                    reader,writer,offered=await self.offer()
+                    binding=await receiver.claim(offered['id'],conversation_id='effects',include=('agent_status',))
+                    self.assertEqual(len(binding.snapshot()),1)
+                    writer.write(b'stop\n');await writer.drain()
+                    self.assertEqual(json.loads(await reader.readline()),{'kind':'closed','clean':True})
+
+    async def test_HD021_frozen_unready_or_malformed_status_denies_claim(self):
+        for delta in ({'ready':False},{'status':'planned_reload_frozen'},{'read_only':0}):
+            async def status(peer,name,arguments):
+                return types.CallToolResult(content=[],structuredContent={'success':True,
+                    'data':{'project_id':'fixture-project','read_only':True,**delta}})
+            with self.subTest(delta=delta),patch.object(Peer,'call_tool',status):
+                async with self.module.Receiver(self.path) as receiver:
+                    reader,writer,offered=await self.offer()
+                    with self.assertRaisesRegex(RuntimeError,'candidate_claim_failed'):
+                        await receiver.claim(offered['id'],conversation_id='invalid',include=('agent_status',))
+                    self.assertEqual(set(registry.get_all_tool_names()),self.baseline)
+
     async def test_HD019_failed_receiver_start_closes_owned_socket(self):
         receiver=self.module.Receiver(self.path)
         try:

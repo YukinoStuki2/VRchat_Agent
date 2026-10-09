@@ -79,15 +79,32 @@ async def run(args):
     if codex_executable is not None or codex_project is not None:
         if 'codex' not in args.client or not codex_executable or not codex_project:
             raise ValueError('codex_local_selection_required')
-    owned=create_owned_run(raw,clients=tuple(args.client))
+    reload_enabled=getattr(args,'reload_control',False)
+    owned=create_owned_run(raw,clients=tuple(args.client),enable_reload=reload_enabled)
+    editor_control=None;editor_worker=None
+    if reload_enabled:
+        from launcher.editor_reload import EditorReloadControl
+        editor_control=EditorReloadControl(owned,args.parent_pid,stop)
+        editor_worker=asyncio.create_task(asyncio.to_thread(editor_control.serve))
+    result=None
     task=asyncio.create_task(asyncio.to_thread(supervise_owned,raw,owned=owned,stop=stop))
     control=asyncio.create_task(read_control(stop))
     delivery=None;delivery_result=None
     codex=None;codex_result=None;codex_started=threading.Event()
     binding_sent=ready_sent=False
+    legacy_detached=False
     try:
         while not task.done():
-            requested=control.done() or os.getppid()!=args.parent_pid
+            if (control.done() and not control.cancelled() and not legacy_detached and
+                editor_control is not None and editor_control.legacy_eof_allowed and control.result()==b''):
+                legacy_detached=True
+                # Old CLR pipe readers must finish before its domain disappears.
+                # Keep Python logging valid but discard it; no file receives secrets.
+                with open(os.devnull,'wb',buffering=0) as sink:
+                    os.dup2(sink.fileno(),1,inheritable=False)
+                    os.dup2(sink.fileno(),2,inheritable=False)
+            requested=(control.done() and not legacy_detached) or os.getppid()!=args.parent_pid or (
+                editor_control is not None and (editor_control.failed.is_set() or editor_control.requested_stop.is_set()))
             if requested:
                 handoff_stop.set()
                 if (delivery is None or delivery.done()) and (codex is None or codex.done()):stop.set()
@@ -98,12 +115,14 @@ async def run(args):
                 codex_result=codex.result();handoff_stop.set()
                 if delivery is None or delivery.done():stop.set()
             if not stop.is_set() and not requested and owned.transport_ready.is_set() and not binding_sent:
-                emit({'kind':'unity_binding','version':2,'clients':owned.owner.identity.clients,'owner_pid':os.getpid(),'project':args.project,
+                bundle={'kind':'unity_binding','version':3 if reload_enabled else 2,'clients':owned.owner.identity.clients,'owner_pid':os.getpid(),'project':args.project,
                     'endpoint':f'wss://127.0.0.1:{port}/hub/plugin','pin':owned.owner.tls.pin,
                     'unity_bearer':owned.owner.identity.credentials['unity'].token,
-                    'expires_at':owned.owner.identity.expires_at})
+                    'expires_at':owned.owner.identity.expires_at}
+                if editor_control is not None:bundle['reload']=editor_control.metadata()
+                emit(bundle)
                 binding_sent=True
-            if not stop.is_set() and not requested and binding_sent and owned.binding.ready.is_set():
+            if not stop.is_set() and not requested and binding_sent and owned.binding.ready.is_set() and (editor_control is None or editor_control.ready.is_set()):
                 if remote is not None and delivery is None:
                     delivery=asyncio.create_task(deliver(remote,owned.owner,stop=handoff_stop,offered=offered))
                 if codex_executable is not None and codex is None:
@@ -121,18 +140,39 @@ async def run(args):
                 if codex is not None:codex_result=await codex
             finally:
                 stop.set();control.cancel();await asyncio.gather(control,return_exceptions=True)
-                await asyncio.wait_for(asyncio.shield(task),12)
-    if remote is not None:
-        result['handoff_cleanup_confirmed']=delivery_result is not None and delivery_result['remote_cleanup_confirmed']
-        result['process_cleanup_complete'] &= delivery_result is None or delivery_result['process_cleanup_complete']
-        if not result['handoff_cleanup_confirmed'] or delivery_result['code'] not in ('STOPPED','HANDOFF_CLOSED'):
-            result.update(phase='blocked',code=delivery_result['code'] if delivery_result else 'HANDOFF_NOT_STARTED')
-    if codex_executable is not None:
-        result['codex_cleanup_complete']=bool(codex_result and codex_result['process_cleanup_complete'] and codex_result['profile_cleanup_complete'])
-        result['process_cleanup_complete'] &= result['codex_cleanup_complete']
-        if not result['codex_cleanup_complete'] or codex_result['code'] not in ('STOPPED','CODEX_CLOSED'):
-            result.update(phase='blocked',code=codex_result['code'] if codex_result else 'CODEX_NOT_STARTED')
-    emit({'kind':'stopped',**result})
+                try:result=await asyncio.wait_for(asyncio.shield(task),12)
+                finally:
+                    if editor_worker is not None:
+                        # Wake request I/O, then join the worker before releasing peers.
+                        owned.reload_control.stop.set()
+                        if result is None:result={'phase':'error','code':'OWNER_CLEANUP_UNCONFIRMED','process_cleanup_complete':False}
+                        if remote is not None:
+                            result['handoff_cleanup_confirmed']=delivery_result is not None and delivery_result['remote_cleanup_confirmed']
+                            result['process_cleanup_complete'] &= delivery_result is None or delivery_result['process_cleanup_complete']
+                            if not result['handoff_cleanup_confirmed'] or delivery_result['code'] not in ('STOPPED','HANDOFF_CLOSED'):
+                                result.update(phase='blocked',code=delivery_result['code'] if delivery_result else 'HANDOFF_NOT_STARTED')
+                        if codex_executable is not None:
+                            result['codex_cleanup_complete']=bool(codex_result and codex_result['process_cleanup_complete'] and codex_result['profile_cleanup_complete'])
+                            result['process_cleanup_complete'] &= result['codex_cleanup_complete']
+                            if not result['codex_cleanup_complete'] or codex_result['code'] not in ('STOPPED','CODEX_CLOSED'):
+                                result.update(phase='blocked',code=codex_result['code'] if codex_result else 'CODEX_NOT_STARTED')
+                        editor_control.finish(result)
+                        await asyncio.shield(editor_worker)
+    if editor_control is None:
+        if remote is not None:
+            result['handoff_cleanup_confirmed']=delivery_result is not None and delivery_result['remote_cleanup_confirmed']
+            result['process_cleanup_complete'] &= delivery_result is None or delivery_result['process_cleanup_complete']
+            if not result['handoff_cleanup_confirmed'] or delivery_result['code'] not in ('STOPPED','HANDOFF_CLOSED'):
+                result.update(phase='blocked',code=delivery_result['code'] if delivery_result else 'HANDOFF_NOT_STARTED')
+        if codex_executable is not None:
+            result['codex_cleanup_complete']=bool(codex_result and codex_result['process_cleanup_complete'] and codex_result['profile_cleanup_complete'])
+            result['process_cleanup_complete'] &= result['codex_cleanup_complete']
+            if not result['codex_cleanup_complete'] or codex_result['code'] not in ('STOPPED','CODEX_CLOSED'):
+                result.update(phase='blocked',code=codex_result['code'] if codex_result else 'CODEX_NOT_STARTED')
+    if editor_control is not None:
+        result['editor_control_cleanup_complete']=editor_control.closed.is_set() and editor_worker.done()
+        if editor_control.failed.is_set():result.update(phase='blocked',code='EDITOR_CONTROL_CLOSED')
+    if not legacy_detached:emit({'kind':'stopped',**result})
     return 0 if result['phase']=='stopped' else 1
 
 
@@ -141,6 +181,7 @@ def main():
     parser.add_argument('--project',required=True)
     parser.add_argument('--parent-pid',required=True,type=int)
     parser.add_argument('--client',choices=('hermes','codex'),action='append',default=[])
+    parser.add_argument('--reload-control',action='store_true')
     parser.add_argument('--codex-executable')
     parser.add_argument('--codex-project')
     parser.add_argument('--hermes-host')

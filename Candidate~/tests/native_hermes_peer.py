@@ -484,7 +484,7 @@ async def main():
     doc = json.loads(sys.stdin.readline())
     interactive = doc.get('mode') == 'approved-task'
     assert doc.get('mode') in (None, 'approved-task')
-    allowed = (['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
+    allowed = (['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','manage_script','get_sha','manage_shader','unity_reflect','get_test_job','manage_asset','manage_prefabs','get_tests',
                 'material_prepare','material_execute','material_stop'] if interactive
                else ['agent_status','agent_stop'])
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)

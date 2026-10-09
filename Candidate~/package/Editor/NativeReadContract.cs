@@ -22,12 +22,29 @@ namespace Yukino.VRChatAgent
         static bool All(JToken array, Func<JToken, bool> valid) => array is JArray items && items.All(valid);
         static bool Components(JToken value, params string[] names) => Shape(value, names) && names.All(n => Number(value[n]));
 
+        static bool ClipInfo(JToken data,JObject args)
+        {
+            return Shape(args,"action","clipPath") && CandidateGate.ClipPath((string)args["clipPath"]) &&
+                Shape(data,"path","name","length","frameRate","isLooping","wrapMode","curveCount","curves","eventCount","events") &&
+                (string)data["path"]==(string)args["clipPath"] && String(data["name"]) && Number(data["length"]) && (double)data["length"]>=0 &&
+                Number(data["frameRate"]) && (double)data["frameRate"]>=0 && Bool(data["isLooping"]) && String(data["wrapMode"]) &&
+                new[]{"Default","Once","Loop","PingPong","ClampForever","Clamp"}.Contains((string)data["wrapMode"]) &&
+                Count(data["curveCount"],data["curves"]) && ((JArray)data["curves"]).Count<=512 &&
+                All(data["curves"],x=>Shape(x,"path","propertyName","type","keyCount") && String(x["path"]) && String(x["propertyName"]) && String(x["type"]) &&
+                    x["keyCount"]?.Type==JTokenType.Integer && (long)x["keyCount"]>=0 && (long)x["keyCount"]<=262144) &&
+                Count(data["eventCount"],data["events"]) && ((JArray)data["events"]).Count<=1024 &&
+                All(data["events"],x=>Shape(x,"time","functionName","stringParameter","floatParameter","intParameter") && Number(x["time"]) &&
+                    NullableString(x["functionName"]) && NullableString(x["stringParameter"]) && Number(x["floatParameter"]) && x["intParameter"]?.Type==JTokenType.Integer);
+        }
         internal static bool Valid(string command, JObject result, JObject args = null)
         {
             if (result == null || result["success"]?.Type != JTokenType.Boolean || !(bool)result["success"]) return false;
             if (!(Shape(result, "success", "data") ||
                 (Shape(result, "success", "message", "data") && String(result["message"])))) return false;
             var data = result["data"];
+            if (command == "manage_script" || command == "manage_shader") return SourceRead(command,data,args);
+            if (command == "manage_animation" && (string)args?["action"] == "clip_get_info") return ClipInfo(data,args);
+            if (command == "unity_reflect") return Reflection(data,args);
             if (command == "manage_packages") return PackageInfo(data, args);
             if (command == "get_menu_items") return Shape(args, "refresh", "search") && Bool(args["refresh"]) && (bool)args["refresh"] && String(args["search"]) && (string)args["search"] == "" &&
                 data is JArray menu && menu.Count <= 4096 && menu.All(x => BoundedString(x, 4096) && ((string)x).Length > 0) &&
@@ -47,6 +64,62 @@ namespace Yukino.VRChatAgent
                 String(data["path"]) && String(data["name"]) && Count(data["layerCount"], data["layers"]) &&
                 Count(data["parameterCount"], data["parameters"]) && All(data["layers"], Layer) && All(data["parameters"], Parameter);
             return false;
+        }
+        static bool Reflection(JToken data,JObject args)
+        {
+            try { CandidateGate.ReflectionParams(args); } catch { return false; }
+            if(!(data is JObject) || System.Text.Encoding.UTF8.GetByteCount(data.ToString(Newtonsoft.Json.Formatting.None))>262144)return false;
+            string action=(string)args["action"],query=(string)args["class_name"];
+            bool Strings(JToken a)=>a is JArray rows && rows.Count<=1024 && rows.All(x=>BoundedString(x,1024));
+            bool Scalar(JToken t)=>Null(t)||Bool(t)||Number(t)||BoundedString(t,4096);
+            bool TypeName(JToken t)=>BoundedString(t,256) && ((string)t==query || (query!=null && query.EndsWith("."+(string)t,System.StringComparison.Ordinal)));
+            if(action=="search")return Shape(data,"query","scope","count","results","truncated") &&
+                JToken.DeepEquals(data["query"],args["query"]) && (string)data["scope"]=="unity" && Bool(data["truncated"]) &&
+                Count(data["count"],data["results"]) && Integer(data["count"],0,13) &&
+                All(data["results"],x=>Shape(x,"name","full_name","namespace","assembly","is_class","is_enum","is_interface","is_struct") &&
+                    BoundedString(x["name"],128) && BoundedString(x["full_name"],256) && (string)x["namespace"]=="UnityEngine" &&
+                    BoundedString(x["assembly"],256) && Bool(x["is_class"]) && Bool(x["is_enum"]) && Bool(x["is_interface"]) && Bool(x["is_struct"]));
+            if(!Bool(data["found"]))return false;
+            if(!(bool)data["found"])return (Shape(data,"found","query") && JToken.DeepEquals(data["query"],args["class_name"])) ||
+                (action=="get_member" && Shape(data,"found","type_name","member_name") && TypeName(data["type_name"]) && JToken.DeepEquals(data["member_name"],args["member_name"]));
+            if(action=="get_type")return Shape(data,"found","name","full_name","namespace","assembly","base_class","interfaces","is_abstract","is_sealed","is_static","is_enum","is_interface","members","extension_methods","obsolete_members") &&
+                TypeName(data["name"]) && BoundedString(data["full_name"],256) &&
+                ((string)data["full_name"]==query || (query!=null && !query.Contains(".") && (string)data["full_name"]=="UnityEngine."+query)) &&
+                (string)data["namespace"]=="UnityEngine" && BoundedString(data["assembly"],256) && NullableBoundedString(data["base_class"],1024) &&
+                Strings(data["interfaces"]) && new[]{"is_abstract","is_sealed","is_static","is_enum","is_interface"}.All(n=>Bool(data[n])) &&
+                Shape(data["members"],"methods","properties","fields","events") && ((JObject)data["members"]).Properties().All(p=>Strings(p.Value)) &&
+                data["extension_methods"] is JArray extensions && extensions.Count==0 && Strings(data["obsolete_members"]);
+            if(!TypeName(data["type_name"]) || !JToken.DeepEquals(data["member_name"],args["member_name"]))return false;
+            string kind=(string)data["member_type"];
+            if(kind=="method")return Shape(data,"found","type_name","member_name","member_type","overload_count","overloads") &&
+                Count(data["overload_count"],data["overloads"]) && Integer(data["overload_count"],1,256) && All(data["overloads"],m=>
+                    Shape(m,"signature","return_type","parameters","is_static","is_virtual","is_abstract","is_generic","generic_arguments","is_obsolete","obsolete_message","declaring_type") &&
+                    BoundedString(m["signature"],8192) && BoundedString(m["return_type"],1024) &&
+                    new[]{"is_static","is_virtual","is_abstract","is_generic","is_obsolete"}.All(n=>Bool(m[n])) &&
+                    (Null(m["generic_arguments"]) || Strings(m["generic_arguments"])) && NullableBoundedString(m["obsolete_message"],4096) && NullableBoundedString(m["declaring_type"],1024) &&
+                    m["parameters"] is JArray parameters && parameters.Count<=64 && parameters.All(p=>Shape(p,"name","type","has_default","default_value","is_params") &&
+                        NullableBoundedString(p["name"],256) && BoundedString(p["type"],1024) && Bool(p["has_default"]) && Scalar(p["default_value"]) && Bool(p["is_params"])));
+            if(kind=="property")return Shape(data,"found","type_name","member_name","member_type","property_type","can_read","can_write","is_static","is_obsolete","declaring_type") &&
+                BoundedString(data["property_type"],1024) && new[]{"can_read","can_write","is_static","is_obsolete"}.All(n=>Bool(data[n])) && NullableBoundedString(data["declaring_type"],1024);
+            if(kind=="field")return Shape(data,"found","type_name","member_name","member_type","field_type","is_static","is_readonly","is_constant","constant_value","is_obsolete","declaring_type") &&
+                BoundedString(data["field_type"],1024) && new[]{"is_static","is_readonly","is_constant","is_obsolete"}.All(n=>Bool(data[n])) && Scalar(data["constant_value"]) && NullableBoundedString(data["declaring_type"],1024);
+            if(kind=="event")return Shape(data,"found","type_name","member_name","member_type","event_handler_type","is_obsolete","declaring_type") &&
+                BoundedString(data["event_handler_type"],1024) && Bool(data["is_obsolete"]) && NullableBoundedString(data["declaring_type"],1024);
+            return false;
+        }
+        static bool SourceRead(string command,JToken data,JObject args)
+        {
+            string target=CandidateGate.SourceParams(command,args);
+            if((string)args["action"]=="get_sha")return Shape(data,"uri","path","sha256","lengthBytes","lastModifiedUtc") &&
+                String(data["path"]) && (string)data["path"]==target && String(data["uri"]) && (string)data["uri"]=="mcpforunity://path/"+target &&
+                String(data["sha256"]) && System.Text.RegularExpressions.Regex.IsMatch((string)data["sha256"],@"\A[0-9a-f]{64}\z") &&
+                Integer(data["lengthBytes"],0,131072) && BoundedString(data["lastModifiedUtc"],64);
+            if(!(command=="manage_script" ? Shape(data,"uri","path","contents","encodedContents","contentsEncoded") : Shape(data,"path","contents","encodedContents","contentsEncoded")) || !String(data["path"]) ||
+                (string)data["path"]!=target || (command=="manage_script" && (string)data["uri"]!="mcpforunity://path/"+target) || !String(data["contents"]) ||
+                !Bool(data["contentsEncoded"]))return false;
+            string text=(string)data["contents"];
+            if(System.Text.Encoding.UTF8.GetByteCount(text)>131072 || (bool)data["contentsEncoded"]!=(text.Length>10000))return false;
+            return text.Length>10000 ? String(data["encodedContents"]) && (string)data["encodedContents"]==Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text)) : Null(data["encodedContents"]);
         }
         static bool PackageVersion(JToken token) => BoundedString(token, 128) &&
             System.Text.RegularExpressions.Regex.IsMatch((string)token, @"\A[0-9][0-9A-Za-z.+-]*\z");

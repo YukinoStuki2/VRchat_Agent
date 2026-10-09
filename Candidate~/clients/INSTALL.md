@@ -37,7 +37,7 @@ plugins:
 
 远端管理员需提供固定 `vrchat-agent-handoff` SSH subsystem，执行固定绝对路径的 Hermes Python 与
 本插件 `hermes_handoff_relay.py`，传入固定绝对 socket 路径。relay只收发管道协议，不接受远程脚本/任意路径。
-必须审查 sshd/authorized_keys 策略：仅可信操作者密钥；禁密码、交互shell/任意exec、PTY、agent/X11转发；
+管理员必须审查 SSH 服务端及每把操作者公钥的授权策略：仅可信操作者密钥；禁密码、交互shell/任意exec、PTY、agent/X11转发；
 只允许所需的远端 **127.0.0.1** 监听端口，`GatewayPorts no`。既有 SSH 服务、用户和信任文件不由插件修改。
 同 UID 连接验证不证明已经配置这些限制；真实跨机部署仍需单独验收。
 

@@ -1,0 +1,18 @@
+{
+  "upstream_commit": "30d22075093d1d35dfb0091c1c7550e9ad948577",
+  "upstream_path": "Editor/Tools/ManageAsset.cs",
+  "upstream_sha256": "2b2dd181e92f38522938468dcf3b2682fa4ea40caa166c8c2dbeb00d7c86799e",
+  "additive_type": "CandidateScopedAssets",
+  "source_sha256": "f1d17ad5f422d7c4f41e35ace1430d4ed8a335edaccfc9f1608593eaf90cb75a",
+  "original_method_hashes": {
+    "SearchAssets": "eef7fc70467e37a28b24a3ce80af4c997923605c76e9cf12e72f494c6697c6e3",
+    "GetAssetInfo": "6320eea2ad70f8ffec5d36fbae0183c9e693ba468503b4e264cb6b68440f5738",
+    "AssetExists": "10b62d3d37298c47c0c02cb8d9c82e91910b30eee39f1da5efad41e42fa7ad98",
+    "GetAssetData": "b543b7e615565e548d3b1116221e3abc4fee1cab761de8df6a551ab1a8ae859b"
+  },
+  "assembly_reference_guid": "98f702da6ca044be59a864a9419c4eab",
+  "installed_upstream_files_modified": false,
+  "native_parser_and_mutation_handlers_included": false,
+  "unity_import_verified": false,
+  "registered_tool": false
+}

@@ -1,6 +1,224 @@
+# 当前状态：2026-10-10 五项独审修复已闭环，进入自动化与 Windows 验证
+
+- 原完整独审发现的 F01–F05 已修复；增量独立复核 `evidence/independent-fixes-20261009/review/verdict.json` 为 passed=true、findings=[]，主Agent已读回报告并核对修复源码/冻结输入。不是重新全量独审，也不是实机产品放行。
+- 技术汇总 `evidence/independent-fixes-20261009/technical-closeout.json`：74个唯一Python(file,method)通过；DG001–015/DA001及UC001–015、EG001–004、PS001–008分组通过。Unity API仍是替身，编译门仅末次source-inputs清单摘要漂移，实际编译输入均当前。
+- 当前精确插件载荷已通过未修改宿主的正常隔离安装：safe、零发现、逐文件读回一致、未启用；安装/测试自有清理确认。368项分发源码摘要匹配。原失败及修前备份保留。
+- 用户现要求集中完成自动化与真实Windows验证。仅候选分支/Actions有限授权；禁止改main、历史版本、现用VPM索引、Hermes配置及真实Unity/头像工程。开始本轮时本地与远程HEAD均为9cce76f5b172ac4f45a8599249ba82a045ea6f96；该提交的历史CI成功不覆盖当前未提交修复。
+- 本段是审后状态文档更新，不重签此前663输入冻结。当前Windows/便携工件、Unity/Mono、真实客户端以及VPM/ALCOM仍须分别验收；后续结果单列 `evidence/windows-automation-20261010/`。
+
+## 历史增量：2026-10-09 Hermes 正常扫描安装兼容验证通过（仅隔离环境）
+
+- 本轮按用户明确请求，仅改候选 `clients/INSTALL.md` 的 SSH 安全说明措辞与 `clients/hermes_gateway.py` 的身份读取，并追加对应网关测试；不改 Hermes、现用配置、SSH 策略或 Unity。
+- 说明保留全部部署限制。网关改用 Hermes `SessionSource.to_dict()` 取身份，防止空 profile 被省略后变成默认身份；机器人、profile 路由拒绝及宿主授权继续检查原对象。
+- `evidence/installer-compat-20261009-red.json` 保留原两条扫描发现与新接口缺失的 RED；`-green.json` 为10项网关契约通过；`-comparison.json` 对修改前备份和当前代码运行272个真实 SessionSource 输入/停止命令组合，授权决定和分发结果无差异。平台发送/网关授权仍是替身，无模型调用。
+- `evidence/installer-compat-20261009-install.json`：当前未修改的宿主原生 `cmd_install(force=False, enable=False)` 在临时 HOME 正常安装成功，扫描 safe/零发现，安装后逐文件读回匹配，未启用，临时根已删除；所监测宿主源码/扫描器/现用配置 hash 未变。测试自有进程树和 socket 清理通过。仅本机精确源码插件安装，不是现用 QQ 网关激活或跨机部署。
+- 两处原有扫描阻塞在本次候选上已解除；下方旧“正常扫描安装未完成”描述仅保留历史。旧整代报告不覆盖本轮网关改动，尚不能称完整产品通过；独审、Windows/便携工件、真实Unity与VPM/ALCOM门槛仍未闭环。本轮没有提交、推送、发布或操作真实头像工程，也未启动全量回归/CI。
+
+## 前一代集成状态：2026-10-08 本地插件信任前提下的实时效果读取
+
+- 资产search/get_info、Prefab get_info/get_hierarchy、非缓存测试发现EditMode/PlayMode已接通实际Session、UI、runtime工具/能力目录与客户端清单；工程级测试作业观测保留。默认均不授予效果或任务权限。
+- 本地两步认可工程插件是明确选定的信任前提，不是完整代码审查、执行映像证明或插件沙箱，不能阻止插件内部未知回调。源会话clarify message 107467已回读，见`evidence/project-plugin-trust-original-response-20261008.json`。旧严格来源阻断仅作为历史，不再误列为当前未实现项。
+- 信任、独立效果开关、精确任务批准分离；停止等待清理前撤销信任，停止中不能再认可；观察到包/连接/程序集库存变化即失效，恢复旧值不恢复授权。清理未知的SessionState拒绝标记不能由重新勾选清除。
+- 生产Session使用随包资产/Prefab读取器和异步发现Job；独立效果回执、原owner清理、迟到结果丢弃继续生效。传输等待Task结果，不把Task序列化成完成回执。
+- 验证边界：Linux/.NET与声明的Unity/NUnit/UI替身；原生Hermes/Codex协议测试无模型调用，审批和Unity数据仍是fixture。不是Unity/Mono/Windows/human接受或正常安装。
+- 本代整体验证以`evidence/plugin-live-20261009-strict-checkpoint.json`为准；文件不存在或passed不为true时，不得称全量通过。preflight的280方法通过但源码变化与旧C#失败引用使聚合失败，原报告保留。
+- 未完成门槛：完整独立审查（旧429后未获重派）、原生Hermes正常扫描安装、精确源码Windows/便携工件、真实Unity/域重载/UI、VPM安装升级卸载及完整后的ALCOM/人审。没有提交、推送、发布或真实头像工程执行许可；不修改Hermes、不绕扫描。
+
+# 以下为历史记录（不覆盖上方当前状态）
+
+# 当前候选状态：2026-10-08 测试发现异步核心，尚未交付
+
+- Prefab修复冻结已通过，但不覆盖之后新增的发现代码。发现reader已25项、独立异步gate已10项专项通过，均为Linux/.NET加明确Unity/NUnit替身，不是Unity验收。
+- 新实现复用固定原生非缓存发现器和收集器，受控自有订阅/迭代器清理；默认关闭、精确模式清单、本地批准、异步票据、撤权与失败回执。返回字段/预算不完整即拒绝，不把未确认清理写为成功，不自动重试。
+- 本轮包括原生MoveNext内部可能清理抛错的保守失败边界：再次Dispose未抛错不证明前次清理成功。未知清理使当前gate锁闭；跨gate/reload债务保持及实际Session/UI/runtime适配仍未实现。
+- 源码载荷已包含发现reader且不注册工具；可信来源尚缺，实际入口仍关闭。计划以`discovery-20261008-core-frozen`做全套同源回归，当前这段文字不声明该轮通过；最终以同名checkpoint JSON为准。
+- 完整独立审查、正常安装、Unity/Mono/Windows/VPM/ALCOM均仍欠。未改Hermes本体/配置/扫描，未操作真实头像工程，未提交/推送/发布。
+
+# 历史检查点：2026-10-08 冷启动基线首轮验证，尚未达到Unity接入门槛
+
+- 批准证据更正：历史状态曾写为用户明确选择冷启动方向，但当前保存的clarify原始结果仅为asked，不能据此证明具体选择或扩大权限。只继续已授权候选与隔离验证；不重启现用工程、不开真实执行、不重派审查、不修改宿主。
+- 实验：`loaded-code-identity-20261008-cold-byte-boundary.json`的NI001–NI004及两个预期充分性反例通过；`cold-lease-20261008-final.json`的CB001/CB002通过。含真实.NET加载器/动态方法和Linux租约，不是Unity/Windows。原始失败报告均保留。
+- 关键边界：同一份已核字节直接交给加载器的合成路径可用，但磁盘hash+MVID、程序集库存或仅inode租约均不足以认证整个Editor；路径替换可保留旧租约。固定Unity参考源码显示依赖InitializeOnLoad先于本候选，窗口/静态构造并非前置拦截点。
+- 完整可行性报告及来源：`evidence/cold-start-context-feasibility-20261008.md`，源码pin：`cold-start-upstream-pins-20261008.json`。目前没有验证真实Unity进程前来源绑定，不能填写complete=true或接资产入口。其余UI/Session/runtime、Prefab/发现、独立审查/正常安装/实机/VPM/ALCOM缺口仍在。
+- 本轮未改产品生产字节；原owner-frozen验证仍属于原源码，不把新实验计入265方法。源表/旧证据逐hash核验、diff检查通过；本轮实验清理确认。未提交、推送或发布。
+
+# 最新证据：2026-10-08 无加载上下文仍欠可靠来源绑定
+
+- `evidence/loaded-code-identity-20261008-final.json`：Linux/.NET 8真实loader/动态方法实验NI001–003及两个预期充分性反例通过，非Unity/Mono/独立审查。磁盘路径+MVID不能证明当前执行字节，程序集库存不变也可有新动态回调。详见`evidence/no-load-context-provenance-20261008.md`。
+- 本轮仅新增evidence，未改生产实现；owner-frozen产品结果仍绑定原源码。进程树/临时根清理均确认，失败实验保留；不得填complete=true绕过provider。
+- 尚需明确是否采用显式冷启动可信基线流程；重启本身不证明安全，不自动授权执行。此时未作新的用户流程决定，所有四类实时目标保留，未知回调继续拒绝。
+
+# 最新检查点：2026-10-08 受控审查导入API与异步暂存已验证，实际资产入口仍关闭
+
+- 最终证据：`evidence/asset-review-20261008-owner-frozen-checkpoint.json`。265个独立进程运行时方法通过，LC006另由同代C#编译组执行；C#主组82、Editor编排7、AR001–008、RC001–005、AG001–007、实际随包资产BA001–015分别通过，交叠测试不求和。
+- 本轮主汇总`asset-review-20261008-owner-frozen-all.json`直接passed=true；已修复制runner的旧C#报告引用，228共同源逐hash相符。源码运行期间未变；所有逐方法原始结果、警告、清理和源绑定再次核验。不是独立源码审查。
+- 产品内部API：`EditorOwnerProcess.CaptureReviewAsync`实际启动固定helper，复用解释器预检；选定文件走私有stdin，stdout有界，非零退出/stderr/超限/超时/取消拒绝。Linux实际进程验证，Windows本轮尚未实机。`AssetCallbackReview.StageCapturedLocalAsync`等待前撤权，迟到/撤销/替换/fault/cancel不恢复记录；成功只暂存。
+- 新RED→GREEN：父身份入口、输入阻塞期限、异步暂存方法、C#实际启动接缝，以及Editor消息循环暂停导致清理续体停滞。进程生命周期worker不调用Unity API；核心仍要求Editor线程及续体。Linux父进程死亡且输入写端保持打开的实际测试首次GREEN；故障fixture逐PID消失。详见`asset-import-owner-20261008-boundary.md`。
+- **API不是UI/Session接入完成**：真实工程无加载可信上下文、已加载代码/依赖/回调覆盖与来源核验仍缺；本地文件选择、确认展示、取消/域重载事件调用、资产Session/runtime/catalog与客户端接入仍缺。没有加入空上下文放行或MCP批准接口，资产入口保持关闭。
+- 清理：本轮4个最终父PID均缺席；受控连接跟踪9后代/3监听无残留，临时诊断后端/构建根清除。载荷hash有效，diff检查通过。状态文档在冻结后追加，不改生产字节。
+- 独立审查仍因旧429未完成、未获重派许可；正常原生安装扫描仍阻断、误报仅本地；真实Unity/Mono/Windows/VPM及完整后ALCOM仍待。Prefab/发现仍仅行为刻画，不冒称产品实现。无Hermes/固定上游/真实工程/现用配置修改，无提交/推送/发布。
+
+# 最新检查点：2026-10-08 本地审查文件导入切片通过，实际入口仍关闭
+
+- 当前最终复核：`evidence/asset-review-20261008-import-checkpoint.json`；同源262个运行时唯一(file, method)、82项C#主组、Editor7方法、AR001–007（含实际私有管道）、AG001–007、BA001–015及原生资产/作业专项分别通过，不求和。
+- `import-final-all.json`本身保留passed=false：262方法均通过且源码未变，但汇总脚本沿用旧`import-frozen`的C#报告，源绑定拒绝。独立的机械复核脚本`verify-import-final-20261008.py`重新验证每条方法回执/清理及**同代import-final**的LC006与226共同源hash；先实测拒绝旧报告，再通过当前报告。不是重新执行262方法，也不是独立源码审查，未篡改原失败记录。下次复制runner须把unity_path绑定当前LABEL。
+- 新增`diagnostics/asset_review.py`复用稳定同描述符/HANDLE读取，单次限制只能收紧；实际文件→私有管道→C#核心暂存已组合测试。导入先撤旧权限，拒绝编码/超限/替换/占用/异常，读取不落盘、不脱敏改写、不批准；StageCapturedLocal和StageLocal重入替换已RED→GREEN，失败清除嵌套已确认记录。
+- 扩大回归初次7失败保留：6项需要真实固定诊断后端；现用临时搬迁副本组装固定Node/npm后端测试，不添加生产fallback。Windows ACL测试将平台替身错误延伸到外部keeper已修局部边界，非内核验收。另修测试自身CLI提前EOF的管道关闭并新增DC008。旧261→新增清理用例后262。
+- 清理逐项回读通过：262方法、三最终父PID缺席、真实owned9后代/3监听无残留，诊断打包临时副本和构建根均清除。载荷源码摘要有效，diff检查通过。此处状态文档追加发生在冻结结束后，不改生产字节。
+- 附加行为刻画：固定上游Prefab PF001–009、测试发现ND001–007通过且纯读反例复现；逐方法原样提取、Unity API替身，非完整原生编译/真实Unity。Prefab可成功但缺组件/Variant信息；发现实际30秒超时返回空表且晚到回调仍可能存在，外层超时不取消底层工作。证据`native-prefab-effects-20261008-first.json`、`native-discovery-effects-20261008-first.json`。
+- **尚未完成**：真实工程无加载可信上下文采集、Editor受控导入进程/UI、本地来源核验、Session/runtime/catalog与两客户端接入；Prefab/异步发现产品授权与实现。资产实际入口继续关闭，不把导入记录等同安全审核，未知回调仍拒绝。
+- 独立审查429后未重派；正常安装扫描仍阻断，误报仅本地；真实Unity/Mono/Windows/VPM/完整后ALCOM仍待。未改Hermes、固定上游或真实头像工程，无提交/推送/发布。没有留后台自治任务。
+
+# 最新检查点：2026-10-08 本地审查记录核心冻结回归通过，真实入口仍关闭
+
+- 当前最终证据：`evidence/asset-review-20261008-record-checkpoint.json`。完整当前源码冻结`asset-review-20261008-record-frozen`完成：212运行时方法、82项C#主组、Editor 7方法、记录AR001–005、资产Gate AG001–007、资产读取/回执BA001–015、原生资产NA001–006及job NJ001–010分别通过，不能求和当独立总数。
+- 全部冻结输入无变化，212方法资源清理逐项核验；受控连接9后代/3监听无残留，临时目录和三个后台父PID已缺席。源码载荷摘要有效，git diff --check通过。仅此状态记录是在冻结后追加，不改生产代码。
+- 本轮落地：实际载荷包含AssetObservation与AssetCallbackReview；search/info加载前后重校验GUID/path。记录暂存不授权、严格校验、上下文/时钟漂移失效、重入撤销不复活；与真实Gate组合验证确认记录不自动开能力或批准任务。
+- 仍缺实际无加载上下文采集/可信本地审查文件导入/UI，再接Session/runtime/catalog。已选记录流程不是实际评估结果。记录digest不验证审核者身份，complete字段不能独自证明回调覆盖，禁止用测试上下文代替真实工程。
+- 当前实际资产入口仍拒绝；Prefab与测试发现未完成。独立源码审查、正常扫描安装、真实Unity/Windows/VPM/ALCOM验收仍欠。未改Hermes、未操作真实工程、未提交推送发布。
+- 合同/边界说明：`evidence/asset-review-record-contract-20261008.md`、`evidence/asset-callback-review-boundary-20261008.md`；用户流程选择凭据：`evidence/asset-review-record-workflow-20261008.json`。未经另批不重派独立审查。
+
+# 当前实施：2026-10-08 本地审查记录核心新增，准备重新冻结
+
+- 用户选定“可核验的本地审查记录，再单独批准任务”，精确记录在`evidence/asset-review-record-workflow-20261008.json`；不是现实执行许可/独立审查重派许可。
+- 新增`package/Editor/Core/AssetCallbackReview.cs`：本地暂存无赋权、确认精确摘要、严格JSON/schema/上下文/未知回调/到期校验；代码/依赖/工程/回调变化、时钟回退/异常、采集时撤销都失效不复活。AR001–004逐项RED→GREEN，AR005与真实gate组合首次characterization通过（记录不会自动打开能力/批准任务）。
+- 回调上下文提供者/实际代码审核/真人UI仍为替身；digest不是签名或审核者身份。该类没有MCP注册或文件导入，更没有实现自动代码安全评估；真实Session仍不接入它，入口拒绝。
+- 新增类实际载荷SP012已RED→GREEN，12方法载荷测试通过；集成Core/Adapter等专项通过。现准备新冻结`asset-review-20261008-record-frozen`；先前receipt-frozen的212/82/Editor结论不覆盖此生产增量。
+- 下一步仍是可信、无副作用的本地上下文采集与审查文件加载/UI绑定；未知动态回调不能靠complete字段/确认框冒充评估。其后再接runtime/catalog。
+
+# 最新检查点：2026-10-08 资产回执/身份重校验局部验收
+
+- 本地成功证据：`evidence/asset-effects-20261008-receipt-checkpoint.json`。212方法、82项C#主组、Editor 7方法、资产gate 7项、资产预算/回执/组合15项、原生资产6项及原生job 10项分别通过；范围有重叠，不求和冒称总覆盖。
+- 生产代码与`asset-effects-20261008-receipt-frozen`一致。冻结之后只有额外测试脚本`tests/verify_owned_transport.py`更正程序集扫描归属；该脚本及真实受控连接单独重建/执行通过，不能说整树原封不动。9后代/3监听清理、全部212方法资源清理、三后台父PID缺席及owned临时目录移除已核验。
+- 保留失败证据：曾误将`gates editor`传给verify_editor_wire（参数拒绝，改用ec成功）；owned构建曾误把ScopedAssets编入候选assembly（按asmref修测试排除，独立实际资产源码编译仍保留）。未修改生产代码迁就测试。
+- 当前资产加载实际入口仍关闭。回调评估来源、Session/UI/runtime/catalog尚未完成；下一信任边界详见`evidence/asset-callback-review-boundary-20261008.md`。未知回调仍拒绝，不用确认框/测试字符串冒充评估；不能承诺同进程隔离或总工作量上限。
+- 仍非独立审查/真实Unity/Windows/VPM/ALCOM验收；未改Hermes、未操作真实工程、未安装、未提交推送发布。
+
+# 当前实施：2026-10-08 资产回执进入实际载荷，准备最新冻结
+
+- 回执适配器 `package/Editor/AssetObservation.cs` 已纳入 `distribution/source-inputs.json`；SP012先失败再通过，完整source-payload 12方法通过。未注册新MCP工具或开启权限。
+- 资产当前预算/安全专项 BA001–BA015 通过，包含真实候选Gate＋实际AssetObservation＋实际随包原生衍生读取器的组合；Unity API、回调及受审上下文仍为替身。BA013最初把被拒绝撤销的pending计划用于approve，改为依现有规则重新prepare；并非生产缺陷修复。
+- BA014、BA015先复现GUID/path在加载期间变化仍被接受，再修复search逐项加载前后/Info加载前后的双向身份重校验。生成器与实际文件及清单摘要同步；GetAssetInfo/GetAssetData/AssetExists固定原生方法正文未改。
+- 最新局部证据：`native-asset-effects-20261008-info-guid-green.json`；`runtime-checked-20261008-asset-receipt-payload-green.json`。准备冻结标签 `asset-effects-20261008-receipt-frozen`；旧212结果不能证明该版本全绿。
+- 真正缺口：Session的可信回调评估来源、UI评估/许可、runtime/catalog接入尚未完成。Gate的review是可信本地适配器接口，不是自动安全判定；当前Session仍使用无资产review的构造器，真实入口保持拒绝。
+- 未评估回调不能凭通用勾选、模型自报或单一字符串变成可信；不得复用会LoadAllAssets的Evidence路径，也不能用路径或结果过滤承诺副作用隔离。
+- 无真实工程执行/安装、无Hermes修改、无提交推送发布。独立审查/扫描/Unity/Windows/VPM/ALCOM门槛不变。
+
+# 当前实施：2026-10-08 资产读取器与授权核心局部通过，真实接入仍关闭
+
+- 候选设计与实现许可记录：`evidence/asset-effects-20261008-approval.json`。真实工程执行另批；不修改Hermes或已安装上游，不自动信任未知回调。
+- 原BA007已先复现再修复：同次FindAssets结果在分页加载前检查全部GUID解析路径，拒绝越界、重复（含大小写别名）和缺失。BA008回调失败脱敏并披露可能已有作用。实际包内`package/Editor/ScopedAssets/`九项BA001–009通过；BA009为实际gate+实际读取器组合，Unity API/评估凭据仍是替身。
+- 核心沿用CandidateGate新增默认关闭的独立回调许可、精确单操作/单目标effect清单及风险说明，trusted review与effect reader缺一拒绝；普通Evidence/registry不会用于新资产操作。AG001/006实际RED→GREEN，AG002–005/007是已有防线首次通过的characterization，不冒称均曾失败。七项覆盖未批/未知上下文/参数、暂停撤权过期/变化/拒绝重载、迟到结果及调用票据归零。原五参数构造保留，支持反射调用者。
+- Session仍使用无asset适配器的旧构造，UI/runtime/catalog未开放资产操作。可信无加载上下文评估实现、审查绑定、本地UI、实际receipt/结果验证和MCP链仍待，不能写成“功能已实现只待实机”。不把资产路径当回调沙箱，不用快照替代。
+- 新附加reader沿用asmref归属单独编译；一般adapter测试从本程序集glob排除其源，专用原生测试逐字节核对重生成结果后直接编译**实际包内源**。不是删除编译覆盖，也不是Unity/Mono验收。SP012加入真实载荷清单，载荷12项曾通过；核心后改已更新输入hash，等待本轮新全量冻结。
+- 先前job的211/82/EC7结果绑定旧源码。当前C#授权/连续性/重载/Adapter专项通过；新212方法+主C#/Editor冻结将使用`asset-effects-20261008-core-frozen`证据，未得结果前不宣称全绿。
+- 独立审查仍无完整结论，429后未重派；原生扫描安装仍拒绝，报告仅本地。完整候选/Windows/便携/VPM/ALCOM门槛不变。无提交、推送、发布或真实工程修改。
+
+# 历史调查：2026-10-08 资产原生行为已量测，回调授权范围待确认
+
+- 最新补充入口：`evidence/asset-effects-20261008-characterization-checkpoint.json`；job本地集成成功见下节。新增仅3个测试文件，未修改生产派发、宿主或真实Unity。
+- `native-asset-effects-20261008-first.json`：原生ManageAsset整文件SHA与固定提交核对后，逐字节抽取SearchAssets/GetAssetInfo/AssetExists/GetAssetData；Unity API及回调为明确替身。不是完整ManageAsset编译/真实Editor执行。NA001–006六项通过，另保留`PAGE_LOAD_BUDGET_VIOLATED`预期失败反例。
+- 实测原生每页1项先加载3匹配项；无效目录改为全工程并加载范围外资产；分别分页重查可重复行且重复加载。禁preview仍加载；合成回调已产生影响后，原生可返回失败，错误不等于零效果。路径限制不是同进程第三方回调沙箱。
+- 所有8个构建/执行子过程自然退出及owner清理通过、构建根缺席、源码前后一致、无编译/资源告警。此前211/82/EC7生产字节不变，仅STATUS更新；这3项新测试不追计旧冻结覆盖。
+- 下一步需确认资产候选的回调信任许可范围；未获新范围前保留原关闭状态，不把“读取目录”写成“只影响目录”，也不以快照替代。独立审查/正常扫描安装/实机/完整候选交付门槛不变。
+
+# 本地集成验证：2026-10-08 工程级作业维护已本地接通，整轮回归恢复通过
+
+- 当前入口：`evidence/job-effects-20261008-local-closeout.json`。工程级job维护默认关闭，真实执行仍须本地批准；四类实时目标不删减。已接gate、原生receipt adapter、session/UI、runtime、目录、客户端白名单及真实源码载荷。
+- 原211方法冻结仅NP006旧“工具必须不存在”断言失败；已先复现，再改成验证“入口可见但未授权拒绝、零原生查询/焦点调用/后台任务”。没有放松生产门控。旧失败和修复前备份保留。
+- 新冻结`job-effects-20261008-np-fixed-all.json`：211/211唯一(file, method)通过；LC006另由新编译C#门控通过，217共享源摘要吻合；运行前后源码不变。C#主组82通过；EffectGate/JobObservation/Adapter专项及EC001–007另列通过，不能跨套件相加冒充产品覆盖。
+- `job-effects-20261008-native-protocol.json`：真实原生Hermes MCP engine与Codex app-server，NJE001/002分别验证工程维护默认拒绝、独立effect清单/本地fixture批准、回执、暂停/恢复、跨客户端拒绝、停止后拒绝。job数据/回执和人审是明确替身；不是真实Unity/安装/模型循环验收，完整原生manager另有独立行为测试。
+- 原生两客户端各创建/DELETE确认2会话；11后代、1监听无残留，临时目录缺席、秘密扫描/ResourceWarning检查通过。211方法逐项cleanup回执、C#构建清理、Editor自然进程树退出均通过；终态无测试入口进程。
+- 原生作业维护错误/丢失回执会撤权并披露`effects_may_have_occurred=true`，无自动重试/回退；回执不宣称零副作用。未真实启用工程维护/启动测试/抢焦点。
+- 余下资产加载、Prefab生命周期、异步测试发现仍未实现；独立审查429后未重派，扫描误报只本地且未绕过。真实Unity/Mono/UI、当前精确Windows/便携工件、正常安装、VPM/独立ALCOM仍待。
+- 仍为本地未提交候选，HEAD `9cce76f5b172ac4f45a8599249ba82a045ea6f96`；无提交/推送/发布、无Hermes宿主或真实头像工程修改。此段更新在冻结结束后，仅状态文档变化，不冒称文档包含在先前冻结中。
+
+# 历史验证：2026-10-07 23:24 作业观测越出单job范围，设计需改审
+
+- 当前入口：`evidence/live-effects-20261007-2324-checkpoint.json`。用户要求继续后，主Agent完成有界原生行为验证；没有新增生产派发/能力开关或真实工程执行。
+- 新增可复跑测试5文件。完整固定原生TestJobManager/TestRunStatus/GetTestJob及解析器直接编译，未切片/改原生；NJ001–010十项characterization通过。另保留预期失败的`single-job-scope-red`：查已结束A触发类恢复，会将不同的过期B标失败；查不存在的ID也会触发恢复。不是修复后的绿灯。
+- 原生查询超时会维护当前状态并序列化工程作业集合，实测内存12项→SessionState保留10项，删除的持久化条目包含未查询历史作业；SessionState写失败被捕获，仍可返回success=true。故原设计“仅指定job维护”不能直接接入，需另行决定工程级维护授权/失败回执边界，不能悄然扩大范围。
+- 实际原生Python包装器NP001–006六项通过：不长轮询也会调度后台焦点nudge；测试专用模块局部禁用接缝可阻断焦点/路径查找/后台任务且保留单次查询。没有将测试补丁安装到产品；候选仍不暴露get_test_job。传输和OS焦点为替身。
+- C#与Python测试源执行前后hash一致，原生固定文件hash核对通过；自有构建/临时HOME/子进程与测试后台任务均清理。Python保留一条asyncio慢任务调试提示，无ResourceWarning；不冒称完全无诊断输出。
+- 新测试不算进旧177/81且未接全量CI。核对旧回归冻结578项仍仅既知STATUS/owned测试驱动变化，生产源码没变；本轮新增测试单独列hash。完整候选未实现/未批准，不用快照或删功能换交付。
+- 无提交/推送/发布，无Hermes/固定上游/真实头像修改；429审查未重派，误报仍只留本地。Unity/Windows/正常安装/独立复核/VPM/ALCOM门槛不变。
+
+# 历史调查：2026-10-07 官方原样安装复核，仍被阻断
+
+- 补充证据：`evidence/native-install-followup-20261007.json`，承接下方22:07检查点；本轮未改生产代码，未重复已通过的整轮回归。
+- 固定官方Hermes提交`84692b7d7499c4536d71a56e8ddbe59abd329103`，未修改的plugin-guard-v9对原样候选插件仍判DANGEROUS；原生cmd_install退出1、未安装。仅`INSTALL.md:40`的SSH安全要求触发critical ssh_backdoor，文档降级明确不适用于该规则。故不能声称升级官方新版即可解决。
+- 没有force、改扫描开关、确认回调或核心补丁；参考源码和所核宿主文件hash未变，临时安装HOME已移除。只有只读参考checkout保留，没有启动服务。
+- 上游报告草稿为`evidence/official-hermes-84692b7d-upstream-report-draft.md`，未提交；不得自行公开私人源码。
+- 静态复核测试能力：原生测试发现调用异步RetrieveTestList并QueuePlayerLoopUpdate；原生GetJob在超时分支会更新作业并写SessionState。未在真实Unity执行，不能把这些操作作为无副作用读取放开。四类安全hold依旧是未实现，不是测试已通过。
+- 当前候选无新提交、推送、发布；独立审查仍无结论。安装方式及有副作用原生操作的产品取舍未解决前，不要求用户ALCOM装半成品。
+
+# 历史核验：2026-10-07 22:07 本地回归收尾，完整候选仍被阻断
+
+- 唯一续接入口：`evidence/candidate-closeout-20261007-2207-checkpoint.json`。本节优先于后文历史记录；不是安装/发布批准。
+- 受限`unity_reflect`已整合为自有附加类型，限13个核心UnityEngine类型、独立ApiMetadata批准。通用反射仍关；固定上游/宿主源码不改。原生双客户端`scoped-reflection-20261007-native.json`已通过，真实Unity/API/人审仍未验收。
+- 完整运行时177个唯一file+TestCase.method通过；C#主组81通过，EC7另列，不相加。新工具导致的3组旧精确列表遗漏已补齐，断言未放宽；原始失败保留。
+- `verify_owned_transport.py`修复测试替身重复Application声明、-I本地helper导入、旧fixture未显式选择Hermes的问题；生产clients=()不变。最终Editor→owner→runtime与owned门控读写均通过，未批/异会话拒绝、stop不回退、磁盘回读及清理均有实证。Editor最后跟踪9后代/3监听无残留；不是Unity/Mono域重载实机。
+- 便携包真实搬迁通过，原生双客户端协议通过。checkpoint逐报告回读源码：产品字节均吻合，迟到测试专属修改明确列出；未把旧报告伪装成新全树冻结。源码组装693载荷项有效，不等于VPM包。
+- 原生`cmd_install`在临时HOME执行，扫描DANGEROUS拒绝（INSTALL.md:40安全说明、hermes_gateway.py:63中等级命中）；未安装，临时根清理、Hermes安装器/扫描文件hash未变。没有删说明、改扫描开关、patch宿主或动现用配置。
+- 经用户允许的新独立审查`deleg_b0a3cb43`再次HTTP429，无报告/结论；不重派、不切号，不能把主Agent回归替代独立批准。
+- 12能力族最新账本：7受限实现、4安全hold（资产/Prefab枚举、测试发现/任务观测）、1仅目录；read_implementation_complete=false。未实现不改记“仅待实机”。
+- HEAD仍`9cce76f5b172ac4f45a8599249ba82a045ea6f96`，候选分支`candidate-alcom-20260928`，本轮无提交/推送/发布/新Actions。main、现用索引、Hermes/QQ、真实头像工程未改。独立复核、原生扫描安装、当前精确Windows、剩余能力、完整VPM/ALCOM门槛仍未通过；没有后台自治续作。
+
+# 历史核验：2026-10-07 脚本/Shader/clip已整合；反射原生路径有回调阻断
+
+- 最新检查点：`Candidate~/evidence/clip-reconciled-20261007183953-checkpoint.json`（STATUS路径相对仓库根）。完整Candidate仍未交付。
+- 本轮两次C#整体回归通过，最新 `unity-parent-clip-reconciled-20261007183953-current-frozen.json` 为81主组PASS；ST001–009等分组单列，不能相加冒充全产品。所有命令、精确IDs、源码不变、无告警、构建根清理通过。上一轮73PASS失败已被修复后新证据替代，旧失败保留。
+- 最新真实Hermes/Codex协议回归 `clip-reconciled-20261007183953-native-current-frozen.json` 通过，NSRC001/002、NCL001/002与既有任务全过；各2会话创建/DELETE确认，9后代/1监听无残留，无秘密或资源告警。仍是net8+文件/Unity API/本地批准fixture，无模型、真实Editor/人审/正常安装批准。
+- 反射对照 `reflection-boundary-clip-reconciled-20261007183953-native-risk-fixture-fixed.json`：未改固定原生reader，实际CLR中get_type、缺失get_member、search各触发1次缺失依赖解析回调；目标静态构造/getter/方法计数均0。元数据不等于getter调用，但已加载也不等于无回调。保持unity_reflect关闭，类型元数据尚未集成，下一步需评估最小原生解析/缓存范围适配，不可只做返回后检查。
+- 12方法族逐项账本 `clip-reconciled-20261007183953-capability-reconciliation.json`：6已有受限实现、4安全hold、1反射/包信息部分阻塞、1纯目录。明确区分安全拒绝和缺实现，read_implementation_complete=false。
+- 修复目录生成丢失4条既有安全说明的问题，增加完整生成回读一致性断言；OC1、catalog2、SP9、VP30逐套实跑通过。321项源码输入摘要更新并保留原清单备份，源组装成功不等于冻结批准或VPM。
+- 插件载荷与旧官方扫描拒绝时逐文件SHA一致，INSTALL.md:40仍触发ssh_backdoor；没有删除安全说明、改扫描器/开关或现用配置。正常安装未验收。
+- HEAD仍9cce76f5b172ac4f45a8599249ba82a045ea6f96，candidate-alcom-20260928；本轮无提交/推送/发布，无main/索引/Hermes/QQ/真实头像修改。真实Unity、完整独立复核、新精确Windows、正常扫描安装、VPM/ALCOM仍欠。旧429不重派/切号。
+
 # 完整候选验收账本
 
+## 2026-10-07 当前入口：源码只读已本地整合，继续双客户端及B2/B3
+
+- 上一轮 `native-source-20261007164155`：受限manage_script/read、get_sha→manage_script/get_sha、manage_shader/read已接Python/C#、UI、目录和客户端工具白名单；默认关闭，须精确文件/任务批准。正文/大小/参数/响应门控不开放写、刷新、正则查找或任意文件。
+- 最新 `unity-parent-native-source-20261007164155-integrated-fixtures-fixed.json`：81主组、ST001–007另列通过，所有命令成功、精确ID、源码不变、构建目录清理、无ResourceWarning。首轮17主组/测试依赖编译失败保留；-I本地模块导入已修。
+- RT037–040为新增来源读取/别名用例，RT036仍为组件类型解析拒绝。上一轮早期日志RT036–038与后续重命名不可混算。完整runtime、33表面回归、目录/载荷和VP消费者通过均有独立报告，非全产品冻结。
+- 实际Editor编排已有EC7、CE4/ER4/RW3/EP6及私有传输测试；真实Unity/API/本地批准依然有替身，不冒称实机。源码读取当前尚欠真实双客户端调用与新Windows文件身份/竞态审查；普通FileStream与路径检查不是硬链接/祖先竞态沙箱。
+- 剩余B2/B3：clip信息、已加载类型元数据；其余方法族按账本明确hold原因，不以catalog行数冒全实现。完整独立复核、精确Windows、正常扫描安装、VPM/独立ALCOM仍欠。旧429不重派、不切号。
+- HEAD仍9cce76f5b172ac4f45a8599249ba82a045ea6f96，仅本地候选修改；未新提交/推送/发布；main/现用索引/Hermes/QQ/真实头像工程不动。当前用户继续开发，非后台自动续作。
+
+## 2026-10-07 当前续接：C#字节/私有通道已验，VP009已修，完整Editor编排仍欠
+
+- 检查点 `Candidate~/evidence/editor-relay-20261007143309-checkpoint.json`；HEAD仍9cce76f，未提交/推送/发布。
+- 上轮RW3、Linux EP6（含netstandard2.1参考编译）、81 C#、28 PI/OS/OC通过并已回读；不是Unity/Windows实机。C#通道尚未接实际EditorOwnerProcess。
+- 完整VP旧27项因VP009过时字符串断言失败，原报告保留；本轮改为执行实际PC001–014接收断言及缺失/重复/额外负例，完整27项通过。
+- 主Agent续接Editor→owner真实控制与重载调度；默认关闭及异常撤权不放宽。其余合同/复核/Windows/扫描安装/VPM与独立ALCOM仍未完成。
+
+
 用户目标不变：先完成完整实现、自动化与VPM准备，再由本人用ALCOM安装独立测试工程验收。未实现项不是“只待实机验收”。**当前仍没有可安装交付或产品批准。**
+
+## 2026-10-06 owner／运行时私有控制已接通，Editor 编排仍未完成
+
+- 最新入口 `evidence/owner-control-20261006081623-checkpoint.json`。HEAD 仍 `9cce76f5b172ac4f45a8599249ba82a045ea6f96`，仅本地未提交；没有新推送、Windows Actions、发布、main／现用索引或现用 Hermes／QQ 改动。
+- 新增 `runtime/reload_control.py` 和 `launcher/reload_owner.py`：原批准摘要不重写，核对完整 read/material cohort；OS 保持的精确 parent/child＋内核对端确认后才传字节；arm／reattach／commit；取消、EOF、超时、错误绑定、已停止任务拒绝，失败清空私有状态；没有远程 approve/resume 工具或授权落盘。
+- 已接到 `create_owned_run(enable_reload=True)`、实际 runtime CLI、监督器和 probe。默认仍关闭，Editor 入口尚未启用。probe 在经本地控制确认且有界的交接期不伪报 ready；先排空旧 probe，commit 后重新核验。transport 可空闲到原 run 期限（上限 3600 秒），单次权限交接仍受原批准期限及最多 60 秒限制，不续期。
+- OC001–015 包括取消冻结时迟到结果、私有字节过期、worker 取消后 join、真实 OS 通道重附与重复交接、真实受控子进程、伪造 bootstrap 拒绝。OC014 运行实际 CLI＋TLS＋SDK，会话 ID 保持且精确 DELETE200；Unity 批准、证据和 WebSocket peer 仍是 fixture，不是实际 Editor／编译。
+- 本轮 167 个逐方法 Python 通过，C# 主组 81 通过（另列 RH9／PC14／WU12／NS18）；源码执行前后稳定，构建／临时根清理。之后只有 OS006 将超限负例 61 改为 3601：首轮 peer 因过期负例等待而超时，原失败保留；修正后的 28 个 PI／OS／OC 逐方法全部通过且源码不变、自然进程树退出／清理／临时 HOME 删除均通过。不能简单求和，各组有重合。
+- OC014 初次宽入口虽 exit0，但 SDK 打印 session termination failed；未接受为正常生命周期通过。改为先精确 DELETE，再断开 fixture／停止，最终显式断言 200 和同 session。VP015–025 通过；新 peer verifier 精确逐方法，CI 消费已更新，尚非实际新 Actions。
+- 分发摘要已更新；source collect() 确认新模块进入 585 个源码载荷项，不是可安装 VPM／portable build。新 Windows 分支未实测、完整独立复核缺失，旧 429 没有重派或切号。
+- 余项仍包括 C# gate 真实字节与本地控制联合、Editor→owner 私有通道／计划内重载编排、其他 B2/B3、正常扫描客户端安装、完整冻结独立复核与 VPM／独立 ALCOM。未实现不标“仅待真人验收”。
+- 本节为测试后的状态记账，不是新的可执行源码。
+
+## 2026-10-05 冻结屏障与交易历史本地整合（未独立批准、未提交）
+
+- 当前HEAD仍 `9cce76f5b172ac4f45a8599249ba82a045ea6f96`；本轮为本地未提交修改。旧提交三路Windows已通过；不覆盖本轮源码。未推送/发布/main或现用索引变更。
+- 当前证据入口 `evidence/reload-integrated-20261005101950-checkpoint.json`：105个逐方法Python全通过，另经fresh WirePeer编译执行LC006；交叉回读194个公共源码摘要一致。C#主组81、独立PC001–014 / WU001–012 / NS001–018精确集合通过，5项VP015–019消费门槛通过；组间有重合，不加总成独立测试总数。
+- 首轮102方法在LC006缺fresh DLL时失败，原证据完整保留。新入口明确把LC006交给fresh C# verifier，未跳过。RL001–014避免与PR暂停测试重名，新增finally/notify_stop在途窗口和两个独立probe拒绝条件。独立 `-I` 入口缺fixture导入已复现并修，14项实际通过。
+- runtime仅实现本地、同连接/同SDK session的冻结/解冻屏障；冻结拒绝执行、不续期/重放，断线/停止仍撤权，probe拒绝伪就绪。**尚无跨域owner保活/认证重附/授权迁移，绝非自动编译续接完成。**
+- 材质交易历史与live journal/Checkpoint分开：保留原交易及连接/任务/撤回结果，导入零授权且不参与候选provenance；旧记录明确无撤回检查点，新交易仍能建立可撤回检查点。原128交易上限包含历史；导入有界/原子/拒重复，SessionState重复属性/尾部内容/过深JSON拒绝，退出清除。保存失败保留固定告警给下一域，非静默丢失。
+- PC011/PC012、历史持久化/UI/保存失败均有首RED后GREEN；PC013/PC014和补充分支为first-green characterization，不谎称先红。实际Unity域重载、Mono/Windows/真人未验收；WU是API doubles。
+- 六文件屏障旧有限审查 `deleg_16626dab` 通过；新增测试/CI的 `deleg_98c24069` 遇HTTP429中断，无结论，不重派/切号。后续C#history和CI PC集合变化尚无独立审查。整轮本地通过不能替代独立批准。
+- 正常扫描安装、B2/B3、跨域续接全链路、完整源码冻结复核及VPM/独立ALCOM仍未完成。没有改现用Hermes/QQ/扫描器/真实头像工程；没有后台自治续作。
+- 本段状态文档为测试结束后的记账更新，非可执行源码变更；测试报告保留运行时原始before/after摘要。
 
 ## 2026-10-05 审查修复冻结（非完整产品批准）
 

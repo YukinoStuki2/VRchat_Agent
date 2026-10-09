@@ -177,4 +177,64 @@ class PluginTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await plugin.close();await asyncio.gather(*ctx.tasks,return_exceptions=True)
 
+    async def test_GP008_exact_plugin_payload_passes_native_scan(self):
+        import importlib.util
+        from tools.plugin_guard import scan_plugin
+        spec=importlib.util.spec_from_file_location('candidate_plugin_scan',ROOT/'distribution/hermes_plugin.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        folder=Path(self.home.name)/'scanned-plugin';folder.mkdir()
+        for name,data in module.collect(ROOT).items():(folder/name).write_bytes(data)
+        result=scan_plugin(folder)
+        self.assertEqual(result.verdict,'safe',[(f.file,f.line,f.pattern_id) for f in result.findings])
+        self.assertEqual(result.findings,[])
+
+    async def test_GP009_native_source_snapshot_preserves_exact_route_and_trust(self):
+        from unittest.mock import patch
+        calls=[];expected=('telegram','owner','chat-a','work','topic')
+        self.plugin.routes={expected}
+        self.plugin.host=SimpleNamespace(chats={},request_stop=calls.append)
+        try:
+            # Real Hermes serialization, not a replacement source dictionary.
+            source=self.event(profile='work',thread_id='topic').source
+            with patch.object(source,'to_dict',wraps=source.to_dict) as snapshot:
+                self.plugin.dispatch(event=MessageEvent(text='/stop',source=source),gateway=self.gateway)
+                self.assertEqual(calls,[expected])
+                snapshot.assert_called_once_with()
+            for changes in ({'user_id':'other'},{'chat_id':'other'},{'profile':None},
+                            {'profile':'other'},{'thread_id':None},{'thread_id':'other'},
+                            {'chat_type':'group'},{'is_bot':True},{'profile_route_rejected':True}):
+                before=len(calls)
+                event=self.event('/stop',**({'profile':'work','thread_id':'topic'}|changes))
+                self.plugin.dispatch(event=event,gateway=self.gateway)
+                self.assertEqual(len(calls),before,changes)
+            self.gateway.authorized=False
+            self.plugin.dispatch(event=self.event('/stop',profile='work',thread_id='topic'),gateway=self.gateway)
+            self.assertEqual(calls,[expected])
+            self.gateway.authorized=True
+            self.plugin.routes={('telegram','owner','chat-a',None,None)}
+            for profile in ('',False,0):
+                self.plugin.dispatch(event=self.event('/stop',profile=profile),gateway=self.gateway)
+                self.assertEqual(calls,[expected],'lossy profile serialization must not admit a default route')
+            self.plugin.dispatch(event=self.event('/stop'),gateway=self.gateway)
+            self.assertEqual(calls[-1],('telegram','owner','chat-a',None,None))
+            self.assertEqual(self.ctx.tasks,[])
+            self.assertEqual(self.gateway.resolutions,0)
+        finally:self.plugin.host=None
+
+    async def test_GP010_source_serialization_failure_is_closed(self):
+        from unittest.mock import patch
+        calls=[]
+        self.plugin.host=SimpleNamespace(chats={},request_stop=calls.append)
+        try:
+            source=self.event().source
+            for failure in (RuntimeError('fixture serialization failure'),):
+                with patch.object(source,'to_dict',side_effect=failure):
+                    self.plugin.dispatch(event=MessageEvent(text='/stop',source=source),gateway=self.gateway)
+                    self.assertEqual(calls,[])
+            with patch.object(source,'to_dict',return_value={}):
+                self.plugin.dispatch(event=MessageEvent(text='/stop',source=source),gateway=self.gateway)
+                self.assertEqual(calls,[])
+            self.assertEqual(self.ctx.tasks,[])
+        finally:self.plugin.host=None
+
 if __name__=='__main__':unittest.main(verbosity=2)

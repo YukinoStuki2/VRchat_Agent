@@ -26,6 +26,11 @@ from transport.plugin_registry import PluginRegistry
 from services.tools.manage_animation import manage_animation
 from services.tools.manage_material import manage_material
 from services.tools.manage_packages import manage_packages
+from services.tools.unity_reflect import unity_reflect
+from services.tools.run_tests import get_test_job as native_get_test_job, GetTestJobData, GetTestJobResponse
+from mcp.types import ToolAnnotations
+from services.tools.manage_script import manage_script, get_sha
+from services.tools.manage_shader import manage_shader
 from services.tools.read_console import read_console
 from services.tools.manage_scene import manage_scene
 from services.tools.find_gameobjects import find_gameobjects
@@ -38,23 +43,63 @@ from services.resources.windows import get_windows
 from services.resources.active_tool import get_active_tool
 from services.resources.prefab_stage import get_prefab_stage
 from services.resources.menu_items import get_menu_items
+import live_effects
 
 _CURRENT: ContextVar[Any] = ContextVar('candidate_request', default=None)
 SPECS = {
-    'manage_animation': ('controller_get_info', 'controller_path', 'controllerPath', '.controller'),
-    'manage_material': ('get_material_info', 'material_path', 'materialPath', '.mat'),
+    ('manage_animation','controller_get_info'): ('controller_path', 'controllerPath', '.controller'),
+    ('manage_animation','clip_get_info'): ('clip_path', 'clipPath', '.anim'),
+    ('manage_material','get_material_info'): ('material_path', 'materialPath', '.mat'),
 }
+REFLECTION_ACTIONS = {'get_type', 'get_member', 'search'}
 SCENE_ACTIONS = {'get_active', 'get_build_settings', 'get_loaded_scenes', 'get_hierarchy', 'validate'}
 ANIMATOR_ACTIONS = {'animator_get_info', 'animator_get_parameter'}
 OBJECT_TOOLS = {'get_gameobject', 'get_gameobject_components'}
 PROJECT_TOOLS = {'get_project_info': get_project_info, 'get_tags': get_tags, 'get_layers': get_layers}
 EDITOR_TOOLS = {'get_selection': get_selection, 'get_windows': get_windows, 'get_active_tool': get_active_tool, 'get_prefab_stage': get_prefab_stage, 'get_menu_items': get_menu_items}
 METADATA_TOOLS = PROJECT_TOOLS | EDITOR_TOOLS
-READ_TOOLS = SPECS.keys() | {'read_console', 'manage_scene', 'find_gameobjects', 'manage_packages'} | OBJECT_TOOLS | METADATA_TOOLS.keys()
+SOURCE_TOOLS = {'manage_script': manage_script, 'get_sha': get_sha, 'manage_shader': manage_shader}
+READ_TOOLS = {command for command,action in SPECS} | SOURCE_TOOLS.keys() | {'read_console', 'manage_scene', 'find_gameobjects', 'manage_packages', 'unity_reflect', 'get_test_job'} | OBJECT_TOOLS | METADATA_TOOLS.keys() | live_effects.TOOLS
 CONTROLS = {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop'}
 # Native SDK session expiration, not a new heartbeat protocol. A quiet client
 # must prepare/approve again after expiry; ping activity never extends plan TTL.
 SESSION_IDLE_TIMEOUT = 60.0
+
+
+def job_target(value):
+    if type(value) is not str or re.fullmatch(r'TestJobs/[0-9a-f]{32}', value) is None:
+        raise ToolError('invalid_job_target')
+    return value
+
+
+def job_params(args):
+    if 'job_id' not in args or set(args) - {'job_id', 'include_details', 'include_failed_tests'}:
+        raise ToolError('invalid_job_arguments')
+    value = args['job_id']
+    if type(value) is not str:
+        raise ToolError('invalid_job_id')
+    job_target('TestJobs/' + value)
+    wire = {'job_id': value}
+    for key, name in (('include_details', 'includeDetails'), ('include_failed_tests', 'includeFailedTests')):
+        if key in args:
+            if type(args[key]) is not bool:
+                raise ToolError('invalid_job_arguments')
+            if args[key]: wire[name] = True
+    return wire
+
+
+class CandidateJobData(GetTestJobData):
+    # Additive receipt only; all native job/result fields keep their pinned models.
+    candidate_effects: dict
+
+
+class CandidateJobResponse(GetTestJobResponse):
+    data: CandidateJobData | None = None
+
+
+def no_job_focus_nudge(**kwargs):
+    # Candidate-owned module adaptation: no project lookup or background task.
+    return False
 
 
 def scene_params(args):
@@ -149,6 +194,22 @@ def object_params(name, args):
     return wire
 
 
+def reflection_params(args):
+    action = args.get('action')
+    keys = ({'action', 'query', 'scope'} if action == 'search' else
+            {'action', 'class_name', 'member_name'} if action == 'get_member' else {'action', 'class_name'})
+    if action not in REFLECTION_ACTIONS or set(args) != keys:
+        raise ToolError('invalid_reflection_arguments')
+    for key in keys - {'action', 'scope'}:
+        value = args[key]
+        pattern = r'[A-Za-z_][A-Za-z0-9_]*' if key == 'member_name' else r'[A-Za-z_][A-Za-z0-9_.]*'
+        if type(value) is not str or len(value) > 128 or re.fullmatch(pattern, value) is None:
+            raise ToolError('invalid_reflection_arguments')
+    if action == 'search' and args['scope'] != 'unity':
+        raise ToolError('reflection_scope_not_supported')
+    return dict(args)
+
+
 def package_params(args):
     value = args.get('package')
     if (set(args) != {'action', 'package'} or args['action'] != 'get_package_info' or
@@ -172,6 +233,44 @@ def target_path(value):
             or any(p in ('', '.', '..') or p != p.strip() for p in value.split('/'))):
         raise ToolError('invalid_target')
     return value
+
+
+def clip_target(value):
+    target_path(value)
+    if (not value.endswith('.anim') or value.split('/')[-1]=='.anim' or
+            any(ch in value for ch in '%<>"|?*') or any(ord(ch)<32 or 127<=ord(ch)<=159 for ch in value) or
+            any(p.endswith('.') or re.fullmatch(r'(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])',p.split('.')[0]) for p in value.split('/'))):
+        raise ToolError('invalid_clip_target')
+    return value
+
+
+def source_target(value):
+    target_path(value)
+    parts=value.split('/')
+    extension='.shader' if value.endswith('.shader') else '.cs'
+    if (not value.endswith(extension) or (extension=='.shader' and len(parts)<3) or
+            re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', parts[-1][:-len(extension)]) is None or
+            any(ch in value for ch in '%<>"|?*') or
+            any(ord(ch)<32 or 127<=ord(ch)<=159 for ch in value) or
+            any(p.endswith('.') or re.fullmatch(r'(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])',p.split('.')[0]) for p in parts) or
+            any(p.endswith('.cs') for p in parts[:-1])):
+        raise ToolError('invalid_source_target')
+    return value
+
+
+def source_params(name,args):
+    if name=='get_sha':
+        if set(args)!={'uri'}: raise ToolError('invalid_source_arguments')
+        target=source_target(args['uri'])
+        if not target.endswith('.cs'):raise ToolError('invalid_source_target')
+        directory,leaf=target.rsplit('/',1)
+        return target,{'action':'get_sha','name':leaf[:-3],'path':directory}
+    if (name not in {'manage_script','manage_shader'} or set(args)!={'action','name','path'} or args.get('action')!='read' or
+            type(args.get('name')) is not str or type(args.get('path')) is not str or
+            re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',args['name']) is None):
+        raise ToolError('invalid_source_arguments')
+    target=source_target(args['path']+'/'+args['name']+('.shader' if name=='manage_shader' else '.cs'))
+    return target,dict(args)
 
 
 def console_params(args):
@@ -213,6 +312,7 @@ class Plan:
     targets: frozenset
     plan_id: str = ''
     approval_client: str = ''
+    approval_digest: str = ''  # Original local gate digest; never rewritten on rebind.
 
 
 @dataclass
@@ -238,11 +338,141 @@ class Runtime(Middleware):
         self.plans = {}
         self.preparing = {}
         self.sessions = {}
+        self.inflight = {}  # Whole middleware lifetime, including post-readback cleanup.
+        self._reload_barrier = None
         self.session_identities = {}
         self.closed_sessions = weakref.WeakSet()
         self.lifecycle_results = deque(maxlen=128)
         from material_runtime import MaterialRuntime
         self.material = MaterialRuntime(self)
+
+    async def freeze_for_reload(self, *, window):
+        """Local-only quiescence barrier, NOT approval or cross-connection resume.
+
+        No network tool exposes this method. release_reload_barrier is same-
+        connection only. The separate local handoff methods require an exact
+        ticket and retain authenticated SDK identities; installed owner/Editor
+        coordination is not wired. Normal EOF/disconnect still revokes.
+        """
+        if (type(window) not in (int, float) or not math.isfinite(window)
+                or not 0 < window <= 60):
+            raise ToolError('invalid_reload_window')
+        if (self._reload_barrier is not None or self.inflight or self.preparing
+                or self.material.preparing or PluginHub._pending):
+            raise ToolError('reload_not_quiescent')
+        connection = await self.connection()
+        # The registry lookup yields: check quiescence again at the commit point.
+        if (self._reload_barrier is not None or self.inflight or self.preparing
+                or self.material.preparing or PluginHub._pending):
+            raise ToolError('reload_not_quiescent')
+        reads, writes = dict(self.plans), dict(self.material.plans)
+        plans = [*reads.values(), *writes.values()]
+        clients = reads.keys() | writes.keys()
+        now = time.monotonic()
+        if (not plans or any(not p.plan_id or p.connection_id != connection or now >= p.expires_at for p in plans)
+                or any(c not in self.sessions or c not in self.session_identities for c in clients)):
+            raise ToolError('reload_binding_unavailable')
+        ticket = object()
+        self._reload_barrier = {'ticket': ticket, 'connection': connection,
+            'deadline': min(now + window, *(p.expires_at for p in plans)),
+            'reads': reads, 'writes': writes,
+            'sessions': {c: (self.sessions[c], self.session_identities[c]) for c in clients}}
+        return ticket
+
+    def suspend_reload_handoff(self, ticket):
+        """Trusted in-process owner seam; not an MCP approval/resume operation.
+
+        Caller must first receive the local Editor's exact approved-cohort ACK.
+        This does not implement OS owner authentication or the owner control pipe.
+        """
+        barrier = self._reload_barrier
+        if (barrier is None or barrier['ticket'] is not ticket or not self.reload_is_frozen()
+                or not self.authenticated or not self.unity_required or self.unity_ingress is None
+                or self.inflight or PluginHub._pending):
+            return False
+        return self.unity_ingress.suspend_reload(ticket)
+
+    async def commit_reload_handoff(self, ticket):
+        """Local coordinator's final ACK, only after C# stage/commit verification.
+
+        Only the connection field changes. No plan, permission, SDK/chat identity,
+        expiry or command is created/renewed/replayed. No installed caller yet.
+        """
+        from dataclasses import replace
+        barrier = self._reload_barrier
+        if barrier is None or barrier['ticket'] is not ticket:
+            return False
+        try:
+            connection = await self.connection()
+            ingress = self.unity_ingress
+            if (self._reload_barrier is not barrier or not self.reload_is_frozen()
+                    or self.inflight or PluginHub._pending or connection == barrier['connection']
+                    or ingress is None or not ingress.reload_committable(ticket, connection)):
+                raise ToolError('reload_binding_changed')
+            reads = {c: replace(p, connection_id=connection) for c, p in barrier['reads'].items()}
+            writes = {c: replace(p, connection_id=connection) for c, p in barrier['writes'].items()}
+            # No awaits after validation: the cohort is committed atomically.
+            self.plans.clear(); self.plans.update(reads)
+            self.material.plans.clear(); self.material.plans.update(writes)
+            self.material.history.clear()  # Old connection reports must not impersonate new history.
+            # scope() uses this exact identity index for execute/status/stop. This
+            # contains no cached report: only the newly bound active plan cohort.
+            self.material.history.update({c: {p.plan_id: p} for c, p in writes.items()})
+            self._reload_barrier = None
+            ingress.finish_reload(ticket)
+            return True
+        except BaseException as exc:
+            if self._reload_barrier is barrier:
+                self.cancel_reload_barrier()
+            if isinstance(exc, Exception):
+                return False
+            raise
+
+    def cancel_reload_barrier(self):
+        barrier, self._reload_barrier = self._reload_barrier, None
+        if barrier is not None:
+            if self.unity_ingress is not None:
+                self.unity_ingress.cancel_reload()
+            # Only the exact frozen generations; never delete replacement plans.
+            for current, saved in ((self.plans, barrier['reads']), (self.material.plans, barrier['writes'])):
+                for client, plan in saved.items():
+                    if current.get(client) is plan:
+                        current.pop(client)
+
+    def reload_is_frozen(self):
+        barrier = self._reload_barrier
+        if barrier is None:
+            return False
+        valid = time.monotonic() < barrier['deadline']
+        valid &= all(self.sessions.get(c) is session and self.session_identities.get(c) == identity
+                     and session not in self.closed_sessions for c, (session, identity) in barrier['sessions'].items())
+        valid &= all(current.keys() == saved.keys() and all(current.get(c) is p for c, p in saved.items())
+                     for current, saved in ((self.plans, barrier['reads']), (self.material.plans, barrier['writes'])))
+        if not valid:
+            self.cancel_reload_barrier()
+            return False
+        return True
+
+    async def release_reload_barrier(self, ticket):
+        barrier = self._reload_barrier
+        if barrier is None or barrier['ticket'] is not ticket:
+            return False
+        try:
+            connection = await self.connection()
+            if (self._reload_barrier is not barrier or not self.reload_is_frozen()
+                    or connection != barrier['connection'] or self.inflight
+                    or (self.unity_ingress is not None and self.unity_ingress.reload_pending())):
+                if self._reload_barrier is barrier:
+                    self.cancel_reload_barrier()
+                return False
+            self._reload_barrier = None  # No plan/expiry/identity change; nothing replayed.
+            return True
+        except BaseException as exc:
+            if self._reload_barrier is barrier:
+                self.cancel_reload_barrier()
+            if isinstance(exc, Exception):
+                return False
+            raise
 
     def client_identity(self, ctx):
         if not self.authenticated:
@@ -297,6 +527,8 @@ class Runtime(Middleware):
         if pending is not None:
             pending.cancelled = True
         plan = self.plans.pop(client, None)  # Revoke synchronously before network I/O.
+        if self._reload_barrier is not None and client in self._reload_barrier['sessions']:
+            self.cancel_reload_barrier()
         if plan is not None:
             await self.notify_stop(client, plan)
         if material_plan is not None:
@@ -332,6 +564,9 @@ class Runtime(Middleware):
                 '本地权限已撤销；Unity撤权未确认（%s）；没有重试或回退。', receipt['reason'])
 
     def connection_closed(self, connection_id):
+        if (self.reload_is_frozen() and self.unity_ingress is not None
+                and self.unity_ingress.expected_reload_close(connection_id)):
+            return  # Only an armed normal close; never EOF/eviction or generic reconnect.
         self.material.connection_closed(connection_id)
         # Native on_disconnect/eviction runs this before yielding. No I/O or
         # automatic reconnect: the lost peer cannot provide a trustworthy ack.
@@ -344,6 +579,8 @@ class Runtime(Middleware):
                 self.plans.pop(client, None)
                 self.lifecycle_results.append({'client_id': client, 'local_revoked': True,
                     'unity_confirmed': False, 'reason': 'unity_connection_closed'})
+        if self._reload_barrier is not None and self._reload_barrier['connection'] == connection_id:
+            self.cancel_reload_barrier()
 
     def current(self):
         invocation = _CURRENT.get()
@@ -366,6 +603,8 @@ class Runtime(Middleware):
         # Signed issuer policy admits the probe; it is never a user client.
         if access is not None and access.client_id.startswith('probe:') and name != 'agent_status':
             raise ToolError('probe_read_only')
+        if self.reload_is_frozen() and name not in ('agent_status', 'agent_stop', 'material_stop'):
+            raise ToolError('planned_reload_frozen')
         from material_runtime import TOOLS
         if name in TOOLS:
             return await self.material.on_call_tool(context, call_next)
@@ -378,6 +617,7 @@ class Runtime(Middleware):
         identity = self.bind_session(ctx)
         invocation = Invocation(self, ctx.session_id, name, args, approval_client=identity)
         token = _CURRENT.set(invocation)
+        self.inflight[id(invocation)] = invocation
         read_succeeded = False
         paused = False
         try:
@@ -390,7 +630,15 @@ class Runtime(Middleware):
                     raise ToolError('prepare_capacity')
                 self.preparing[invocation.client_id] = invocation
             if name in READ_TOOLS:
-                if name == 'read_console':
+                if name in live_effects.TOOLS:
+                    action,target,_ = live_effects.params(name,args)
+                elif name == 'get_test_job':
+                    job_params(args)
+                    action, target = 'observe', 'TestJobs/' + args['job_id']
+                elif name in SOURCE_TOOLS:
+                    target, _ = source_params(name,args)
+                    action = 'get_sha' if name=='get_sha' else 'read'
+                elif name == 'read_console':
                     console_params(args)
                     action, target = 'get', 'Console'
                 elif name == 'manage_scene':
@@ -399,6 +647,9 @@ class Runtime(Middleware):
                 elif name == 'manage_animation' and args.get('action') in ANIMATOR_ACTIONS:
                     animator_params(args)
                     action, target = args['action'], 'Scenes'
+                elif name == 'unity_reflect':
+                    reflection_params(args)
+                    action, target = args['action'], 'ApiMetadata'
                 elif name == 'manage_packages':
                     package_params(args)
                     action, target = 'get_package_info', 'ProjectMetadata'
@@ -412,15 +663,17 @@ class Runtime(Middleware):
                     find_params(args)
                     action, target = 'find', 'Scenes'  # Permission label; NOT a native argument.
                 else:
-                    action, key, _, extension = SPECS[name]
-                    if set(args) != {'action', key} or args['action'] != action:
+                    action=args.get('action')
+                    if type(action) is not str or (name,action) not in SPECS:raise ToolError('operation_not_enabled')
+                    key, _, extension = SPECS[name,action]
+                    if set(args) != {'action', key}:
                         raise ToolError('operation_not_enabled')
-                    target = target_path(args[key])
+                    target = clip_target(args[key]) if extension=='.anim' else target_path(args[key])
                     if not target.endswith(extension):
                         raise ToolError('invalid_target')
                 invocation.plan = self.plans.get(invocation.client_id)
                 self.check_plan(invocation)
-                if (name, action) not in invocation.plan.operations or target not in invocation.plan.targets:
+                if ('manage_script' if name=='get_sha' else name, action) not in invocation.plan.operations or target not in invocation.plan.targets:
                     raise ToolError('outside_plan')
             elif name == 'agent_catalog':
                 if (set(args) - {'offset','limit'} or
@@ -430,7 +683,7 @@ class Runtime(Middleware):
                 raise ToolError('unexpected_arguments')
             elif name == 'agent_stop' and set(args) != {'task_id'}:
                 raise ToolError('unexpected_arguments')
-            elif name == 'agent_prepare' and set(args) != {'task_id', 'operations', 'targets', 'ttl_seconds'}:
+            elif name == 'agent_prepare' and (not {'task_id', 'operations', 'targets', 'ttl_seconds'} <= set(args) or set(args) - {'task_id', 'operations', 'targets', 'ttl_seconds', 'effects'}):
                 raise ToolError('unexpected_arguments')
             if name == 'agent_prepare' and type(args.get('ttl_seconds')) not in (int, float):
                 raise ToolError('invalid_ttl')
@@ -462,6 +715,7 @@ class Runtime(Middleware):
                 invocation.active = False
                 if self.preparing.get(invocation.client_id) is invocation:
                     self.preparing.pop(invocation.client_id, None)
+                self.inflight.pop(id(invocation), None)
                 _CURRENT.reset(token)
 
     def check_plan(self, invocation):
@@ -522,19 +776,27 @@ class Runtime(Middleware):
                 or (self.unity_required and (self.unity_ingress is None or
                     not self.unity_ingress.allows(session)))):
             raise ToolError('request_not_bound')
-        if command != invocation.name:
+        if command != ('manage_script' if invocation.name=='get_sha' else invocation.name):
             raise ToolError('operation_not_enabled')
         from material_runtime import TOOLS
         if command in TOOLS:
             return self.material.envelope(invocation, session_id, command, params)
         if command in READ_TOOLS:
             self.check_plan(invocation)
-            if command == 'read_console':
+            if command in live_effects.TOOLS:
+                expected = live_effects.params(command,invocation.arguments)[2]
+            elif command == 'get_test_job':
+                expected = job_params(invocation.arguments)
+            elif command in SOURCE_TOOLS:
+                _, expected = source_params(invocation.name,invocation.arguments)
+            elif command == 'read_console':
                 expected = console_params(invocation.arguments)
             elif command == 'manage_scene':
                 expected = scene_params(invocation.arguments)
             elif command == 'manage_animation' and invocation.arguments.get('action') in ANIMATOR_ACTIONS:
                 expected = animator_params(invocation.arguments)
+            elif command == 'unity_reflect':
+                expected = reflection_params(invocation.arguments)
             elif command == 'manage_packages':
                 expected = package_params(invocation.arguments)
             elif command in METADATA_TOOLS:
@@ -544,7 +806,8 @@ class Runtime(Middleware):
             elif command == 'find_gameobjects':
                 expected = find_params(invocation.arguments)
             else:
-                action, key, wire_key, _ = SPECS[command]
+                action=invocation.arguments['action']
+                key, wire_key, _ = SPECS[command,action]
                 expected = {'action': action, wire_key: invocation.arguments[key]}
             if params != expected:
                 raise ToolError('operation_not_enabled')
@@ -554,7 +817,7 @@ class Runtime(Middleware):
             kind = command.removeprefix('agent_')
             body = params
             expected = {} if kind in ('status', 'stop') else {
-                k: invocation.arguments[k] for k in ('operations', 'targets', 'ttl_seconds')}
+                k: invocation.arguments[k] for k in ('operations', 'targets', 'ttl_seconds', 'effects') if k in invocation.arguments}
             if params != expected:
                 raise ToolError('unexpected_arguments')
         plan = invocation.plan
@@ -570,32 +833,55 @@ class Runtime(Middleware):
             'plan_id': plan.plan_id if plan else '', 'body': body,
         }
 
-    async def prepare(self, task_id, operations, targets, ttl_seconds):
+    async def prepare(self, task_id, operations, targets, ttl_seconds, effects=None):
         invocation = self.current()
         exact_id(task_id)
         if type(ttl_seconds) not in (int, float) or not math.isfinite(ttl_seconds) or not 0 < ttl_seconds <= 900:
             raise ToolError('invalid_ttl')
-        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS) + 3 + len(SCENE_ACTIONS) + len(OBJECT_TOOLS) + len(ANIMATOR_ACTIONS) + len(METADATA_TOOLS):
+        if not isinstance(operations, list) or not 1 <= len(operations) <= len(SPECS) + len(SOURCE_TOOLS) + len(REFLECTION_ACTIONS) + 3 + len(SCENE_ACTIONS) + len(OBJECT_TOOLS) + len(ANIMATOR_ACTIONS) + len(METADATA_TOOLS):
             raise ToolError('invalid_operations')
         pairs = []
         for operation in operations:
             if type(operation) is not dict or set(operation) != {'command', 'action'}:
                 raise ToolError('invalid_operations')
             command = operation['command']
-            allowed = (ANIMATOR_ACTIONS | {'controller_get_info'} if command == 'manage_animation' else
+            allowed = (live_effects.ACTIONS[command] if command in live_effects.TOOLS else
+                       {'observe'} if command == 'get_test_job' else
+                       ANIMATOR_ACTIONS | {'controller_get_info','clip_get_info'} if command == 'manage_animation' else
+                       {'read','get_sha'} if command == 'manage_script' else
+                       REFLECTION_ACTIONS if command == 'unity_reflect' else
                        {'get_package_info'} if command == 'manage_packages' else
                        SCENE_ACTIONS if command == 'manage_scene' else
-                       {'read'} if command in OBJECT_TOOLS | METADATA_TOOLS.keys() else
+                       {'read'} if command in OBJECT_TOOLS | METADATA_TOOLS.keys() | {'manage_shader'} else
                        {'find'} if command == 'find_gameobjects' else
                        {'get'} if command == 'read_console' else
-                       {SPECS[command][0]} if command in SPECS else set())
+                       {action for name,action in SPECS if name==command})
             if type(operation['action']) is not str or operation['action'] not in allowed:
                 raise ToolError('operation_not_enabled')
             pairs.append((command, operation['action']))
         if (type(targets) is not list or not 1 <= len(targets) <= 64
                 or len(set(targets)) != len(targets) or len(set(pairs)) != len(pairs)):
             raise ToolError('invalid_targets')
+        is_job = ('get_test_job', 'observe') in pairs
+        is_live_effect = any(c in live_effects.TOOLS for c,a in pairs)
+        if is_live_effect:
+            live_effects.manifest(pairs,targets,effects)
+        elif is_job:
+            if len(pairs) != 1 or len(targets) != 1:
+                raise ToolError('job_requires_separate_exact_plan')
+            job_target(targets[0])
+            if (type(effects) is not list or len(effects) != 1 or type(effects[0]) is not dict
+                    or set(effects[0]) != {'kind', 'version'}
+                    or effects[0]['kind'] != 'project_test_job_maintenance'
+                    or type(effects[0]['version']) is not int or effects[0]['version'] != 1):
+                raise ToolError('explicit_job_effect_required')
+        elif 'effects' in invocation.arguments:
+            raise ToolError('unexpected_effects')
         for target in targets:
+            if is_job or is_live_effect:
+                continue
+            if target == 'ApiMetadata' and any(command == 'unity_reflect' for command, action in pairs):
+                continue
             if target == 'Console' and ('read_console', 'get') in pairs:
                 continue
             if target == 'Scenes' and any(command in {'manage_scene','find_gameobjects'} | OBJECT_TOOLS or
@@ -604,8 +890,12 @@ class Runtime(Middleware):
             if ((target == 'ProjectMetadata' and any(command in PROJECT_TOOLS or command == 'manage_packages' for command, action in pairs)) or
                     (target == 'EditorMetadata' and any(command in EDITOR_TOOLS for command, action in pairs))):
                 continue
-            target_path(target)
-            if not any(c in SPECS and a == SPECS[c][0] and target.endswith(SPECS[c][3]) for c, a in pairs):
+            if ((target.endswith('.cs') and any(('manage_script',a) in pairs for a in ('read','get_sha'))) or
+                    (target.endswith('.shader') and ('manage_shader','read') in pairs)):
+                source_target(target)
+                continue
+            clip_target(target) if target.endswith('.anim') else target_path(target)
+            if not any((c,a) in SPECS and target.endswith(SPECS[c,a][2]) for c, a in pairs):
                 raise ToolError('invalid_target')
         # Bound idle session storage. Expiry removes mapping, never renews Unity approval.
         self.plans = {k: p for k, p in self.plans.items() if p.expires_at > time.monotonic()}
@@ -621,14 +911,15 @@ class Runtime(Middleware):
         self.plans[invocation.client_id] = plan
         returned_plan = None
         try:
-            result = await PluginHub.send_command(connection, 'agent_prepare', {
-                'operations': operations, 'targets': targets, 'ttl_seconds': ttl_seconds})
+            body = {'operations': operations, 'targets': targets, 'ttl_seconds': ttl_seconds}
+            if is_job or is_live_effect: body['effects'] = effects
+            result = await PluginHub.send_command(connection, 'agent_prepare', body)
             data = result.get('data', {})
             if result.get('success') is not True or data.get('status') != 'pending':
                 raise ToolError('prepare_not_pending')
             plan_id = exact_id(data.get('plan_id'))
             returned_plan = Plan(plan.task_id, connection, plan.expires_at,
-                                 plan.operations, plan.targets, plan_id, plan.approval_client)
+                                 plan.operations, plan.targets, plan_id, plan.approval_client, data.get('digest', ''))
             current_connection = await self.connection()
             if (self.plans.get(invocation.client_id) is not plan or current_connection != connection
                     or time.monotonic() >= plan.expires_at or not invocation.active or invocation.cancelled):
@@ -641,6 +932,15 @@ class Runtime(Middleware):
             if returned_plan is not None and invocation.client_id not in self.sessions:
                 await self.notify_stop(invocation.client_id, returned_plan)
             raise
+
+    def stop_suspended_handoff(self, plan):
+        barrier = self._reload_barrier
+        ingress = self.unity_ingress
+        if (barrier is not None and ingress is not None and ingress.reload_pending()
+                and any(saved is plan for saved in (*barrier['reads'].values(), *barrier['writes'].values()))):
+            self.cancel_reload_barrier()
+            return {'success': True, 'data': {'status': 'locally_stopped', 'unity_confirmed': False}}
+        return None
 
     async def stop(self, task_id):
         invocation = self.current()
@@ -655,7 +955,11 @@ class Runtime(Middleware):
             return {'success': True, 'data': {'status': 'locally_stopped', 'unity_confirmed': False}}
         if plan.task_id != task_id:
             raise ToolError('task_mismatch')
+        stopped = self.stop_suspended_handoff(plan)
+        if stopped is not None:
+            return stopped
         invocation.plan = self.plans.pop(invocation.client_id)
+        self.reload_is_frozen()  # Invalidated mapping cancels the barrier before I/O.
         return await PluginHub.send_command(plan.connection_id, 'agent_stop', {})
 
 
@@ -697,6 +1001,9 @@ def create_server(project_id, *, mcp_auth=None):
     @server.tool
     async def agent_status(ctx: Context) -> dict:
         """读取所选Unity工程受控入口状态；不授予权限。"""
+        if runtime.reload_is_frozen():
+            return {'success': True, 'data': {'status': 'planned_reload_frozen',
+                'ready': False, 'read_only': True, 'project_id': runtime.project_id}}
         result = await PluginHub.send_command(await runtime.connection(), 'agent_status', {})
         if type(result) is dict and result.get('success') is True and type(result.get('data')) is dict:
             result = {**result, 'data': {**result['data'], 'project_id': runtime.project_id}}
@@ -710,18 +1017,57 @@ def create_server(project_id, *, mcp_auth=None):
 
     @server.tool
     async def agent_prepare(task_id: str, operations: list[dict], targets: list[str],
-                            ttl_seconds: float, ctx: Context) -> dict:
+                            ttl_seconds: float, ctx: Context, effects: list[dict] | None = None) -> dict:
         """提交明确清单供Unity本地核对；仅pending，不批准或续权。"""
-        return await runtime.prepare(task_id, operations, targets, ttl_seconds)
+        return await runtime.prepare(task_id, operations, targets, ttl_seconds, effects)
 
     @server.tool
     async def agent_stop(task_id: str, ctx: Context) -> dict:
         """立即关闭本会话清单映射，通知Unity撤权；不回滚文件。"""
         return await runtime.stop(task_id)
 
+    @server.tool(name='get_test_job', annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True,
+                 idempotentHint=False, openWorldHint=False))
+    async def observed_test_job(job_id: str, ctx: Context, include_details: bool = False,
+                                include_failed_tests: bool = False) -> dict:
+        """实时查询精确TestJobs/<32位小写job_id>；须独立工程级维护开关和含effects的本地批准清单。
+        可能恢复其他过期作业、保存SessionState及裁剪历史，不是纯只读。不启动/清空测试、不抢焦点、不后台轮询。
+        effects必须为[{kind:project_test_job_maintenance,version:1}]，操作get_test_job/observe；不与其他操作/目标混批。
+        """
+        try:
+            result = await native_get_test_job(ctx, job_id, include_failed_tests=include_failed_tests,
+                                              include_details=include_details, wait_timeout=None)
+            payload = result.model_dump(mode='json')
+            if payload.get('success') is True:
+                data = payload.get('data')
+                if type(data) is not dict or data.get('job_id') != job_id or data.get('status') not in {'running','succeeded','failed'}:
+                    raise ToolError('invalid_job_response')
+                receipt = data.get('candidate_effects')
+                if (type(receipt) is not dict or set(receipt) != {'kind','version','project_wide','read_only',
+                        'all_mutations_observed','persistence','observed_at_utc'}
+                        or receipt['kind'] != 'project_test_job_maintenance'
+                        or type(receipt['version']) is not int or receipt['version'] != 1
+                        or receipt['project_wide'] is not True or receipt['read_only'] is not False
+                        or receipt['all_mutations_observed'] is not False
+                        or receipt['persistence'] not in ('not_claimed','target_timeout_state_confirmed')
+                        or type(receipt['observed_at_utc']) is not str or not 1 <= len(receipt['observed_at_utc']) <= 64):
+                    raise ToolError('invalid_job_receipt')
+            return payload
+        except Exception:
+            # The native fetch may already have maintained project state. A lost
+            # or malformed receipt cannot establish that nothing happened, and
+            # must not expose raw native/Pydantic response contents.
+            raise ToolError('job_observation_unconfirmed; effects_may_have_occurred=true; '
+                            '作业维护结果未确认；可能已发生工程级副作用，不自动重试或回退。') from None
+
+    live_effects.register(server,runtime)
+    server.tool(unity_reflect, description='仅固定13种UnityEngine核心类型的原生API元数据；独立ApiMetadata批准。get_type需class_name，get_member另需member_name，search需query和scope=unity；仅规范标识符。拒绝程序集限定名/泛型/额外参数。不扫描程序集，不执行getter/方法；不支持第三方/项目类型或扩展方法，结果不代表全工程API目录。')
     server.tool(read_console, description='仅本地批准Console范围后的get；必须action=get、format=json、page_size整数1–100。仅types(error/warning/log)、cursor整数0–1000000、filter_text、include_stacktrace布尔可选；拒绝clear/count/类型转换。分页total在truncated时仅为下界，实时日志非冻结快照。')
     # Module-local adapter: installed only by this candidate server factory.
     import importlib
+    job_module = importlib.import_module('services.tools.run_tests')
+    job_module.should_nudge = no_job_focus_nudge
+    job_module.GetTestJobResponse = CandidateJobResponse
     importlib.import_module('services.tools.manage_scene').preflight = scene_read_preflight
     importlib.import_module('services.tools.find_gameobjects').preflight = scene_read_preflight
     for name, reader in EDITOR_TOOLS.items():
@@ -737,6 +1083,9 @@ def create_server(project_id, *, mcp_auth=None):
     server.tool(manage_scene, description='仅本地批准Scenes范围后的get_active/get_build_settings/get_loaded_scenes（仅action）和get_hierarchy。层级必填page_size整数1–100；可选cursor整数0–1000000、parent非零int32的当前场景/Prefab Stage内GameObject ID、include_transform布尔。拒绝名称/路径、max_depth、加载/保存/刷新/修复。validate必须仅action和显式auto_repair=false，不修复、不Undo、不标脏；问题记录最多200条，totalIssues按脚本/Prefab问题数量统计，非对象记录数，全场景遍历可能耗时。单层实时摘要，非冻结完整树或完整组件属性；childrenPageSizeDefault仅上游提示，不扩大100条上限。')
     server.tool(manage_animation, description='controller_get_info仅精确批准的controller_path；animator_get_info/animator_get_parameter需独立Scenes批准，必填规范非零int32字符串target与search_method=by_id。get_parameter仅properties字典parameter_name精确名称；get_info不接受properties。仅当前场景/Prefab Stage，参数最多256、层最多64，info含至多1024个已引用clip摘要。Trigger沿用原生GetBool结果，不承诺触发器队列状态。拒绝播放、赋值、修改、刷新与任何其他参数。')
     server.tool(manage_packages, description='仅get_package_info与规范小写已安装包名package（最长214字符），独立ProjectMetadata清单批准。复用本地GetAllRegisteredPackages，返回版本/描述/作者/来源/绝对路径/依赖元数据；不是包内容授权，不查询远端或触发UPM任务。拒绝其他action及多余参数；依赖超1024/输出预算拒绝。')
+    server.tool(manage_shader, description='仅read，必须提供规范Assets子目录path及无扩展名name；精确.shader及.meta证据核验。拒绝默认目录、变更、导入或刷新，原始/解码文本均限128KiB。不是编辑或编译授权。')
+    server.tool(get_sha, description='仅规范Assets/*.cs uri，清单权限manage_script/get_sha；复用原生别名，不接受file或mcp URI/转义/遍历。sha256与lengthBytes基于解码后的UTF8文本，不是原始磁盘字节摘要；不会授予读取正文或写入权限。')
+    server.tool(manage_script, description='仅read与精确批准Assets/*.cs；参数恰为action、无后缀name、明确目录path。整文件至多128KiB，拒绝写入/编译/多余参数/URI归一化。复用上游读取，会向Console追加弃用提示；不是资源协议或脚本执行授权。')
     server.tool(manage_material, description='仅已批准get_material_info；其他操作拒绝。')
     from material_runtime import register
     register(server, runtime.material)

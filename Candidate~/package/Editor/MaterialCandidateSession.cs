@@ -16,8 +16,9 @@ namespace Yukino.VRChatAgent
         static MaterialCandidateSession()
         {
             LoadTaskRecords(Gate);
+            LoadTransactionHistory(Gate);
             EditorApplication.update+=Gate.Observe;
-            EditorApplication.quitting+=()=>{Revoke();SessionState.EraseString(RecordKey);};
+            EditorApplication.quitting+=()=>{Revoke();SessionState.EraseString(RecordKey);SessionState.EraseString(HistoryKey);};
             AssemblyReloadEvents.beforeAssemblyReload+=SaveTaskRecords;
             EditorApplication.playModeStateChanged+=_=>Revoke();
         }
@@ -39,11 +40,46 @@ namespace Yukino.VRChatAgent
             }
             catch{target.StopAll("任务记录无效；未恢复任何授权");}
         }
+        static string HistoryKey=>"Yukino.VRChatAgent.material-transactions.v1."+CoplayProjectIdentity.GetProjectHash();
+        static void LoadTransactionHistory(MaterialCandidateGate target)
+        {
+            string raw=SessionState.GetString(HistoryKey,"");SessionState.EraseString(HistoryKey);
+            if(raw.Length==0)return;
+            if(raw=="save_failed"){target.StopAll("上次交易历史保存失败；历史不完整，未恢复授权或检查点");return;}
+            try
+            {
+                if(System.Text.Encoding.UTF8.GetByteCount(raw)>4*1024*1024)throw new InvalidDataException();
+                using(var text=new StringReader(raw))using(var reader=new JsonTextReader(text){MaxDepth=16})
+                {
+                    var history=JArray.Load(reader,new JsonLoadSettings{DuplicatePropertyNameHandling=DuplicatePropertyNameHandling.Error});
+                    if(reader.Read() || !target.ImportTransactionHistory(history))throw new InvalidDataException();
+                }
+            }
+            catch{target.StopAll("交易历史无效；未恢复授权或撤回检查点");}
+        }
+        internal static void SaveReloadHistory(JArray records, JArray history)
+        {
+            // Validate inert snapshots before writing either key; no restored grant.
+            var check=new MaterialCandidateGate(()=>EditorApplication.timeSinceStartup,CoplayProjectIdentity.GetProjectHash,()=>null,null);
+            if(!check.ImportTaskRecords(records) || !check.ImportTransactionHistory(history))throw new InvalidDataException();
+            SessionState.SetString(RecordKey,records.ToString(Formatting.None));
+            SessionState.SetString(HistoryKey,history.ToString(Formatting.None));
+        }
         static void SaveTaskRecords()
         {
-            Revoke();SessionState.EraseString(RecordKey);
+            if(CandidateReload.PreserveHistory)return;
+            Revoke();SessionState.EraseString(RecordKey);SessionState.EraseString(HistoryKey);
             try{SessionState.SetString(RecordKey,Gate.ExportTaskRecords().ToString(Formatting.None));}
             catch{Gate.StopAll("任务记录未保存；授权已撤销");}
+            try
+            {
+                var history=Gate.ExportTransactionHistory();
+                // Validate the whole export against the same bounded inert import.
+                var check=new MaterialCandidateGate(()=>EditorApplication.timeSinceStartup,CoplayProjectIdentity.GetProjectHash,()=>null,null);
+                if(!check.ImportTransactionHistory(history))throw new InvalidDataException();
+                SessionState.SetString(HistoryKey,history.ToString(Formatting.None));
+            }
+            catch{SessionState.SetString(HistoryKey,"save_failed");Gate.StopAll("交易历史未完整保存；授权已撤销，当前报告仍保留");}
         }
         static void Revoke()=>Gate.StopAll("编辑器生命周期已撤权，不回退");
         internal static void Draw()
@@ -81,17 +117,24 @@ namespace Yukino.VRChatAgent
                 else if (GUILayout.Button("暂停此清单（不回退）")) Gate.Pause((string)plan["plan_id"], (string)plan["digest"]);
                 EditorGUI.EndDisabledGroup();
             }
-            foreach(JObject row in Gate.LocalTransactions())
+            DrawTransactions(Gate);
+        }
+        internal static void DrawTransactions(MaterialCandidateGate target)
+        {
+            foreach(JObject row in target.LocalTransactions())
             {
                 var tx=row["transaction"];EditorGUILayout.LabelField("修改报告",tx.ToString());
-                EditorGUILayout.HelpBox("撤回仅作用于此步骤直接改动，先核postimage。复制产生的候选保留，不自动删除；按反向步骤撤回。重载后本轮内存撤回记录不保留。",MessageType.Info);
-                EditorGUI.BeginDisabledGroup((bool)row["withdrawn"] || (string)tx["action"]=="copy");
-                if(GUILayout.Button("明确撤回此步骤 "+(string)tx["id"]))Gate.Withdraw((string)tx["id"]);
+                EditorGUILayout.LabelField("记录原连接",(string)row["connection_id"]);
+                if((string)row["withdrawal_unavailable_reason"]=="domain_reload_checkpoint_lost")
+                    EditorGUILayout.LabelField("重载前记录：无撤回检查点",(bool)row["withdrawn"]?"此前已撤回；保留原结果":"仅保留历史，不代表已撤回");
+                EditorGUILayout.HelpBox("撤回仅作用于此步骤直接改动，先核postimage。复制产生的候选保留，不自动删除；按反向步骤撤回。重载后历史保留，但不恢复内存撤回检查点。",MessageType.Info);
+                EditorGUI.BeginDisabledGroup((bool?)row["withdrawal_available"]!=true);
+                if(GUILayout.Button("明确撤回此步骤 "+(string)tx["id"]))target.Withdraw((string)tx["id"]);
                 EditorGUI.EndDisabledGroup();
             }
         }
         static void Capability(string operation,string chinese)
-        {bool current=Gate.Allows(operation);bool next=EditorGUILayout.ToggleLeft(chinese,current);if(next!=current)Gate.SetCapability(operation,next);}
+        {bool current=Gate.Allows(operation);bool next=EditorGUILayout.ToggleLeft(chinese,current);if(next!=current){CandidateReload.Cancel();Gate.SetCapability(operation,next);}}
     }
     // Not an alias of vrchat_agent_dispatch; runtime must explicitly gate this route.
     // No global discovery or dispatch; compatibility calls always fail closed.

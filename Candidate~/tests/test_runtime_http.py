@@ -78,7 +78,7 @@ class RuntimeHTTPTests(unittest.IsolatedAsyncioTestCase):
                     try:
                         async with Client(url + '/mcp') as client:
                             self.assertEqual({t.name for t in await client.list_tools()}, {
-                                'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene', 'find_gameobjects', 'get_gameobject', 'get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
+                                'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene', 'find_gameobjects', 'get_gameobject', 'get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','manage_script','get_sha','manage_shader','unity_reflect','get_test_job','manage_asset','manage_prefabs','get_tests',
                                 'material_prepare', 'material_execute', 'material_status', 'material_stop'})
                             status = await client.call_tool('agent_status', {})
                             self.assertTrue(status.data['data']['fixture_only'])

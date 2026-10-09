@@ -3,7 +3,8 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
- public class AnimationClip:Object {}
+ public class AnimationClip:Object {public float length,frameRate;public string wrapMode="Loop";}
+ public static class Resources {public static Object[] Items=Array.Empty<Object>();public static T[] FindObjectsOfTypeAll<T>() where T:Object=>System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<T>(Items));}
  public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
  public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
 
@@ -19,7 +20,7 @@ namespace UnityEngine {
  public class MeshRenderer : Renderer {}
  public class SkinnedMeshRenderer : Renderer {}
  public class Material : Object { public Shader shader=new Shader(); public bool HasProperty(string name)=>true; public Texture Texture;public string[] GetTexturePropertyNames()=>Texture==null?Array.Empty<string>():new[]{"_MainTex"};public Texture GetTexture(string name)=>Texture;public void SetTexture(string name,Texture tex){Texture=tex;}public Color GetColor(string name)=>new Color();public Vector4 GetVector(string name)=>new Vector4();public float GetFloat(string name)=>0.7f; }
- public static class Application { public static string dataPath; }
+ public static class Application { public static string dataPath; public static string unityVersion="fixture-2022.3"; }
  public struct Vector2 {}
  public struct Color { public float r,g,b,a; }
  public struct Vector4 { public float x,y,z,w; }
@@ -33,6 +34,14 @@ namespace UnityEngine {
 }
 namespace UnityEngine.SceneManagement { public class Scene { public bool isLoaded=true,isDirty;public string path="Assets/test.unity";public bool IsValid()=>true; } }
 namespace UnityEditor.SceneManagement { public class PrefabStage { public UnityEngine.SceneManagement.Scene scene; } public static class PrefabStageUtility { public static PrefabStage GetCurrentPrefabStage()=>null; } public static class EditorSceneManager { public static UnityEngine.SceneManagement.Scene GetActiveScene()=>new UnityEngine.SceneManagement.Scene(); public static Action sceneDirtied;public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene s){s.isDirty=true;return true;} } }
+namespace UnityEditor.Compilation {
+ public static class CompilationPipeline {
+  public static event Action<object> compilationStarted;
+  public static int Requests;
+  public static void RequestScriptCompilation(){Requests++;}
+  public static void Start(){UnityEditor.EditorApplication.isCompiling=true;compilationStarted?.Invoke(null);}
+ }
+}
 namespace UnityEditor {
  [AttributeUsage(AttributeTargets.Class)] public class InitializeOnLoadAttribute : Attribute {}
  [AttributeUsage(AttributeTargets.Method)] public class MenuItemAttribute : Attribute { public MenuItemAttribute(string s) {} }
@@ -60,6 +69,7 @@ namespace UnityEditor {
   public static Type GetMainAssetTypeAtPath(string path)=>Objects.TryGetValue(path,out var o)?o.GetType():typeof(UnityEngine.Material);
   public static T LoadAssetAtPath<T>(string path) where T:UnityEngine.Object => Objects.TryGetValue(path,out var o)?o as T:null;
   public static void SaveAssetIfDirty(UnityEngine.Object o){Saves++;System.IO.File.WriteAllText(GetAssetPath(o),UnityEditor.EditorJsonUtility.ToJson(o));}
+  public static bool IsMainAsset(UnityEngine.Object o)=>Objects.ContainsValue(o);
   public static bool IsValidFolder(string path)=>System.IO.Directory.Exists(path);
   public static string GetAssetPath(UnityEngine.Object obj){foreach(var p in Objects)if(ReferenceEquals(p.Value,obj))return p.Key;return "Assets/source.mat";}
   public static string AssetPathToGUID(string path) => System.IO.File.Exists(path)?"fixture-guid":"";
@@ -81,7 +91,8 @@ namespace UnityEditor {
   public static int IntField(string label,int value)=>value;
   public static string NextText; public static string TextField(string label,string value) {var result=NextText??value;NextText=null;return result;}
   public static readonly List<string> Labels = new List<string>();
-  public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v)=>v;
+  public static string NextToggle;
+  public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v){if(EditorGUI.Disabled || NextToggle!=s)return v;NextToggle=null;return !v;}
   public static void LabelField(string a, string b=""){Labels.Add(a+":"+b);} public static void Space(){}
   public static UnityEngine.Vector2 BeginScrollView(UnityEngine.Vector2 v)=>v; public static void EndScrollView(){}
  }

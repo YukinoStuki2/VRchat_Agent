@@ -3,15 +3,28 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
- public class AnimationClip:Object {}
+#if SOURCE_NATIVE_TESTS
+ public class Material:Object{} public class Shader:Object{} public class SkinnedMeshRenderer:Component{}
+ public struct Vector3{} public struct Quaternion{} public struct Color{}
+#endif
+ public class AnimationClip:Object {public float length,frameRate;public string wrapMode="Loop";}
+ public static class Resources {public static Object[] Items=Array.Empty<Object>();public static T[] FindObjectsOfTypeAll<T>() where T:Object=>System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<T>(Items));}
  public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
  public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
 
- public class Object { public bool Persistent; public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
+ public class Object { public static void DestroyImmediate(Object o)=>throw new Exception("unexpected_destroy"); public bool Persistent; public string name, Json = "fixture-memory"; public int GetInstanceID() => 1; }
  public class Component : Object {}
- public class Transform : Component {public int childCount;}
- public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; public Transform transform=new Transform(); public Component[] Components=Array.Empty<Component>(); public T[] GetComponents<T>() where T:Component=>Array.ConvertAll(Components,x=>(T)x); }
- public static class Application { public static string dataPath; }
+ public class Transform : Component,System.Collections.IEnumerable {public int childCount;
+  public GameObject gameObject;public Transform parent;
+  public Transform GetChild(int i)=>throw new Exception("no_child_in_fixture");
+  public System.Collections.IEnumerator GetEnumerator()=>Array.Empty<Transform>().GetEnumerator();
+#if SOURCE_NATIVE_TESTS
+  public static int MetadataGetterCalls; public static int MetadataOnly {get{MetadataGetterCalls++;return 1;}}
+  public void Translate(float x,float y,float z) {throw new Exception("metadata called method");}
+#endif
+ }
+ public class GameObject : Object { public bool activeSelf=true; public GameObject(){transform.gameObject=this;} public UnityEngine.SceneManagement.Scene scene; public Transform transform=new Transform(); public Component[] Components=Array.Empty<Component>(); public T[] GetComponents<T>() where T:Component=>Array.ConvertAll(Components,x=>(T)x); }
+ public static class Application { public static string dataPath; public static string unityVersion="fixture-2022.3"; }
  public struct Vector2 {}
  public static class GUILayout {
   public static string NextButton; public static Action BeforeClick;
@@ -44,12 +57,26 @@ namespace UnityEditor {
  public static class EditorApplication {
   public static bool isCompiling, isUpdating, isPlayingOrWillChangePlaymode; public static double timeSinceStartup = 100;
   public static event Action update, quitting; public static event Action<PlayModeStateChange> playModeStateChanged;
+  public static int Updates=>update?.GetInvocationList().Length??0;public static int Quits=>quitting?.GetInvocationList().Length??0;
   public static void Tick() => update?.Invoke(); public static void Quit() => quitting?.Invoke(); public static void Play() => playModeStateChanged?.Invoke(PlayModeStateChange.ExitingEditMode);
  }
- public static class AssemblyReloadEvents { public static event Action beforeAssemblyReload; public static void Reload() => beforeAssemblyReload?.Invoke(); }
- public static class AssetDatabase {
+ public static class AssemblyReloadEvents { public static event Action beforeAssemblyReload;public static int Count=>beforeAssemblyReload?.GetInvocationList().Length??0; public static void Reload() => beforeAssemblyReload?.Invoke(); }
+ public enum ImportAssetOptions { ForceSynchronousImport }
+ public static partial class AssetDatabase {
   public static UnityEngine.Object Asset = new UnityEngine.Object();
-  public static string AssetPathToGUID(string path) => "fixture-guid";
+  public static string ClipPath;
+  public static string GetAssetPath(UnityEngine.Object o)=>ReferenceEquals(o,Asset)?ClipPath:"";
+  public static Type GetMainAssetTypeAtPath(string path)=>path==ClipPath?Asset.GetType():null;
+  public static bool IsMainAsset(UnityEngine.Object o)=>ReferenceEquals(o,Asset);
+  public static T LoadAssetAtPath<T>(string path) where T:UnityEngine.Object=>path==ClipPath?Asset as T:null;
+  public static int SourceReads; public static int RefreshCalls; public static void Refresh(ImportAssetOptions x) { RefreshCalls++; throw new Exception("unexpected refresh"); }
+  public static string AssetPathToGUID(string path){SourceReads++;
+#if PLUGIN_NATIVE_ASSETS
+   return path==ClipPath?new string('a',32):"";
+#else
+   return "fixture-guid";
+#endif
+  }
   public static string GetAssetDependencyHash(string path) => "fixture-dependency-hash";
   public static UnityEngine.Object[] LoadAllAssetsAtPath(string path) => new[] { Asset };
  }
@@ -60,7 +87,7 @@ namespace UnityEditor {
   public static string NextText; public static string TextField(string label,string value) {var result=NextText??value;NextText=null;return result;}
   public static readonly List<string> Labels = new List<string>();
   public static string NextToggle;
-  public static void HelpBox(string s, MessageType t){} public static bool ToggleLeft(string s, bool v){
+  public static void HelpBox(string s, MessageType t){Labels.Add("help:"+s);} public static bool ToggleLeft(string s, bool v){
    if(EditorGUI.Disabled || NextToggle!=s)return v;NextToggle=null;return !v;
   }
   public static void LabelField(string a, string b=""){Labels.Add(a+":"+b);} public static void Space(){}
@@ -85,6 +112,9 @@ namespace MCPForUnity.Editor.Services.Transport.Transports {
  }
 }
 namespace MCPForUnity.Editor.Services {
+#if SOURCE_NATIVE_TESTS
+ public static class EditorStateCache {public static bool GetActualIsCompiling()=>UnityEditor.EditorApplication.isCompiling;}
+#endif
  public static class MCPServiceLocator { public static Transport.TransportManager TransportManager = new Transport.TransportManager(); }
 }
 namespace MCPForUnity.Editor.Tools {
@@ -106,6 +136,9 @@ namespace MCPForUnity.Editor.Tools.Animation {
  public static class ManageAnimation {
   public static int Calls;public static bool WrongName;
   public static object HandleCommand(JObject args){
+#if SOURCE_NATIVE_TESTS
+   if((string)args["action"]=="clip_get_info"){Calls++;return MCPForUnity.Editor.Tools.Animation.ClipCreate.GetInfo(args);}
+#endif
    Calls++;if((string)args["action"]=="animator_get_parameter")return new {success=true,data=(object)new {name=WrongName?"wrong":"Speed",type="Float",value=0.5f}};
    return new {success=true,data=(object)new {gameObject=WrongName?"wrong":"Avatar",enabled=true,speed=1,hasController=false,controllerName=(string)null,applyRootMotion=false,updateMode="Normal",cullingMode="AlwaysAnimate",parameterCount=0,layerCount=0,parameters=new object[0],layers=new object[0],clips=new object[0]}};
   }

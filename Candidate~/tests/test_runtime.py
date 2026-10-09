@@ -488,7 +488,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await self.client.call_tool('manage_scene',args,raise_on_error=False)).is_error)
 
     async def test_RT024_nine_read_manifest_matches_final_gate_capacity(self):
-        reads=[('manage_packages',{'action':'get_package_info','package':'com.unity.ugui'}),('get_menu_items',{}),('get_selection',{}),('get_windows',{}),('get_active_tool',{}),('get_prefab_stage',{}),('get_project_info',{}),('get_tags',{}),('get_layers',{}),('manage_animation',READ),
+        reads=[('manage_script',{'action':'read','name':'Read','path':'Assets/Scripts'}),('get_sha',{'uri':'Assets/Scripts/Read.cs'}),('manage_shader',{'action':'read','name':'Read','path':'Assets/Shaders'}),('manage_packages',{'action':'get_package_info','package':'com.unity.ugui'}),('get_menu_items',{}),('get_selection',{}),('get_windows',{}),('get_active_tool',{}),('get_prefab_stage',{}),('get_project_info',{}),('get_tags',{}),('get_layers',{}),('manage_animation',READ),
                ('manage_animation',{'action':'animator_get_info','target':'11','search_method':'by_id'}),
                ('manage_animation',{'action':'animator_get_parameter','target':'11','search_method':'by_id','properties':{'parameter_name':'Speed'}}),
                ('manage_material',{'action':'get_material_info','material_path':MATERIAL}),
@@ -501,8 +501,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                ('get_gameobject',{'instance_id':'11'}),
                ('get_gameobject_components',{'instance_id':'11','page_size':2,'include_properties':False}),
                ('find_gameobjects',{'search_term':'Root','search_method':'by_name','include_inactive':True,'page_size':2})]
-        operations=[{'command':name,'action':args.get('action','find' if name=='find_gameobjects' else 'read')} for name,args in reads]
-        prepare={**PREPARE,'operations':operations,'targets':[CONTROLLER,MATERIAL,'Console','Scenes','ProjectMetadata','EditorMetadata']}
+        operations=[{'command':'manage_script' if name=='get_sha' else name,'action':args.get('action','get_sha' if name=='get_sha' else 'find' if name=='find_gameobjects' else 'read')} for name,args in reads]
+        prepare={**PREPARE,'operations':operations,'targets':[CONTROLLER,MATERIAL,'Console','Scenes','ProjectMetadata','EditorMetadata','Assets/Scripts/Read.cs','Assets/Shaders/Read.shader']}
         for name,args in reads:
             self.assertTrue((await self.client.call_tool(name,args,raise_on_error=False)).is_error)
         self.assertEqual(self.peer.events,[])
@@ -518,6 +518,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         before=len(self.peer.events)
         for name,args in reads:
             self.peer.execute_data=[] if name in ('get_tags','get_windows','get_menu_items') else {} if name in ('get_layers','get_selection','get_active_tool','get_prefab_stage','get_menu_items') else {'fixture_only':True}
+            if name=='get_sha':self.peer.execute_data={'sha256':'a'*64,'lengthBytes':1}
             result=await self.client.call_tool(name,args)
             payload=result.structured_content['result'] if name in ('get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items') else result.structured_content
             self.assertTrue(payload['success'])
@@ -786,7 +787,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_RT007_surface_and_unmanaged_paths_are_closed(self):
         names = {t.name for t in await self.client.list_tools()}
-        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene', 'find_gameobjects', 'get_gameobject', 'get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
+        self.assertEqual(names, {'agent_status', 'agent_catalog', 'agent_prepare', 'agent_stop', 'manage_animation', 'manage_material', 'read_console', 'manage_scene', 'find_gameobjects', 'get_gameobject', 'get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','manage_script','get_sha','manage_shader','unity_reflect','get_test_job','manage_asset','manage_prefabs','get_tests',
             'material_prepare', 'material_execute', 'material_status', 'material_stop'})
         for name, args in [('agent_approve', {}), ('execute_custom_tool', {}),
                            ('manage_animation', {**READ, 'client_id': 'fake'}),
@@ -825,6 +826,126 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.peer.events), before)
         self.assertEqual(PluginHub._pending, {})
 
+
+    async def test_RT037_native_script_read_exact_file_and_decoder(self):
+        prepare={'task_id':'source-task','operations':[{'command':'manage_script','action':'read'}],
+                 'targets':['Assets/Scripts/Read.cs'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error, str(result))
+        self.peer.approved=True
+        import base64
+        text='// 中文\n'+('x'*10001)
+        self.peer.execute_data={'path':'Assets/Scripts/Read.cs','uri':'mcpforunity://path/Assets/Scripts/Read.cs',
+                                'contents':text,'contentsEncoded':True,'encodedContents':base64.b64encode(text.encode()).decode()}
+        result=await self.client.call_tool('manage_script',{'action':'read','name':'Read','path':'Assets/Scripts'})
+        self.assertEqual(result.data['data']['contents'],text)
+        self.assertNotIn('encodedContents',result.data['data'])
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_script','params':{'action':'read','name':'Read','path':'Assets/Scripts'}})
+        for bad in ({'action':'delete','name':'Read','path':'Assets/Scripts'},
+                    {'action':'read','name':'Read','path':'Assets/Scripts','contents':None},
+                    {'action':'read','name':'Read','path':'Assets/Scripts/Read.cs'},
+                    {'action':'read','name':'Read','path':'Assets/../Scripts'},
+                    {'action':'read','name':'Other','path':'Assets/Scripts'}):
+            await self.client.call_tool('agent_prepare',prepare)
+            before=len(self.peer.events)
+            result=await self.client.call_tool('manage_script',bad,raise_on_error=False)
+            self.assertTrue(result.is_error or result.data.get('success') is False)
+            self.assertFalse(any(row['params']['kind']=='execute' for row in self.peer.events[before:]))
+
+    async def test_RT038_native_sha_alias_does_not_open_script_mutation(self):
+        prepare={'task_id':'sha-task','operations':[{'command':'manage_script','action':'get_sha'}],
+                 'targets':['Assets/Scripts/Read.cs'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,str(result));self.peer.approved=True
+        self.peer.execute_data={'sha256':'a'*64,'lengthBytes':7,'path':'Assets/Scripts/Read.cs'}
+        result=await self.client.call_tool('get_sha',{'uri':'Assets/Scripts/Read.cs'})
+        self.assertEqual(result.data['data'],{'sha256':'a'*64,'lengthBytes':7})
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_script','params':{'action':'get_sha','name':'Read','path':'Assets/Scripts'}})
+        for uri in ('file:///Assets/Scripts/Read.cs','Assets/Scripts/%52ead.cs','Assets/Scripts/../Read.cs','Assets/Scripts/Other.cs'):
+            await self.client.call_tool('agent_prepare',prepare);before=len(self.peer.events)
+            result=await self.client.call_tool('get_sha',{'uri':uri},raise_on_error=False)
+            self.assertTrue(result.is_error or result.data.get('success') is False)
+            self.assertFalse(any(row['params']['kind']=='execute' for row in self.peer.events[before:]))
+
+    async def test_RT039_shader_plain_read_no_default_folder_or_mutation(self):
+        prepare={'task_id':'shader-task','operations':[{'command':'manage_shader','action':'read'}],
+                 'targets':['Assets/Shaders/Read.shader'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,str(result));self.peer.approved=True
+        self.peer.execute_data={'path':'Assets/Shaders/Read.shader','contents':'Shader {}','contentsEncoded':False,'encodedContents':None}
+        result=await self.client.call_tool('manage_shader',{'action':'read','name':'Read','path':'Assets/Shaders'})
+        self.assertEqual(result.data['data']['contents'],'Shader {}')
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_shader','params':{'action':'read','name':'Read','path':'Assets/Shaders'}})
+        for bad in ({'action':'update','name':'Read','path':'Assets/Shaders'}, {'action':'read','name':'Read','path':'Assets'},
+                    {'action':'read','name':'Read','path':'Assets/Shaders','contents':None}):
+            await self.client.call_tool('agent_prepare',prepare);before=len(self.peer.events)
+            result=await self.client.call_tool('manage_shader',bad,raise_on_error=False)
+            self.assertTrue(result.is_error or result.data.get('success') is False)
+            self.assertFalse(any(row['params']['kind']=='execute' for row in self.peer.events[before:]))
+
+    async def test_RT040_source_aliases_do_not_expand_manifest_or_basename(self):
+        prepare={'task_id':'alias-task','operations':[{'command':'manage_script','action':'read'}],
+                 'targets':['Assets/Scripts/Nested/Read.cs'],'ttl_seconds':60}
+        await self.client.call_tool('agent_prepare',prepare);self.peer.approved=True
+        before=len(self.peer.events)
+        bad=await self.client.call_tool('manage_script',{'action':'read','name':'Nested/Read','path':'Assets/Scripts'},raise_on_error=False)
+        self.assertTrue(bad.is_error or bad.data.get('success') is False,'basename must not carry directory segments')
+        self.assertFalse(any(row['params']['kind']=='execute' for row in self.peer.events[before:]))
+        prepare['operations'].append({'command':'get_sha','action':'read'})
+        before=len(self.peer.events);bad=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertTrue(bad.is_error,'get_sha alias is not a manifest command')
+        self.assertFalse(any(row['params']['kind']=='prepare' for row in self.peer.events[before:]))
+
+    async def test_RT042_scoped_reflection_reuses_native_wrapper_and_rejects_expansion(self):
+        from services.tools.unity_reflect import unity_reflect
+        prepare={'task_id':'api-metadata','operations':[{'command':'unity_reflect','action':a} for a in ('get_type','get_member','search')],
+                 'targets':['ApiMetadata'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,'scoped API metadata operation missing')
+        self.assertIs((await self.server.get_tool('unity_reflect')).fn,unity_reflect)
+        self.peer.approved=True
+        for args in ({'action':'get_type','class_name':'UnityEngine.Transform'},
+                     {'action':'get_member','class_name':'Animator','member_name':'SetFloat'},
+                     {'action':'search','query':'Transform','scope':'unity'}):
+            result=await self.client.call_tool('unity_reflect',args)
+            self.assertTrue(result.structured_content['success'])
+            self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'unity_reflect','params':args})
+        for args in ({'action':'invoke','class_name':'Transform'},
+                     {'action':'GET_TYPE','class_name':'Transform'},
+                     {'action':'get_type','class_name':'Evil, UnloadedAssembly'},
+                     {'action':'get_type','class_name':'Transform','query':None},
+                     {'action':'get_member','class_name':'Transform','member_name':'get_x()'},
+                     {'action':'search','query':'*','scope':'unity'},
+                     {'action':'search','query':'Transform','scope':'all'},
+                     {'action':'search','query':'Transform'},
+                     {'action':'get_type','class_name':'x'*129}):
+            await self.client.call_tool('agent_prepare',prepare);before=len(self.peer.events)
+            result=await self.client.call_tool('unity_reflect',args,raise_on_error=False)
+            self.assertTrue(result.is_error or result.data.get('success') is False,str(args))
+            self.assertFalse(any(e['params']['kind']=='execute' for e in self.peer.events[before:]))
+        for scope in ('Scenes','ProjectMetadata','EditorMetadata',CONTROLLER):
+            self.assertTrue((await self.client.call_tool('agent_prepare',{**prepare,'targets':[scope]},raise_on_error=False)).is_error)
+        await self.client.call_tool('agent_prepare',prepare);await self.client.call_tool('agent_stop',{'task_id':'api-metadata'})
+        self.assertTrue((await self.client.call_tool('unity_reflect',{'action':'get_type','class_name':'Transform'},raise_on_error=False)).is_error)
+
+    async def test_RT041_clip_native_read_is_exact_file_operation(self):
+        prepare={'task_id':'clip-task','operations':[{'command':'manage_animation','action':'clip_get_info'}],
+                 'targets':['Assets/Clips/Walk.anim'],'ttl_seconds':60}
+        result=await self.client.call_tool('agent_prepare',prepare,raise_on_error=False)
+        self.assertFalse(result.is_error,str(result));self.peer.approved=True
+        self.peer.execute_data={'path':'Assets/Clips/Walk.anim','name':'Walk','length':1.0,'frameRate':60,'isLooping':True,
+            'wrapMode':'Loop','curveCount':0,'curves':[],'eventCount':0,'events':[]}
+        args={'action':'clip_get_info','clip_path':'Assets/Clips/Walk.anim'}
+        result=await self.client.call_tool('manage_animation',args)
+        self.assertEqual(result.data['data']['name'],'Walk')
+        self.assertEqual(self.peer.events[-1]['params']['body'],{'command':'manage_animation','params':{'action':'clip_get_info','clipPath':'Assets/Clips/Walk.anim'}})
+        for bad in ({**args,'properties':{'action':'clip_create'}},{**args,'clip_path':'Assets/Other.anim'},
+                    {**args,'clip_path':'Assets/Clips/../Walk.anim'},{**args,'action':'clip_add_event'},
+                    {**args,'target':'11'},{**args,'controller_path':'Assets/Other.controller'}):
+            await self.client.call_tool('agent_prepare',prepare);before=len(self.peer.events)
+            result=await self.client.call_tool('manage_animation',bad,raise_on_error=False)
+            self.assertTrue(result.is_error or result.data.get('success') is False)
+            self.assertFalse(any(e['params']['kind']=='execute' for e in self.peer.events[before:]))
 
     async def test_RT010_http_app_has_no_raw_rest_route(self):
         import httpx

@@ -15,6 +15,8 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+# Explicit local test helper import also under Python isolated (-I) entry.
+sys.path.insert(0,str(ROOT/'tests'))
 TESTS = ROOT / 'tests/unity-core'
 DOTNET = Path('/home/ubuntu/.local/share/vrchat-agent-dev/dotnet/dotnet')
 PYTHON = '/home/ubuntu/.cache/uv/archive-v0/7z4PORN2YM2xSubx/bin/python'
@@ -26,20 +28,28 @@ def hashes():
                 *(ROOT / 'dependencies/mcp-1.29.1/mcp').rglob('*.py'),
                 ROOT / 'catalog/native-inventory.json', ROOT / 'tests/test_runtime_lifecycle.py', ROOT / 'tests/test_client_binding.py',
                 ROOT / 'tests/test_runtime_unity_auth.py', ROOT / 'tests/test_runtime_material.py',
-                *(ROOT / 'tests/unity-core').glob('*.csproj'), ROOT / 'tests/verify_unity.py', ROOT / 'tests/scene_native_source.py'])}
+                *(ROOT / 'tests/unity-core').glob('*.csproj'), ROOT / 'tests/verify_unity.py', ROOT / 'tests/scene_native_source.py', ROOT / 'tests/source_native_source.py'])}
 
-def write_unity_result(report):
-    """WU is a separate exact group, never part of the main 81 IDs."""
-    rows = [r for r in report['runs'] if r['name'] in ('WriteUnityCases-build', 'WriteUnityCases')]
-    ids = sorted(re.findall(r'^PASS (WU\d{3}) ', '\n'.join(
-        r['stdout'] for r in rows if r['name'] == 'WriteUnityCases'), re.M))
+def compiled_group_result(report, name, prefix, count):
+    """Exact separate groups: duplicates/warnings/cleanup debt are failures."""
+    rows = [r for r in report['runs'] if r['name'] in (name+'-build', name)]
+    ids = sorted(re.findall(r'^PASS ('+prefix+r'\d{3}) ', '\n'.join(
+        r['stdout'] for r in rows if r['name'] == name), re.M))
     warnings = [line for r in rows for line in (r['stdout'] + '\n' + r['stderr']).splitlines()
         if re.search(r'ResourceWarning|(?i:\bwarning\s+[A-Z]+\d+:)', line)]
-    passed = (sorted(r['name'] for r in rows) == ['WriteUnityCases', 'WriteUnityCases-build']
-        and ids == [f'WU{i:03d}' for i in range(1,13)] and not warnings
+    passed = (sorted(r['name'] for r in rows) == [name, name+'-build']
+        and ids == [f'{prefix}{i:03d}' for i in range(1,count+1)] and not warnings
         and all(r['exit_code'] == 0 and not r['timeout'] and r['process_group_absent']
             and r['pid_absent'] for r in rows) and report['owned_build_directory_removed'])
     return {'pass_ids': ids, 'unique_pass_count': len(set(ids)), 'warning_lines': warnings, 'passed': passed}
+
+
+def write_unity_result(report):
+    return compiled_group_result(report, 'WriteUnityCases', 'WU', 13)
+
+
+def reload_result(report):
+    return compiled_group_result(report, 'ReloadCases', 'RH', 9)
 
 
 def main(label):
@@ -56,6 +66,8 @@ def main(label):
                'DOTNET_SKIP_FIRST_TIME_EXPERIENCE': '1', 'MSBUILDDISABLENODEREUSE': '1',
                'PYTHONPATH': str(ROOT / 'dependencies/mcp-1.29.1'),
                'PYTHONWARNINGS': 'always::ResourceWarning', 'FASTMCP_CHECK_FOR_UPDATES': 'off'}
+        from source_native_source import assemble as assemble_source
+        report['source_native_source'] = assemble_source(Path('/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor'), work/'ManageSource.cs')
         from scene_native_source import assemble
         report['scene_native_source'] = assemble(Path('/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor'), work/'ManageScene.cs')
         targets = work / 'References.targets'
@@ -102,12 +114,12 @@ def main(label):
                 '-p:BaseOutputPath=' + str(work/name/'bin') + '/',
                 '-p:RestoreConfigFile=' + str(TESTS/'ReviewNuGet.Config'),
                 '-p:CustomAfterMicrosoftCommonTargets=' + str(targets),
-                '-p:NuGetAudit=false', '-p:RestoreSources=', '-p:SceneNativeSource=' + str(work/'ManageScene.cs')])
+                '-p:NuGetAudit=false', '-p:RestoreSources=', '-p:CandidateSourceNative=' + str(work/'ManageSource.cs'), '-p:SceneNativeSource=' + str(work/'ManageScene.cs')])
         try:
             if build('ReviewUpstreamApi'):
                 build('ReviewExternalAssembly')
-            for name in ('CoreTests', 'AdapterTests', 'ConsoleNativeCases', 'SceneNativeCases', 'FixOutputCases', 'ReviewLeakCases',
-                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'WriteUnityCases', 'EditorBootstrapCases', 'WirePeer'):
+            for name in ('CoreTests', 'AdapterTests', 'SourceReadCases', 'ConsoleNativeCases', 'SceneNativeCases', 'FixOutputCases', 'ReviewLeakCases',
+                         'FixIdentityAbsent', 'FixIdentityCases', 'LifecycleCases', 'OwnedGateCases', 'ContinuityCases', 'ReloadCases', 'WriteUnityCases', 'EditorBootstrapCases', 'WirePeer'):
                 if not build(name):
                     continue
                 if name == 'FixIdentityCases':
@@ -156,9 +168,11 @@ def main(label):
             save()
     report['owned_build_directory_removed'] = not Path(td).exists()
     report['write_unity'] = write_unity_result(report)
+    report['reload'] = reload_result(report)
+    report['source_reads'] = compiled_group_result(report, 'SourceReadCases', 'ST', 11)
     report['continuity_pass_ids'] = sorted(set(re.findall(r'^PASS (PC\d{3}) ',
         '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
-    assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,11)]
+    assert report['continuity_pass_ids'] == [f'PC{i:03d}' for i in range(1,15)]
     report['client_selection_csharp_ids'] = sorted(set(re.findall(r'^PASS (CS00[789]|CS010) ', '\n'.join(r.get('stdout','') for r in report['runs']),re.M)))
     assert report['client_selection_csharp_ids'] == ['CS007','CS008','CS009','CS010']
     report['all_commands_succeeded'] = bool(report['runs']) and all(
@@ -181,7 +195,7 @@ def main(label):
     report['scene_ids_match']=report['scene_pass_ids']==[f'NS{i:03d}' for i in range(1,19)]
     report['client_binding_pass_ids'] = sorted(r['name'] for r in report['runs'] if re.fullmatch(r'CB00[1-7]',r['name']) and r['exit_code']==0)
     report['client_binding_ids_match'] = report['client_binding_pass_ids'] == [f'CB{i:03d}' for i in range(1,8)]
-    expected = ({f'UC{i:03d}' for i in range(1, 16)} | {f'UA{i:03d}' for i in range(1, 21)} |
+    expected = ({f'UC{i:03d}' for i in range(1, 16)} | {f'UA{i:03d}' for i in range(1, 22)} |
                 {f'UF{i:03d}' for i in range(1, 25)} | {'UR002', 'UR003', 'WI001', 'CLC001', 'CLC002'} |
                 {f'LC{i:03d}' for i in range(1, 8)} | {f'OI{i:03d}' for i in range(1, 11)})
     report['expected_ids_match'] = set(report['pass_ids']) == expected
@@ -193,7 +207,7 @@ def main(label):
         'source_unchanged','owned_build_directory_removed','expected_ids_match')}, ensure_ascii=False))
     return 0 if (report['all_commands_succeeded'] and report['source_unchanged'] and
                  report['expected_ids_match'] and report['owned_build_directory_removed'] and
-                 report['clean_warning_free_run'] and report['client_binding_ids_match'] and report['console_ids_match'] and report['scene_ids_match'] and report['write_unity']['passed']) else 1
+                 report['clean_warning_free_run'] and report['client_binding_ids_match'] and report['console_ids_match'] and report['scene_ids_match'] and report['write_unity']['passed'] and report['reload']['passed'] and report['source_reads']['passed']) else 1
 
 if __name__ == '__main__':
     if len(sys.argv) != 2 or re.fullmatch(r'[a-z0-9-]+', sys.argv[1]) is None:

@@ -141,7 +141,10 @@ class Receiver:
                 status = await peer.session.call_tool('agent_status', {})
             data = status.structured_content
             if (status.is_error or type(data) is not dict or data.get('success') is not True
-                    or type(data.get('data')) is not dict or data['data'].get('read_only') is not True
+                    # Local effect consent does not make an authenticated peer unready.
+                    or type(data.get('data')) is not dict or type(data['data'].get('read_only')) is not bool
+                    or data['data'].get('ready', True) is not True
+                    or data['data'].get('status') == 'planned_reload_frozen'
                     or data['data'].get('project_id') != offer.project):
                 raise ValueError('candidate_project_unverified')
             adopted, peer = peer, None  # bind owns failure cleanup as well

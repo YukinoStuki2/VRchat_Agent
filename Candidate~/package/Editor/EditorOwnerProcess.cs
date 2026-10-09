@@ -73,6 +73,128 @@ namespace Yukino.VRChatAgent
             }
         }
 
+        // Shared credential-free interpreter preflight; keeps exact-child checks.
+        static async Task SelectDirectPythonAsync(ProcessStartInfo info,string metadataEntry,Func<bool> stopped)
+        {
+            string python=info.FileName;
+            // Inspect only interpreter metadata before issuing any credential.
+            // The selected Windows venv is a redirector; CPython's own launch
+            // hint preserves that venv while the real interpreter is our child.
+            string arguments = info.Arguments;
+            info.Arguments = "-I -B " + Quote(metadataEntry);
+            using (var probe = new Process {StartInfo = info})
+            {
+                if (stopped() || !probe.Start()) throw new InvalidOperationException("python_probe_refused");
+                var drain = DrainAsync(probe.StandardError);
+                try
+                {
+                    probe.StandardInput.Close();
+                    var metadata = Parse(await ReadLineAsync(probe.StandardOutput, 5));
+                    if (!probe.WaitForExit(3000) || probe.ExitCode != 0 || metadata.Count != 3 ||
+                        metadata["executable"]?.Type != JTokenType.String || metadata["selected"]?.Type != JTokenType.String ||
+                        metadata["windows"]?.Type != JTokenType.Boolean)
+                        throw new InvalidOperationException("python_probe_invalid");
+                    bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
+                    var comparison = windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                    string direct = (string)metadata["executable"], selected = (string)metadata["selected"];
+                    if ((bool)metadata["windows"] != windows || !Path.IsPathRooted(direct) || !File.Exists(direct) ||
+                        !string.Equals(Path.GetFullPath(selected), Path.GetFullPath(python), comparison))
+                        throw new InvalidOperationException("python_probe_mismatch");
+                    info.FileName = direct;
+                    if (windows) info.EnvironmentVariables["__PYVENV_LAUNCHER__"] = selected;
+                }
+                finally
+                {
+                    if (!probe.HasExited) { probe.Kill(); probe.WaitForExit(3000); }
+                    await drain;
+                }
+            }
+            info.Arguments = arguments;
+        }
+
+        // Local explicit selection only; no tool, listener, credential or grant.
+        // python=null requires the bundled runtime; a non-null value is the same
+        // explicit development-only opt-in as StartAsync, never a fallback.
+        internal static Task<byte[]> CaptureReviewAsync(string package,string root,string name,
+            System.Threading.CancellationToken cancel,string python=null)
+        {
+            // No Unity API on this worker. Process cleanup must continue even if
+            // the Editor message pump pauses; the review core resumes on its caller.
+            return Task.Run(()=>CaptureReviewCoreAsync(package,root,name,cancel,python));
+        }
+        static async Task<byte[]> CaptureReviewCoreAsync(string package,string root,string name,
+            System.Threading.CancellationToken cancel,string python)
+        {
+            try
+            {
+                cancel.ThrowIfCancellationRequested();
+                if(string.IsNullOrWhiteSpace(package) || !Path.IsPathRooted(package) ||
+                    string.IsNullOrWhiteSpace(root) || !Path.IsPathRooted(root) || string.IsNullOrEmpty(name))
+                    throw new IOException();
+                string runtime=Path.Combine(package,"Runtime~");
+                string entry=Path.Combine(runtime,"diagnostics","asset_review.py");
+                if(python==null)python=ResolvePortablePython(package);
+                if(!Path.IsPathRooted(python) || !File.Exists(python) || !File.Exists(entry))throw new IOException();
+                byte[] request=new UTF8Encoding(false,true).GetBytes(new JObject{["root"]=root,["name"]=name}.ToString(Newtonsoft.Json.Formatting.None));
+                if(request.Length>8192)throw new IOException();
+                var info=new ProcessStartInfo(python){Arguments="-I -B "+Quote(entry)+" --owned-parent "+Process.GetCurrentProcess().Id,
+                    UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,
+                    StandardOutputEncoding=new UTF8Encoding(false,true),StandardErrorEncoding=Encoding.UTF8,WorkingDirectory=runtime};
+                info.EnvironmentVariables.Clear();
+                foreach(string key in new[]{"SystemRoot","WINDIR","TEMP","TMP","HOME","USERPROFILE"})
+                {string value=Environment.GetEnvironmentVariable(key);if(value!=null)info.EnvironmentVariables[key]=value;}
+                await SelectDirectPythonAsync(info,Path.Combine(runtime,"launcher","direct_python.py"),()=>cancel.IsCancellationRequested);
+                cancel.ThrowIfCancellationRequested();
+                using(var child=new Process{StartInfo=info})
+                {
+                    if(!child.Start())throw new IOException();
+                    Task<byte[]> output=null,errors=null;Task writing=null;
+                    try
+                    {
+                        output=ReadReviewBytesAsync(child.StandardOutput.BaseStream,262144);
+                        errors=ReadReviewBytesAsync(child.StandardError.BaseStream,512);
+                        writing=SendReviewSelectionAsync(child,request);
+                        var timer=Stopwatch.StartNew();
+                        while(!child.HasExited || !output.IsCompleted || !errors.IsCompleted || !writing.IsCompleted)
+                        {
+                            cancel.ThrowIfCancellationRequested();
+                            if(timer.Elapsed.TotalSeconds>=12 || output.IsFaulted || errors.IsFaulted || writing.IsFaulted)throw new IOException();
+                            await Task.Delay(20);
+                        }
+                        cancel.ThrowIfCancellationRequested();await writing;
+                        byte[] data=await output;
+                        if(child.ExitCode!=0 || (await errors).Length!=0 || data.Length==0)throw new IOException();
+                        return data;
+                    }
+                    finally
+                    {
+                        // Fixed helper creates no children. Terminate only this held
+                        // Process, then join both bounded readers before releasing it.
+                        if(!child.HasExited)child.Kill();
+                        if(!child.WaitForExit(3000))throw new IOException();
+                        foreach(Task task in new Task[]{writing,output,errors})if(task!=null){try{await task;}catch{}}
+                        child.StandardInput.Dispose();child.StandardOutput.Dispose();child.StandardError.Dispose();
+                    }
+                }
+            }
+            catch { throw new IOException("local_review_capture_refused"); }
+        }
+        static async Task SendReviewSelectionAsync(Process child,byte[] request)
+        {
+            await child.StandardInput.BaseStream.WriteAsync(request,0,request.Length);
+            await child.StandardInput.BaseStream.FlushAsync();child.StandardInput.Close();
+        }
+        static async Task<byte[]> ReadReviewBytesAsync(Stream input,int limit)
+        {
+            using(var result=new MemoryStream())
+            {
+                byte[] buffer=new byte[8192];int count;
+                while((count=await input.ReadAsync(buffer,0,buffer.Length))!=0)
+                {if(result.Length+count>limit)throw new IOException();result.Write(buffer,0,count);}
+                return result.ToArray();
+            }
+        }
+
         internal static string HermesArguments(JObject settings, bool allowed)
         {
             if (settings == null) return "";
@@ -99,20 +221,27 @@ namespace Yukino.VRChatAgent
                 throw new ArgumentException("owner_codex_settings_invalid");
             return " --codex-executable " + Quote(executable) + " --codex-project " + Quote(project);
         }
-        bool remoteHandoff, localCodex;
+        bool remoteHandoff, localCodex, reloadEnabled, restored, restoring;
+        string restoreHandoff, runProject;
+        long runExpiry;
+        bool detached;
+        JObject armedTicket;
+        EditorPeerChannel.HeldPeer reloadPeer;
+        EditorPeerChannel reloadChannel;
         Process process;
         Task stderrDrain, monitor, starting;
         Func<Task> disconnect;
         bool used, stopping, disposed;
         public bool Ready { get; private set; }
+        internal bool ReloadAvailable => Ready && reloadPeer != null && reloadChannel != null && armedTicket == null && !stopping;
         public bool CleanupComplete { get; private set; }
         public int OwnerPid { get; private set; }
 
         internal Task<bool> StartAsync(string python, string entry, string project,
-            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null, string codexExecutable = null, string codexProject = null)
+            Func<Uri, string, byte[], Task<bool>> connect, Func<Task> close, bool allowHermes = false, bool allowCodex = false, JObject hermesSsh = null, string codexExecutable = null, string codexProject = null, bool enableReloadControl = false)
         {
             if (used || disposed) throw new InvalidOperationException("owner_single_use");
-            used = true; disconnect = close;
+            used = true; disconnect = close; reloadEnabled = enableReloadControl; runProject = project;
             var task = StartCoreAsync(python, entry, project, connect, allowHermes, allowCodex, hermesSsh == null ? null : (JObject)hermesSsh.DeepClone(), codexExecutable, codexProject);
             starting = task;
             return task;
@@ -132,7 +261,7 @@ namespace Yukino.VRChatAgent
                 var info = new ProcessStartInfo(python) {
                     Arguments = "-I -B " + Quote(entry) + " --project " + Quote(project) +
                         " --parent-pid " + Process.GetCurrentProcess().Id +
-                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : "") + sshArguments + codexArguments,
+                        (allowHermes ? " --client hermes" : "") + (allowCodex ? " --client codex" : "") + sshArguments + codexArguments + (reloadEnabled ? " --reload-control" : ""),
                     UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = new UTF8Encoding(false, true), StandardErrorEncoding = Encoding.UTF8,
@@ -147,39 +276,7 @@ namespace Yukino.VRChatAgent
                 info.EnvironmentVariables["PYTHONUTF8"] = "1";
                 info.EnvironmentVariables["PYTHONDONTWRITEBYTECODE"] = "1";
                 info.EnvironmentVariables["DISABLE_TELEMETRY"] = "true";
-                // Inspect only interpreter metadata before issuing any credential.
-                // The selected Windows venv is a redirector; CPython's own launch
-                // hint preserves that venv while the real interpreter is our child.
-                string arguments = info.Arguments;
-                info.Arguments = "-I -B " + Quote(Path.Combine(Path.GetDirectoryName(entry), "direct_python.py"));
-                using (var probe = new Process {StartInfo = info})
-                {
-                    if (stopping || !probe.Start()) throw new InvalidOperationException("python_probe_refused");
-                    var drain = DrainAsync(probe.StandardError);
-                    try
-                    {
-                        probe.StandardInput.Close();
-                        var metadata = Parse(await ReadLineAsync(probe.StandardOutput, 5));
-                        if (!probe.WaitForExit(3000) || probe.ExitCode != 0 || metadata.Count != 3 ||
-                            metadata["executable"]?.Type != JTokenType.String || metadata["selected"]?.Type != JTokenType.String ||
-                            metadata["windows"]?.Type != JTokenType.Boolean)
-                            throw new InvalidOperationException("python_probe_invalid");
-                        bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
-                        var comparison = windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                        string direct = (string)metadata["executable"], selected = (string)metadata["selected"];
-                        if ((bool)metadata["windows"] != windows || !Path.IsPathRooted(direct) || !File.Exists(direct) ||
-                            !string.Equals(Path.GetFullPath(selected), Path.GetFullPath(python), comparison))
-                            throw new InvalidOperationException("python_probe_mismatch");
-                        info.FileName = direct;
-                        if (windows) info.EnvironmentVariables["__PYVENV_LAUNCHER__"] = selected;
-                    }
-                    finally
-                    {
-                        if (!probe.HasExited) { probe.Kill(); probe.WaitForExit(3000); }
-                        await drain;
-                    }
-                }
-                info.Arguments = arguments;
+                await SelectDirectPythonAsync(info,Path.Combine(Path.GetDirectoryName(entry),"direct_python.py"),()=>stopping);
                 process = new Process {StartInfo = info};
                 if (stopping || !process.Start()) throw new InvalidOperationException("owner_start_refused");
                 OwnerPid = process.Id;
@@ -187,8 +284,9 @@ namespace Yukino.VRChatAgent
                 await process.StandardInput.WriteAsync("start\n"); await process.StandardInput.FlushAsync();
                 JObject bundle = Parse(await ReadLineAsync(process.StandardOutput, 12));
                 var expected = new[] {"kind","version","owner_pid","project","endpoint","pin","unity_bearer","expires_at","clients"};
+                if (reloadEnabled) expected=expected.Concat(new[]{"reload"}).ToArray();
                 if (!bundle.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(expected.OrderBy(x=>x)) ||
-                    bundle["version"].Type != JTokenType.Integer || (int)bundle["version"] != 2 ||
+                    bundle["version"].Type != JTokenType.Integer || (int)bundle["version"] != (reloadEnabled ? 3 : 2) ||
                     bundle["owner_pid"].Type != JTokenType.Integer || (int)bundle["owner_pid"] != OwnerPid ||
                     bundle["kind"].Type != JTokenType.String || (string)bundle["kind"] != "unity_binding" ||
                     bundle["project"].Type != JTokenType.String || (string)bundle["project"] != project ||
@@ -199,7 +297,8 @@ namespace Yukino.VRChatAgent
                 if (allowCodex) clients.Add("codex");
                 if (!JToken.DeepEquals(bundle["clients"], clients))
                     throw new InvalidOperationException("owner_client_selection_mismatch");
-                long remaining = (long)bundle["expires_at"] - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                runExpiry=(long)bundle["expires_at"];
+                long remaining = runExpiry - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 if (remaining <= 0 || remaining > 3600) throw new InvalidOperationException("owner_expired");
                 foreach (string key in new[] {"endpoint","pin","unity_bearer"})
                     if (bundle[key].Type != JTokenType.String) throw new InvalidOperationException("owner_bundle_type");
@@ -212,6 +311,21 @@ namespace Yukino.VRChatAgent
                     bearer.Length > 8192 || bearer.Any(ch=>!(char.IsLetterOrDigit(ch) || ch=='.' || ch=='_' || ch=='-')))
                     throw new InvalidOperationException("owner_material_invalid");
                 byte[] bytes = Enumerable.Range(0,32).Select(i=>Convert.ToByte(pin.Substring(i*2,2),16)).ToArray();
+                if (reloadEnabled)
+                {
+                    var local=bundle["reload"] as JObject;
+                    if(local==null || !local.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(new[]{"address","created"}) ||
+                        local["address"].Type!=JTokenType.String || local["created"].Type!=JTokenType.Integer)
+                        throw new IOException("owner_control_bootstrap_invalid");
+                    // Creation tuple arrived over the original held child's anonymous
+                    // stdout, NOT a discovered PID or an unauthenticated peer claim.
+                    reloadPeer=new EditorPeerChannel.HeldPeer(OwnerPid,(long)local["created"]);
+                    reloadChannel=await EditorPeerChannel.ConnectAsync((string)local["address"],reloadPeer,remaining,System.Threading.CancellationToken.None);
+                    var hello=Parse(Encoding.UTF8.GetString(await reloadChannel.ExchangeAsync(Encoding.UTF8.GetBytes(
+                        new JObject{["kind"]="hello",["version"]=1,["project"]=project}.ToString(Newtonsoft.Json.Formatting.None)),5,System.Threading.CancellationToken.None)));
+                    if(!JToken.DeepEquals(hello,new JObject{["kind"]="editor_control_ready",["version"]=1}))
+                        throw new IOException("owner_control_handshake_invalid");
+                }
                 bundle.RemoveAll();
                 if (stopping || !await connect(uri,bearer,bytes)) throw new InvalidOperationException("owner_connect_refused");
                 bearer = null;
@@ -223,7 +337,7 @@ namespace Yukino.VRChatAgent
             }
             catch
             {
-                Ready = false; Terminate();
+                Ready = false; Terminate(); CloseReloadControl();
                 if (stderrDrain != null) { try { await stderrDrain; } catch { } }
                 if (disconnect != null) await disconnect();
                 return false;
@@ -241,20 +355,207 @@ namespace Yukino.VRChatAgent
                     (bool?)result["process_cleanup_complete"] == true && (bool?)result["probe_cleanup_complete"] == true &&
                     (bool?)result["probe_session_cleanup_confirmed"] == true &&
                     (!remoteHandoff || (bool?)result["handoff_cleanup_confirmed"] == true) &&
-                    (!localCodex || (bool?)result["codex_cleanup_complete"] == true);
+                    (!localCodex || (bool?)result["codex_cleanup_complete"] == true) &&
+                    (!reloadEnabled || ((bool?)result["editor_control_cleanup_complete"] == true && (bool?)result["reload_control_cleanup_complete"] == true));
                 if (stderrDrain != null && process.HasExited) await stderrDrain;
             }
             catch { CleanupComplete = false; }
             finally
             {
                 Ready = false;
-                if (!CleanupComplete) Terminate();
-                if (disconnect != null) await disconnect();
+                if(!detached)
+                {
+                    if (!CleanupComplete) Terminate();
+                    CloseReloadControl();
+                    if (disconnect != null) await disconnect();
+                }
             }
+        }
+        internal async Task<JObject> ArmReloadAsync(string handoff, string[] transfers, double editorNow, double window)
+        {
+            if(!Ready || armedTicket!=null || reloadPeer==null)throw new InvalidOperationException("owner_arm_unavailable");
+            try
+            {
+                if(transfers==null || transfers.Length<1 || transfers.Length>2)throw new IOException("owner_transfer_invalid");
+                var response=await RequestReloadControlAsync(new JObject{["kind"]="arm",["handoff_id"]=handoff,
+                    ["transfers"]=new JArray(transfers),["editor_now"]=editorNow,["window"]=window});
+                var digests=new JArray();
+                foreach(string raw in transfers)using(var hash=SHA256.Create())
+                    digests.Add(BitConverter.ToString(hash.ComputeHash(new UTF8Encoding(false,true).GetBytes(raw))).Replace("-","").ToLowerInvariant());
+                if(response.Count!=4 || (string)response["kind"]!="armed" || (string)response["handoff_id"]!=handoff ||
+                    response["next_address"]?.Type!=JTokenType.String || !JToken.DeepEquals(response["digests"],digests))
+                    throw new IOException("owner_arm_changed");
+                armedTicket=new JObject{["version"]=1,["project"]=runProject,["owner_pid"]=OwnerPid,["created"]=reloadPeer.Created,
+                    ["address"]=(string)response["next_address"],["expires_at"]=runExpiry,["handoff_id"]=handoff,["digests"]=digests,
+                    ["remote_handoff"]=remoteHandoff,["local_codex"]=localCodex};
+                return (JObject)armedTicket.DeepClone();
+            }
+            catch{await StopAsync();throw;}
+        }
+        internal async Task<JObject> DetachReloadAsync()
+        {
+            if(!Ready || armedTicket==null || detached)throw new InvalidOperationException("owner_detach_unavailable");
+            try
+            {
+                var reply=await RequestReloadControlAsync(new JObject{["kind"]="detach",["handoff_id"]=(string)armedTicket["handoff_id"]});
+                if(reply.Count!=2 || (string)reply["kind"]!="detached" || (string)reply["handoff_id"]!=(string)armedTicket["handoff_id"])
+                    throw new IOException("owner_detach_changed");
+                detached=true;Ready=false;CloseReloadControl();
+                if(!restored)
+                {
+                    process.StandardInput.Close();
+                    // The surviving owner closes its old stdout/stderr on the
+                    // explicitly allowed EOF. Join readers rather than orphan I/O.
+                    var readers=Task.WhenAll(monitor??Task.CompletedTask,stderrDrain??Task.CompletedTask);
+                    if(await Task.WhenAny(readers,Task.Delay(5000))!=readers)throw new IOException("owner_detach_readers_pending");
+                    await readers;process.Dispose();process=null;
+                }
+                else if(monitor!=null)await monitor;
+                return (JObject)armedTicket.DeepClone();
+            }
+            catch
+            {
+                // No unauthorized retry or replacement owner. A failed detach
+                // remains blocked; the original finite owner deadline still applies.
+                Ready=false;CloseReloadControl();throw;
+            }
+        }
+        long LoadReloadTicket(JObject ticket,string project)
+        {
+            string[] fields={"version","project","owner_pid","created","address","expires_at","handoff_id","digests","remote_handoff","local_codex"};
+            if(ticket==null || !ticket.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(fields.OrderBy(x=>x)) ||
+                ticket["version"].Type!=JTokenType.Integer || (int)ticket["version"]!=1 ||
+                ticket["project"].Type!=JTokenType.String || (string)ticket["project"]!=project ||
+                ticket["owner_pid"].Type!=JTokenType.Integer || ticket["created"].Type!=JTokenType.Integer ||
+                ticket["expires_at"].Type!=JTokenType.Integer || ticket["address"].Type!=JTokenType.String ||
+                ticket["handoff_id"].Type!=JTokenType.String || ticket["remote_handoff"].Type!=JTokenType.Boolean ||
+                ticket["local_codex"].Type!=JTokenType.Boolean || !(ticket["digests"] is JArray digests) || digests.Count<1 || digests.Count>2 ||
+                digests.Any(d=>d.Type!=JTokenType.String || !System.Text.RegularExpressions.Regex.IsMatch((string)d,@"\A[0-9a-f]{64}\z")) ||
+                !System.Text.RegularExpressions.Regex.IsMatch((string)ticket["handoff_id"],@"\A[0-9a-f]{32}\z"))
+                throw new IOException("owner_ticket_invalid");
+            long expiry=(long)ticket["expires_at"], remaining=expiry-DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if(remaining<=0 || remaining>3600)throw new IOException("owner_expired");
+            OwnerPid=(int)ticket["owner_pid"];restoreHandoff=(string)ticket["handoff_id"];runExpiry=expiry;runProject=project;
+            remoteHandoff=(bool)ticket["remote_handoff"];localCodex=(bool)ticket["local_codex"];
+            return remaining;
+        }
+        // Cancellation validates routing metadata but never requests Unity admission.
+        internal void PrepareReloadCancellation(JObject ticket,string project,Func<Task> close)
+        {
+            if(used || disposed)throw new InvalidOperationException("owner_single_use");
+            used=true;LoadReloadTicket(ticket,project);disconnect=close;reloadEnabled=true;
+            armedTicket=(JObject)ticket.DeepClone();detached=true;
+        }
+        // Ticket contains non-secret routing/integrity metadata, never a grant.
+        // The original surviving owner must authenticate this same OS Editor and
+        // return its still-live transfers; no authority is loaded from SessionState.
+        internal async Task<JArray> ReattachAsync(JObject ticket, string project,
+            Func<Uri,string,byte[],Task<bool>> connect, Func<Task> close)
+        {
+            if(used || disposed)throw new InvalidOperationException("owner_single_use");
+            used=true;restored=true;restoring=true;reloadEnabled=true;disconnect=close;
+            try
+            {
+                long remaining=LoadReloadTicket(ticket,project),expiry=runExpiry;var digests=(JArray)ticket["digests"];
+                reloadPeer=new EditorPeerChannel.HeldPeer(OwnerPid,(long)ticket["created"]);
+                reloadChannel=await EditorPeerChannel.ConnectAsync((string)ticket["address"],reloadPeer,remaining,System.Threading.CancellationToken.None);
+                var request=new JObject{["kind"]="resume",["version"]=1,["project"]=project,["handoff_id"]=restoreHandoff};
+                var response=Parse(Encoding.UTF8.GetString(await reloadChannel.ExchangeAsync(Encoding.UTF8.GetBytes(request.ToString(Newtonsoft.Json.Formatting.None)),20,System.Threading.CancellationToken.None)));
+                if(!response.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(new[]{"handoff_id","kind","transfers","unity_binding"}) ||
+                    (string)response["kind"]!="reattach" || (string)response["handoff_id"]!=restoreHandoff ||
+                    !(response["transfers"] is JArray transfers) || transfers.Count!=digests.Count || !(response["unity_binding"] is JObject material))
+                    throw new IOException("owner_resume_invalid");
+                for(int i=0;i<transfers.Count;i++)
+                {
+                    if(transfers[i].Type!=JTokenType.String)throw new IOException("owner_transfer_invalid");
+                    using(var hash=SHA256.Create())
+                        if(BitConverter.ToString(hash.ComputeHash(new UTF8Encoding(false,true).GetBytes((string)transfers[i]))).Replace("-","").ToLowerInvariant()!=(string)digests[i])
+                            throw new IOException("owner_transfer_changed");
+                }
+                if(!material.Properties().Select(p=>p.Name).OrderBy(x=>x).SequenceEqual(new[]{"endpoint","expires_at","pin","unity_bearer"}) ||
+                    material["expires_at"].Type!=JTokenType.Integer || (long)material["expires_at"]!=expiry ||
+                    new[]{"endpoint","pin","unity_bearer"}.Any(k=>material[k].Type!=JTokenType.String))throw new IOException("owner_material_invalid");
+                var uri=new Uri((string)material["endpoint"],UriKind.Absolute);
+                string pin=(string)material["pin"],bearer=(string)material["unity_bearer"];
+                if(uri.Scheme!="wss" || uri.Host!="127.0.0.1" || uri.Port<1 || uri.AbsolutePath!="/hub/plugin" || uri.Query!="" || uri.Fragment!="" || uri.UserInfo!="" ||
+                    pin.Length!=64 || pin.Any(ch=>!Uri.IsHexDigit(ch)) || bearer.Length<32 || bearer.Length>8192 ||
+                    bearer.Any(ch=>!(char.IsLetterOrDigit(ch)||ch=='.'||ch=='_'||ch=='-')))throw new IOException("owner_material_invalid");
+                byte[] bytes=Enumerable.Range(0,32).Select(i=>Convert.ToByte(pin.Substring(i*2,2),16)).ToArray();
+                material.RemoveAll();
+                if(stopping || !await connect(uri,bearer,bytes))throw new IOException("owner_connect_refused");
+                bearer=null;
+                monitor=MonitorRestoredAsync(expiry);
+                // Ready remains false: local gates must stage/revalidate and commit.
+                return (JArray)transfers.DeepClone();
+            }
+            catch
+            {
+                restoring=false;Ready=false;CloseReloadControl();
+                if(disconnect!=null)await disconnect();
+                return null;
+            }
+        }
+        async Task MonitorRestoredAsync(long expiry)
+        {
+            while(!stopping && reloadPeer!=null && reloadPeer.Alive && DateTimeOffset.UtcNow.ToUnixTimeSeconds()<expiry)await Task.Delay(20);
+            if(!stopping && !detached){Ready=false;restoring=false;CloseReloadControl();if(disconnect!=null)await disconnect();}
+        }
+        async Task StopRestoredAsync(JObject firstRequest = null)
+        {
+            try
+            {
+                var result=Parse(Encoding.UTF8.GetString(await reloadChannel.ExchangeAsync(Encoding.UTF8.GetBytes((firstRequest??new JObject{["kind"]="stop"}).ToString(Newtonsoft.Json.Formatting.None)),12,System.Threading.CancellationToken.None)));
+                var timer=Stopwatch.StartNew();
+                while(reloadPeer.Alive && timer.Elapsed.TotalSeconds<12)await Task.Delay(20);
+                bool yes(string key)=>result[key]?.Type==JTokenType.Boolean && (bool)result[key];
+                CleanupComplete=!reloadPeer.Alive && (string)result["kind"]=="stopped" && (string)result["phase"]=="stopped" &&
+                    yes("process_cleanup_complete") && yes("probe_cleanup_complete") && yes("probe_session_cleanup_confirmed") &&
+                    yes("reload_control_cleanup_complete") && (!remoteHandoff || yes("handoff_cleanup_confirmed")) && (!localCodex || yes("codex_cleanup_complete"));
+            }
+            catch{CleanupComplete=false;}
+            finally{CloseReloadControl();if(disconnect!=null)await disconnect();}
+        }
+        internal async Task<JObject> RequestReloadControlAsync(JObject request)
+        {
+            if((!Ready && !restoring) || stopping || reloadChannel==null ||
+                (restoring && ((string)request?["kind"]!="commit" || (string)request?["handoff_id"]!=restoreHandoff)))
+                throw new InvalidOperationException("owner_control_unavailable");
+            try
+            {
+                var bytes=Encoding.UTF8.GetBytes(request.ToString(Newtonsoft.Json.Formatting.None));
+                var reply=Parse(Encoding.UTF8.GetString(await reloadChannel.ExchangeAsync(bytes,60,System.Threading.CancellationToken.None)));
+                if(restoring && !stopping)
+                {
+                    if(reply.Count!=2 || (string)reply["kind"]!="committed" || (string)reply["handoff_id"]!=restoreHandoff)throw new IOException("owner_commit_changed");
+                    restoring=false;Ready=true;
+                }
+                if(!Ready || stopping)throw new IOException("owner_control_stopped");
+                return reply;
+            }
+            catch {Ready=false;await StopAsync();throw;}
+        }
+        void CloseReloadControl()
+        {
+            reloadChannel?.Dispose();reloadChannel=null;
+            reloadPeer?.Dispose();reloadPeer=null;
         }
         internal async Task StopAsync()
         {
             Ready = false; stopping = true;
+            if(detached)
+            {
+                try
+                {
+                    long left=runExpiry-DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    if(left<=0)throw new IOException("owner_expired");
+                    reloadPeer=new EditorPeerChannel.HeldPeer(OwnerPid,(long)armedTicket["created"]);
+                    reloadChannel=await EditorPeerChannel.ConnectAsync((string)armedTicket["address"],reloadPeer,left,System.Threading.CancellationToken.None);
+                    await StopRestoredAsync(new JObject{["kind"]="cancel",["version"]=1,["project"]=runProject,["handoff_id"]=(string)armedTicket["handoff_id"]});
+                }
+                catch{CleanupComplete=false;CloseReloadControl();if(disconnect!=null)await disconnect();}
+                return;
+            }
+            if(restored){await StopRestoredAsync();if(monitor!=null)await monitor;return;}
             try
             {
                 if (process != null && !process.HasExited)
@@ -303,6 +604,9 @@ namespace Yukino.VRChatAgent
         }
         void Terminate()
         {
+            // A restored object never signals a PID or starts a replacement owner.
+            // Closing the authenticated channel revokes the original surviving run.
+            if(detached || restored){CloseReloadControl();return;}
             try
             {
                 if (process == null || process.HasExited) return;
@@ -322,7 +626,7 @@ namespace Yukino.VRChatAgent
         public void Dispose()
         {
             if(disposed)return; disposed=true; stopping=true; Ready=false;
-            Terminate(); process?.Dispose();
+            Terminate(); CloseReloadControl(); process?.Dispose();
         }
     }
 }

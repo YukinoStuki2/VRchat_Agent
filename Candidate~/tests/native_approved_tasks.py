@@ -2,6 +2,7 @@
 The verifier owns the gate stdin approval channel. Neither client receives it.
 """
 import asyncio
+import hashlib
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 import json
@@ -16,7 +17,7 @@ import test_client_binding as binding
 import websockets
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages',
+TOOLS = ['agent_status','agent_catalog','agent_prepare','agent_stop','manage_material','manage_animation','read_console','manage_scene','find_gameobjects','get_gameobject','get_gameobject_components','get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items','manage_packages','manage_script','get_sha','manage_shader','unity_reflect','get_test_job','manage_asset','manage_prefabs','get_tests',
          'material_prepare','material_execute','material_stop']
 
 def assert_denied_result(value,tool):
@@ -228,6 +229,11 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                     report['native_approved_pass_ids']=checks
                     async def data(role,tool,arguments):
                         value=await peers[role].call(tool,arguments)
+                        if value.get('isError'):
+                            # TEST ONLY, bounded fixture diagnostics; captured output is secret-scanned before reporting.
+                            report['native_call_failure']={'role':role,'tool':tool,
+                                'structured_keys':sorted(value.get('structuredContent') or {}),
+                                'error_text':[v.get('text','')[:240] for v in value.get('content',[]) if v.get('type')=='text'][:2]}
                         assert not value.get('isError'), 'native_tool_error'
                         result=value['structuredContent']
                         if tool in ('get_project_info','get_tags','get_layers','get_selection','get_windows','get_active_tool','get_prefab_stage','get_menu_items'):
@@ -259,6 +265,76 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         assert [row['name'] for row in rows]==[row['name'] for row in expected_catalog['tools']]
                         assert page['total']==len(rows) and await plans()==[] and await plans(True)==[]
                         report['native_catalog_pass_ids'].append('NC001' if role=='hermes' else 'NC002')
+                    report['native_job_pass_ids']=[]
+                    report['native_job_scope']='real Hermes/Codex MCP, runtime wrapper and C# gate; job data/receipt and human approval are explicit fixtures, full native manager tested separately'
+                    job_id='0123456789abcdef0123456789abcdef'
+                    job_args={'job_id':job_id}
+                    job_prepare={'task_id':'job-effect-task','operations':[{'command':'get_test_job','action':'observe'}],
+                        'targets':['TestJobs/'+job_id],'ttl_seconds':120,
+                        'effects':[{'kind':'project_test_job_maintenance','version':1}]}
+                    for role,other,ident in (('hermes','codex','NJE001'),('codex','hermes','NJE002')):
+                        report['approved_stage']='job_effect_'+role
+                        await denied(role,'agent_prepare',job_prepare)  # effect ceiling remains closed
+                        assert (await exchange({'fixture_job_ceiling':True}))['fixture_job_ceiling'] is True
+                        plan=await data(role,'agent_prepare',job_prepare)
+                        assert plan['status']=='pending'
+                        await denied(role,'get_test_job',job_args)
+                        plan=await data(role,'agent_prepare',job_prepare);await approve(plan)
+                        await denied(other,'get_test_job',job_args)
+                        value=await data(role,'get_test_job',job_args)
+                        assert value['job_id']==job_id and value['candidate_effects']['read_only'] is False
+                        assert value['candidate_effects']['project_wide'] is True
+                        assert value['candidate_effects']['all_mutations_observed'] is False
+                        # Same-connection local pause is denial, not revocation or automatic resume.
+                        assert (await exchange({'fixture_pause_exact':plan}))['fixture_paused']
+                        paused=await peers[role].call('get_test_job',job_args)
+                        assert_denied_result(paused,'get_test_job')
+                        assert any(p['plan_id']==plan['plan_id'] and p['paused'] for p in await plans())
+                        assert (await exchange({'fixture_resume_exact':plan}))['fixture_resumed']
+                        assert (await data(role,'get_test_job',job_args))['job_id']==job_id
+                        await data(role,'agent_stop',{'task_id':'job-effect-task'})
+                        await denied(role,'get_test_job',job_args)
+                        for arguments in ({'job_id':'a'*32},dict(job_args,wait_timeout=1),dict(job_args,include_details='false')):
+                            plan=await data(role,'agent_prepare',job_prepare);await approve(plan)
+                            await denied(role,'get_test_job',arguments)
+                            await data(role,'agent_stop',{'task_id':'job-effect-task'})
+                        plan=await data(role,'agent_prepare',job_prepare);await approve(plan)
+                        assert (await exchange({'fixture_job_ceiling':False}))['fixture_job_ceiling'] is False
+                        await denied(role,'get_test_job',job_args)
+                        assert await plans()==[]
+                        report['native_job_pass_ids'].append(ident)
+                    assert report['native_job_pass_ids']==['NJE001','NJE002']
+                    report['native_live_pass_ids']=[]
+                    report['native_live_scope']='real Hermes/Codex, runtime and compiled C# authority; explicitly synthetic readers/approval, not Unity. Actual Session/readers verified separately.'
+                    live_cases=[
+                        ('manage_asset','get_info','AssetReads/Assets/a.asset',{'action':'get_info','path':'Assets/a.asset','generate_preview':False},['asset_load_callbacks']),
+                        ('manage_asset','search','AssetReads/Assets/Scope',{'action':'search','path':'Assets/Scope','generate_preview':False,'page_number':1,'page_size':2},['asset_load_callbacks']),
+                        ('manage_prefabs','get_info','PrefabReads/Assets/a.prefab',{'action':'get_info','prefab_path':'Assets/a.prefab'},['asset_load_callbacks']),
+                        ('manage_prefabs','get_hierarchy','PrefabReads/Assets/a.prefab',{'action':'get_hierarchy','prefab_path':'Assets/a.prefab'},['asset_load_callbacks','prefab_contents_callbacks']),
+                        ('get_tests','discover','TestDiscovery/EditMode',{'mode':'EditMode'},['test_discovery_callbacks']),
+                        ('get_tests','discover','TestDiscovery/PlayMode',{'mode':'PlayMode'},['test_discovery_callbacks']),
+                    ]
+                    for role,other in [('hermes','codex'),('codex','hermes')]:
+                        for command,action,target,arguments,kinds in live_cases:
+                            report['approved_stage']='live_'+role+'_'+command+'_'+action+'_'+target.split('/')[1]
+                            payload={'task_id':'live-effects-task','operations':[{'command':command,'action':action}],
+                                'targets':[target],'ttl_seconds':120,'effects':[{'kind':k,'version':1} for k in kinds]}
+                            assert (await exchange({'fixture_live_ceiling':False}))['fixture_live_ceiling'] is False
+                            await denied(role,'agent_prepare',payload)
+                            assert (await exchange({'fixture_live_ceiling':True}))['fixture_live_ceiling'] is True
+                            plan=await data(role,'agent_prepare',payload);assert plan['status']=='pending'
+                            await denied(role,command,arguments)
+                            plan=await data(role,'agent_prepare',payload);await approve(plan)
+                            await denied(other,command,arguments)
+                            value=await data(role,command,arguments)
+                            assert value['candidate_effects']['kind']==kinds[-1] and value['candidate_effects']['read_only'] is False
+                            assert value['candidate_effects']['all_mutations_observed'] is False
+                            if command=='get_tests':assert len(value['tests'])==1 and value['tests'][0][3]==arguments['mode']
+                            assert (await exchange({'fixture_live_ceiling':False}))['fixture_live_ceiling'] is False
+                            await denied(role,command,arguments);assert await plans()==[]
+                            await data(role,'agent_stop',{'task_id':'live-effects-task'})
+                            report['native_live_pass_ids'].append('NLE'+str(len(report['native_live_pass_ids'])+1).zfill(3))
+                    assert report['native_live_pass_ids']==['NLE001','NLE002','NLE003','NLE004','NLE005','NLE006','NLE007','NLE008','NLE009','NLE010','NLE011','NLE012']
                     report['native_console_pass_ids']=[]
                     console_prepare={'task_id':'console-task','operations':[{'command':'read_console','action':'get'}],
                                      'targets':['Console'],'ttl_seconds':120}
@@ -407,6 +483,77 @@ async def check_approved_tasks(args,home,endpoint,owner,runtime,processes,captur
                         await data(role,'agent_stop',{'task_id':'metadata-task'})
                         await denied(role,'get_tags',{})
                         report['native_project_metadata_pass_ids'].append(ident)
+                    report['native_reflection_pass_ids']=[]
+                    report['native_reflection_scope']='real clients and C# final gate; native reader independently tested in ReflectionBoundaryCases/SourceReadCases, Unity approval is a fixture'
+                    reflection_prepare={'task_id':'api-metadata','operations':[{'command':'unity_reflect','action':a} for a in ('get_type','get_member','search')],'targets':['ApiMetadata'],'ttl_seconds':60}
+                    reflection_calls=[{'action':'get_type','class_name':'Transform'},{'action':'get_member','class_name':'Transform','member_name':'Missing'},{'action':'search','query':'Transform','scope':'unity'}]
+                    for role,other,ident in (('hermes','codex','NRF001'),('codex','hermes','NRF002')):
+                        report['approved_stage']='reflection_'+role
+                        plan=await data(role,'agent_prepare',reflection_prepare)
+                        await denied(role,'unity_reflect',reflection_calls[0])
+                        plan=await data(role,'agent_prepare',reflection_prepare);await approve(plan)
+                        await denied(other,'unity_reflect',reflection_calls[0])
+                        for arguments in reflection_calls:
+                            value=await data(role,'unity_reflect',arguments)
+                            assert value['candidate_scope']['all_loaded_types'] is False
+                        await pause_resume(role,plan,'unity_reflect',reflection_calls[0])
+                        await data(role,'agent_stop',{'task_id':'api-metadata'})
+                        await denied(role,'unity_reflect',reflection_calls[0])
+                        for arguments in ({'action':'search','query':'Transform','scope':'all'},{'action':'get_type','class_name':'Evil, Unloaded'},{'action':'invoke','class_name':'Transform'}):
+                            plan=await data(role,'agent_prepare',reflection_prepare);await approve(plan)
+                            await denied(role,'unity_reflect',arguments)
+                            await data(role,'agent_stop',{'task_id':'api-metadata'})
+                        assert await plans()==[]
+                        report['native_reflection_pass_ids'].append(ident)
+                    report['native_clip_pass_ids']=[]
+                    clip_prepare={'task_id':'clip-read-task','operations':[{'command':'manage_animation','action':'clip_get_info'}],'targets':['Assets/Clips/Fixture.anim'],'ttl_seconds':60}
+                    clip_args={'action':'clip_get_info','clip_path':'Assets/Clips/Fixture.anim'}
+                    for role,other,ident in (('hermes','codex','NCL001'),('codex','hermes','NCL002')):
+                        report['approved_stage']='clip_'+role
+                        plan=await data(role,'agent_prepare',clip_prepare)
+                        await denied(role,'manage_animation',clip_args)
+                        plan=await data(role,'agent_prepare',clip_prepare);await approve(plan)
+                        await denied(other,'manage_animation',clip_args)
+                        value=await data(role,'manage_animation',clip_args)
+                        assert value['name']=='Fixture clip' and value['curveCount']==0 and value['curves']==[]
+                        await pause_resume(role,plan,'manage_animation',clip_args)
+                        await data(role,'agent_stop',{'task_id':'clip-read-task'})
+                        await denied(role,'manage_animation',clip_args)
+                        plan=await data(role,'agent_prepare',clip_prepare);await approve(plan)
+                        await denied(role,'manage_animation',dict(clip_args,action='clip_add_event'))
+                        await data(role,'agent_stop',{'task_id':'clip-read-task'})
+                        assert await plans()==[]
+                        report['native_clip_pass_ids'].append(ident)
+                    report['native_source_pass_ids']=[]
+                    report['native_source_scope']='real client routing and C# gate; source values/evidence are explicit protocol fixtures, not Editor file capture'
+                    source_prepare={'task_id':'source-read-task','operations':[{'command':'manage_script','action':a} for a in ('read','get_sha')]+[{'command':'manage_shader','action':'read'}],
+                        'targets':['Assets/Scripts/Fixture.cs','Assets/Shaders/Fixture.shader'],'ttl_seconds':120}
+                    source_calls=[('manage_script',{'action':'read','name':'Fixture','path':'Assets/Scripts'}),
+                        ('get_sha',{'uri':'Assets/Scripts/Fixture.cs'}),
+                        ('manage_shader',{'action':'read','name':'Fixture','path':'Assets/Shaders'})]
+                    for role,other,ident in (('hermes','codex','NSRC001'),('codex','hermes','NSRC002')):
+                        report['approved_stage']='source_'+role
+                        plan=await data(role,'agent_prepare',source_prepare)
+                        await denied(role,*source_calls[0])
+                        plan=await data(role,'agent_prepare',source_prepare);await approve(plan)
+                        await denied(other,*source_calls[0])
+                        for tool,arguments in source_calls:
+                            value=await data(role,tool,arguments)
+                            if tool=='get_sha':
+                                assert value['sha256']==hashlib.sha256(b'fixture source\n').hexdigest()
+                                assert value['lengthBytes']==len(b'fixture source\n')
+                            else:assert value['contents']=='fixture source\n'
+                        await pause_resume(role,plan,*source_calls[0])
+                        await data(role,'agent_stop',{'task_id':'source-read-task'})
+                        for tool,arguments in source_calls:await denied(role,tool,arguments)
+                        for tool,arguments in (('manage_script',{'action':'delete','name':'Fixture','path':'Assets/Scripts'}),
+                                ('manage_shader',{'action':'create','name':'Fixture','path':'Assets/Shaders','contents':'denied'}),
+                                ('get_sha',{'uri':'Assets/Scripts/Other.cs'})):
+                            plan=await data(role,'agent_prepare',source_prepare);await approve(plan)
+                            await denied(role,tool,arguments)
+                            await data(role,'agent_stop',{'task_id':'source-read-task'})
+                        assert await plans()==[]
+                        report['native_source_pass_ids'].append(ident)
                     report['native_package_metadata_pass_ids']=[]
                     package_prepare={'task_id':'package-metadata','operations':[{'command':'manage_packages','action':'get_package_info'}],'targets':['ProjectMetadata'],'ttl_seconds':120}
                     package_args={'action':'get_package_info','package':'com.unity.ugui'}

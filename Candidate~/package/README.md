@@ -32,3 +32,36 @@
 客户端采用独立临时CODEX_HOME，不导入现用auth.json/配置；登录由用户在该原生控制台完成。`ephemeral`登录保存、禁用历史持久化/插件及受控MCP目录通过CLI覆盖固定；启动不附带提示，不自动发起模型轮次。关闭后账号不保留，重新启动需单独登录。本轮bearer只通过新进程环境交付且从原生终端的默认子环境排除，不写argv/配置/日志；公开证书可写私有临时目录。原生终端不属于MCP硬隔离，仍必须遵守项目AGENTS.md。自定义CA是附加信任，不宣称独占pin。
 
 停止先撤销Unity任务权限，再结束本轮客户端/Job并清理临时profile，最后结束运行时；缺少客户端清理回执不算成功。进程崩溃时Job负责后代退出，但非秘密配置目录的崩溃后磁盘清理不冒称已保证。此入口仍需Windows原生Codex、Unity UI与用户登录完整验收；开发fixture不代替上述验收。
+
+## 受限核心API元数据（本地测试，待实机验收）
+
+`unity_reflect/get_type|get_member|search`复用固定上游读取/格式化方法，
+`Editor/ScopedReflection/`是VRchat_Agent自己的独立命名附加类型，asmref加入固定Coplay程序集。
+不覆盖已安装的Coplay文件，不修改全局UnityTypeResolver、Hermes源码或安全扫描器。
+变换来源、输入hash、固定类型名单见该目录`PROVENANCE.json`，许可证正文一同保留。
+
+必须本地勾选具体操作并批准`ApiMetadata`。仅查询`unity-engine-core-v1`集合：
+Object、Component、GameObject、Transform、Animator、RuntimeAnimatorController、AnimationClip、
+Material、Shader、SkinnedMeshRenderer、Vector3、Quaternion、Color，均为UnityEngine命名空间。
+`class_name`接受集合成员的精确全名或短名；`member_name`为规范标识符，
+`search`须显式`scope=unity`及非空规范`query`。拒绝程序集限定名、泛型语法和额外参数。
+不读取对象实时值、不调用getter/方法、不查询项目/插件类型，不进行扩展方法发现。
+
+返回`candidate_scope`明确标识类型集合以及`all_loaded_types=false`、
+`extension_methods_included=false`。范围外类型/成员的`found=false`仅指本候选范围内没有结果，
+绝不证明该API在整个工程/Unity中不存在；空扩展方法列表也不表示工程没有扩展方法。
+原生读取主体保留，但通用上游反射入口仍被候选门控拒绝。
+本地.NET回调对照测试和Unity API替身不替代真实Unity/Mono、UI和不同SDK/插件组合验收。
+
+## 三类实时效果读取：默认关闭的候选入口
+
+已接入资产`manage_asset/search,get_info`、Prefab `manage_prefabs/get_info,get_hierarchy`和非缓存测试发现`get_tests`（精确`EditMode`/`PlayMode`）。这不是纯只读或插件沙箱：加载/清理与发现可能触发工程插件回调，无法保证阻止内部未知回调，也不能承诺观察全部作用。
+
+本地顺序为：核对当前工程并两步确认信任其插件 → 单独打开对应效果开关和具体操作能力 → 客户端提交含effects的精确任务清单 → 本地核对并批准。任何一步都不代替其他步骤，MCP没有认可插件/批准任务接口。连接、打开窗口或查看目录均不会自动授予这些权限。
+
+- 资产：目标`AssetReads/Assets/...`；effect为`asset_load_callbacks`版本1。预览必须显式关闭；search明确页码/页大小，返回是实时页面而非快照。禁止刷新/全工程无效目录回退/写分支。
+- Prefab：目标`PrefabReads/Assets/*.prefab`；info要求资产effect；hierarchy还需`prefab_contents_callbacks`版本1。仅卸载本次创建的临时内容，不保存或打开Stage。
+- 发现：目标`TestDiscovery/EditMode`或`TestDiscovery/PlayMode`；effect为`test_discovery_callbacks`版本1。不启动测试、不维护作业、不抢焦点；有迭代/结果预算和30秒观测期限，但不能强停阻塞中的插件回调。
+- 停止先撤销信任及任务，不自动回退作用；观察到连接/包/程序集库存变化要求重新本地核对，库存摘要不是执行代码证明。清理不确定会保留Editor会话拒绝标记，重连/新门控/重新勾选不能擦除它；界面不提供重置绕过。
+
+当前发现附加源码固定于Unity Test Framework 1.1.31，候选显式声明依赖和Editor程序集引用；不宣称已兼容其他版本，也不自动修改真实工程来解决依赖冲突。真实Unity/Mono编译、域重载、UI、平台和VPM安装验收仍是交付前门槛。

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "unity_test_framework": "1.1.31",
+  "framework_inputs": {
+    "UnityEditor.TestRunner/TestRunner/Utils/TestListProvider.cs": "64c1413ba11a1b2b34d65f9cd7ad8b90dfb872a51255b7fe04a2e63304666916",
+    "UnityEditor.TestRunner/UnityEditor.TestRunner.asmdef": "bfd5a30e7779218ec0a51022c81a1a9fc1c5f1d94c205057c864a0d3e201ea36",
+    "UnityEditor.TestRunner/UnityEditor.TestRunner.asmdef.meta": "db240d872a959268149b59f14d032e0aac8d20f6018fc2a111e87eb9a6fdc1f4",
+    "LICENSE.md": "075062af29ac0be77c0f8d46adc3f408f449100be142372bd4a5a03c065367aa"
+  },
+  "coplay_test_runner_sha256": "b5f25bffbcee394d746f4a67b7cfaba1bf3e24279f581d79fec7c20098d6ee23",
+  "collector_before_sha256": "dc42ee98cacc591bd6c29bee6e2494c0c2dd31eeddf1f126a599bd0c3259fc38",
+  "outputs": {
+    "CandidateLiveTestListProvider.cs": "b7f69798ad96ab6fefea3e5fc29aa0d3dfb66d488b852d7b3b553dd1941afefc",
+    "CandidateDiscoveryCollector.cs": "e5a32fd3db20abd093edb6c0f9e15b25d0e26d66dd8c346744c8fdb50db09fe0",
+    "CandidateTests.asmref": "7fe353020883192d30892544ac3b3e55178d5d7e4508751310512a6a97538378",
+    "LICENSE-Unity.md": "075062af29ac0be77c0f8d46adc3f408f449100be142372bd4a5a03c065367aa",
+    "LICENSE-Coplay.md": "6efe650c965012ac418238dcd6b9116e4130a5220717ef0dfb539dd159c4245c"
+  },
+  "installed_upstream_files_modified": false,
+  "registered_tool": false,
+  "not_a_callback_sandbox": true
+}

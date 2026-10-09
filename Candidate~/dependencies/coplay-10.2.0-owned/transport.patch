@@ -1,5 +1,5 @@
---- a/Editor/Services/Transport/Transports/WebSocketTransportClient.cs
-+++ b/Editor/Services/Transport/Transports/WebSocketTransportClient.cs
+--- a/WebSocketTransportClient.cs
++++ b/WebSocketTransportClient.cs
 @@ -60,6 +60,29 @@
          private TransportState _state = TransportState.Disconnected(TransportDisplayName, "Transport not started");
          private string _apiKey;
@@ -127,7 +127,7 @@
                  _state = TransportState.Connected(TransportDisplayName, sessionId: _sessionId, details: _endpointUri.ToString());
                  McpLog.Info($"[WebSocket] Registered with session ID: {_sessionId}", false);
  
-@@ -621,14 +676,27 @@
+@@ -621,14 +676,31 @@
              {
                  using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
                  timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
@@ -144,6 +144,10 @@
 +                        if (!_isConnected || string.IsNullOrEmpty(_sessionId)) throw new InvalidOperationException("owned_disconnected");
 +                        return _ownedDispatch(commandName, parameters);
 +                    }, timeoutCts.Token).ConfigureAwait(false);
++                    // The local delegate can return the owned non-cached discovery task.
++                    // Await actual completion/cleanup; cancellation is not cleanup proof.
++                    if (response is Task<object> pending) response = await pending.ConfigureAwait(false);
++                    timeoutCts.Token.ThrowIfCancellationRequested();
 +                    responseJson = JsonConvert.SerializeObject(new { status = "success", result = response });
 +                }
              }
@@ -157,7 +161,7 @@
                  });
              }
              catch (Exception ex)
-@@ -636,7 +704,7 @@
+@@ -636,7 +708,7 @@
                  responseJson = JsonConvert.SerializeObject(new
                  {
                      status = "error",
@@ -166,7 +170,7 @@
                  });
              }
  
-@@ -744,6 +812,7 @@
+@@ -744,6 +816,7 @@
  
          private async Task HandleSocketClosureAsync(string reason)
          {

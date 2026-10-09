@@ -102,9 +102,15 @@ class CLIPTYTests(unittest.TestCase):
                 self.assertFalse(root.parent.exists(), 'snapshot persisted after session ended')
                 self.assertEqual(sorted(p.name for p in Path(home).iterdir()), ['source'])
             finally:
-                if process is not None and process.poll() is None:
-                    process.kill()
-                    process.communicate(timeout=10)
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                    try:
+                        process.communicate(timeout=10)
+                    finally:
+                        for pipe in (process.stdin, process.stdout, process.stderr):
+                            if pipe is not None:
+                                pipe.close()
                 finished.set()
                 if observer:
                     observer.join(timeout=5)
@@ -125,6 +131,20 @@ class CLIPTYTests(unittest.TestCase):
             print('DIAGNOSTICS_CLI_CLEANUP=' + json.dumps({'case': self.id(),
                 'cli_pid': process.pid, 'observed_descendants': sorted(seen),
                 'exit_code': process.returncode, 'fixture_removed_after_context': home}))
+        self.assertFalse(Path(home).exists())
+
+    def test_DC008_missing_backend_closes_pipes_even_after_child_exits(self):
+        import shutil
+        from unittest.mock import patch
+        # Actual CLI EOF, with an intentionally unbundled owned copy. No backend
+        # substitute: expected refusal must also close every parent-side pipe.
+        with tempfile.TemporaryDirectory(prefix='dc-unbundled-') as home:
+            root = Path(home)
+            shutil.copytree(BASE / 'diagnostics', root / 'diagnostics',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            with patch.dict(CLIPTYTests.exercise.__globals__, {'BASE': root}):
+                with self.assertRaisesRegex(AssertionError, 'unexpected CLI EOF'):
+                    self.exercise('eof')
         self.assertFalse(Path(home).exists())
 
     def test_DC007_sigterm_during_preview_cleans_unapproved_snapshot(self):
@@ -159,9 +179,15 @@ class CLIPTYTests(unittest.TestCase):
                 self.assertEqual(output, b'')
                 self.assertEqual(sorted(p.name for p in Path(home).iterdir()), ['source'])
             finally:
-                if process is not None and process.poll() is None:
-                    process.kill()
-                    process.communicate(timeout=10)
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                    try:
+                        process.communicate(timeout=10)
+                    finally:
+                        for pipe in (process.stdin, process.stdout, process.stderr):
+                            if pipe is not None:
+                                pipe.close()
                 os.close(master)
                 os.close(slave)
                 if process:

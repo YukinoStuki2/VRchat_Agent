@@ -321,3 +321,9 @@ missing cross-reload/reconnection task-continuation workflow. No secret/private 
 written; generated child output and owned test-home files are scanned before
 report persistence, and tracked descendants/listeners and temporary roots must be
 absent. The original no-Unity compatibility mode remains separately runnable.
+
+## 原生Hermes参数语义（候选适配器）
+
+专用绑定保留上游原始MCP参数Schema，包括nullable分支；属性以等价的单分支`allOf`表达，避免当前原生Hermes在最终产品权限校验前先转换字符串、标量或嵌套JSON。适配器不替用户“修复”参数、不扩大Schema接受集合，也不改变Hermes的转换器、扫描器或工具执行器。工具参数仍由Runtime及最终C#门控校验。
+
+HA016通过真实原生dispatcher实测布尔/数字/数组/对象/嵌套JSON/null的原样传递，并用现有jsonschema校验器对比Schema语义；原失败保留。兼容性绑定当前原生宿主版本，升级宿主必须重跑；这不是未来宿主或任意模型供应端对所有Schema的保证。自动测试没有模型请求，真实客户端/模型工作流仍需最终验收。

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation><NativeEditorRoot>/home/ubuntu/.hermes/tmp/coplaydev-unity-mcp-v10.2.0/MCPForUnity/Editor</NativeEditorRoot></PropertyGroup>
+ <ItemGroup><Compile Include="JobObservationCases.cs"/><Compile Include="NativeJobEffectStubs.cs"/>
+ <Compile Include="../../package/Editor/Core/CandidateGate.cs"/><Compile Include="../../package/Editor/JobObservation*.cs"/>
+ <Compile Include="$(NativeEditorRoot)/Services/TestJobManager.cs"/><Compile Include="$(NativeEditorRoot)/Services/TestRunStatus.cs"/><Compile Include="$(NativeEditorRoot)/Tools/GetTestJob.cs"/>
+ <Compile Include="$(NativeEditorRoot)/Helpers/Response.cs"/><Compile Include="$(NativeEditorRoot)/Helpers/ToolParams.cs"/><Compile Include="$(NativeEditorRoot)/Helpers/ParamCoercion.cs"/><Compile Include="$(NativeEditorRoot)/Helpers/StringCaseUtility.cs"/>
+ <Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference></ItemGroup>
+</Project>

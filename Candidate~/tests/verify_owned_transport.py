@@ -40,12 +40,15 @@ async def main(label):
   source=[SOURCE,additive,UP/'Editor/Services/IToolDiscoveryService.cs',UP/'Editor/Services/Transport/TransportState.cs',UP/'Editor/Services/Transport/IMcpTransportClient.cs',ROOT/'tests/unity-core/OwnedTransportStubs.cs',ROOT/'tests/unity-core/OwnedTransportCases.cs']
   if gates:
    text=(ROOT/'tests/unity-core/WriteUnityStubs.cs').read_text()
-   text=text.replace(' public static class Application { public static string dataPath; }','')
+   application=[line for line in text.splitlines() if line.startswith(' public static class Application {')]
+   assert len(application)==1, 'expected_exactly_one_application_stub'
+   text=text.replace(application[0],'',1)
    text=text.replace('return "Assets/source.mat";', 'return obj is UnityEngine.Shader ? "Resources/unity_builtin_extra" : "Assets/source.mat";')
    a=text.index('namespace MCPForUnity.Editor.Helpers {');b=text.index('namespace MCPForUnity.Editor.Tools {',a)
-   text=text[:a]+text[b:]
+   lookup=next(line for line in text.splitlines() if line.startswith(" public static class GameObjectLookup "))
+   text=text[:a]+"namespace MCPForUnity.Editor.Helpers {\n"+lookup+"\n}\n"+text[b:]
    doubled=work/'GateUnityDoubles.cs';doubled.write_text(text+'\ninternal static class WriteUnityCases {}\n')
-   source=[p for p in source if p.name!='OwnedTransportCases.cs']+[doubled,UP/'Editor/Helpers/Response.cs',ROOT/'tests/unity-core/OwnedGatePeer.cs',*sorted(p for p in (ROOT/'package/Editor').rglob('*.cs') if 'OwnedTransport' not in p.parts)]
+   source=[p for p in source if p.name!='OwnedTransportCases.cs']+[doubled,ROOT/'tests/unity-core/ProjectResourceApiStubs.cs',UP/'Editor/Helpers/Response.cs',ROOT/'tests/unity-core/OwnedGatePeer.cs',*sorted(p for p in (ROOT/'package/Editor').rglob('*.cs') if 'OwnedTransport' not in p.parts and 'ScopedReflection' not in p.parts and 'ScopedAssets' not in p.parts and 'ScopedPrefabs' not in p.parts and 'ScopedTests' not in p.parts)]
   if editor:source=[ROOT/'tests/unity-core/EditorOwnerPeer.cs' if p.name=='OwnedGatePeer.cs' else p for p in source]
   freeze=source+[ROOT/'distribution/materialize_owned_transport.py',diff,diff.parent/'PROVENANCE.json',*shipped.iterdir()]+list((ROOT/'runtime').glob('*.py'))+list((ROOT/'launcher').glob('*.py'))+list((ROOT/'native/src').rglob('*.py'))+[ROOT/'tests/unity-core/WriteUnityStubs.cs',Path(__file__),ROOT/'tests/owned_descendants.py',ROOT/'distribution/assemble_source.py',ROOT/'distribution/source-inputs.json',ROOT/'build_candidate.py'];hashes={str(x):hashlib.sha256(x.read_bytes()).hexdigest() for x in freeze};report['input_sha256']=hashes
   csproj=work/'OwnedTransport.csproj'
@@ -66,14 +69,16 @@ async def main(label):
   report['build']={'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr};print(p.stdout,p.stderr)
   dll=work/'bin/Release/net8.0/OwnedTransport.dll'
   async def run(*args):
+   sys.path.insert(0,str(ROOT/'tests'))
    from owned_descendants import Descendants
    tracker=Descendants() if editor else None
    done=asyncio.Event()
    proc=await asyncio.create_subprocess_exec(str(DOTNET),str(dll),*args,env=env,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
    watch=asyncio.create_task(tracker.watch(proc.pid,done)) if tracker else None
    try:stdout,stderr=await asyncio.wait_for(proc.communicate(),45)
-   except TimeoutError:
-    proc.kill();stdout,stderr=await proc.communicate()
+   except (TimeoutError,asyncio.CancelledError):
+    if proc.returncode is None:proc.kill()
+    stdout,stderr=await proc.communicate()
    finally:
     done.set()
     if watch is not None:await watch
@@ -137,6 +142,12 @@ async def main(label):
      and rows[0].get('register',{}).get('project_hash')=='fixture-project'
      and rows[0].get('execute_anything',{}).get('result',{}).get('status')=='error'
      and rows[0].get('vrchat_agent_dispatch',{}).get('result',{}).get('result',{}).get('data',{}).get('probe')=='owned-native-wire')
+   out.write_text(json.dumps(report,indent=2)) # Preserve real wire failures before SDK setup.
+   if '--wire-only' in sys.argv:
+    report['sources_unchanged']=all(hashlib.sha256(x.read_bytes()).hexdigest()==hashes[str(x)] for x in freeze)
+    report['passed']=report.get('wire_valid') is True and report.get('listener_closed') is True and report['sources_unchanged'] and len(report['runs'])==4 and all(r['exit']==0 and r['pid_absent'] for r in report['runs'])
+    out.write_text(json.dumps(report,indent=2));print(json.dumps({'passed':report['passed'],'scope':'native TLS wire only, not SDK'}))
+    return 0 if report['passed'] else 1
    # Full real SDK -> authenticated native hub -> patched upstream C# -> readback.
    for path in (ROOT/'native/src',ROOT/'runtime',ROOT/'dependencies/mcp-1.29.1'):
     sys.path.insert(0,str(path))
@@ -159,7 +170,7 @@ async def main(label):
     sys.path.insert(0,str(ROOT))
     from launcher.owned_run import create_owned_run,supervise_owned
     raw={'project':'fixture-project','local_port':port,'parent_pid':os.getpid()}
-    owned=create_owned_run(raw,lifetime=120);identity=owned.owner.identity;material=owned.owner.tls;pin=material.pin
+    owned=create_owned_run(raw,lifetime=120,clients=('hermes',));identity=owned.owner.identity;material=owned.owner.tls;pin=material.pin
     sock.close();stop=threading.Event();statuses=[]
     task=asyncio.create_task(asyncio.to_thread(supervise_owned,raw,owned=owned,stop=stop,report=statuses.append))
    else:

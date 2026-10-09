@@ -167,7 +167,7 @@ internal static class SceneNativeCases {
   Denied(Wire("prepare","",invalid),"operation_not_supported");
   invalid=(JObject)manifest.DeepClone();invalid["operations"][6]=invalid["operations"][0].DeepClone();
   Denied(Wire("prepare","",invalid),"local_capability_disabled");
-  invalid=(JObject)manifest.DeepClone();((JArray)invalid["operations"]).Add(invalid["operations"][0].DeepClone());
+  invalid=(JObject)manifest.DeepClone();while(((JArray)invalid["operations"]).Count<=29)((JArray)invalid["operations"]).Add(invalid["operations"][0].DeepClone());
   Denied(Wire("prepare","",invalid),"invalid_manifest");
   invalid=(JObject)manifest.DeepClone();((JArray)invalid["targets"]).Add("Scenes");
   Denied(Wire("prepare","",invalid),"duplicate_target");

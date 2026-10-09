@@ -157,6 +157,8 @@ class RuntimeBinding:
     started: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     cancelled: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     used: bool = field(default=False, init=False)
+    probe_inflight: threading.Event = field(default_factory=threading.Event,init=False,repr=False)
+    reload_control: object = field(default=None, repr=False)  # Local typed owner only.
 
 
 def child_environment(extra=None, source=None):
@@ -267,6 +269,7 @@ def supervise(raw, *, binding=None, stop=None, report=None):
                 status.update(stage='runtime_starting', component='runtime', phase='starting',
                               code='RUNTIME_STARTING', process_cleanup_complete=False)
                 runtime = owner.spawn(runtime_argv, env, runtime_progress.line)
+                if binding.reload_control is not None:binding.reload_control.bind(runtime.pid)
                 binding.started.set()
                 publish()
                 deadline = time.monotonic() + START_TIMEOUT
@@ -314,6 +317,9 @@ def supervise(raw, *, binding=None, stop=None, report=None):
     finally:
         binding.cancelled.set()
         clean = True
+        if binding.reload_control is not None:
+            try:binding.reload_control.close()
+            except Exception:clean=False
         # Cut off remote access first; no MCP allocations or custom protocol here.
         if ssh is not None:
             try:

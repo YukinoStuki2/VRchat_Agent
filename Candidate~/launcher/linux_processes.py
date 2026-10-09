@@ -13,8 +13,8 @@ from .windows_processes import NativeProcess
 
 class Process(NativeProcess):
     def __init__(self, proc, readfd, callback):
-        super().__init__(None, None, None, readfd, callback)
-        self.proc, self.pid = proc, proc.pid
+        super().__init__(None, None, None, readfd, callback, pid=proc.pid)
+        self.proc = proc
 
     def poll(self):
         if self.proc.returncode is not None:

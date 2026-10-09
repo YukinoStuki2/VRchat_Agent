@@ -317,6 +317,8 @@ def main():
         asyncio.run(run(args,report))
         report['passed']=bool(report['descendants']['clean'] and report['runtime_sessions_empty']
             and (not args.approved_tasks or (report.get('native_approved_pass_ids')==[f'NA{i:03d}' for i in range(1,7)] and report.get('native_console_pass_ids')==['NQ001','NQ002']
+                and report.get('native_job_pass_ids')==['NJE001','NJE002']
+                and report.get('native_live_pass_ids')==['NLE001','NLE002','NLE003','NLE004','NLE005','NLE006','NLE007','NLE008','NLE009','NLE010','NLE011','NLE012']
                 and report.get('native_scene_pass_ids')==['NE001','NE002']
                 and report.get('native_validate_pass_ids')==['NV001','NV002']
                 and report.get('native_find_pass_ids')==['NF001','NF002']
@@ -326,6 +328,8 @@ def main():
                 and report.get('native_editor_metadata_pass_ids')==['NEM001','NEM002']
                 and report.get('native_menu_metadata_pass_ids')==['NMN001','NMN002']
                 and report.get('native_package_metadata_pass_ids')==['NPK001','NPK002']
+                and report.get('native_reflection_pass_ids')==['NRF001','NRF002']
+                and report.get('native_clip_pass_ids')==['NCL001','NCL002'] and report.get('native_source_pass_ids')==['NSRC001','NSRC002']
                 and report.get('native_hierarchy_pass_ids')==['NH001','NH002'])))
     except BaseException as exc:
         report['error_type']=type(exc).__name__

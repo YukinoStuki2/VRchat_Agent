@@ -64,8 +64,15 @@ async def observe_runtime(owner, binding, *, stop=None, receipt=None, transport_
     async with Client(transport, timeout=3) as client:
         while not cancelled():
             if time.time() >= owner.identity.expires_at:raise TimeoutError('owned_run_expired')
+            control=getattr(binding,'reload_control',None)
+            if control is not None and control.pending():
+                binding.ready.clear()
+                await asyncio.sleep(.02)
+                continue
             try:
-                result = await client.call_tool('agent_status',{})
+                binding.probe_inflight.set()
+                try:result = await client.call_tool('agent_status',{})
+                finally:binding.probe_inflight.clear()
             except ToolError as exc:
                 if (not binding.ready.is_set() and str(exc)=='expected_project_not_connected'
                         and time.monotonic()<deadline):
@@ -74,7 +81,14 @@ async def observe_runtime(owner, binding, *, stop=None, receipt=None, transport_
                 raise
             data = result.data
             if (type(data) is not dict or data.get('success') is not True
-                    or type(data.get('data')) is not dict or data['data'].get('read_only') is not True):
+                    # Effect ceilings describe authority, not transport readiness.
+                    or type(data.get('data')) is not dict or type(data['data'].get('read_only')) is not bool
+                    or data['data'].get('ready', True) is not True
+                    or data['data'].get('status') == 'planned_reload_frozen'):
+                # Until the owner has a verified suspend/reattach state, a frozen
+                # runtime is NOT ready. Never preserve liveness by faking readiness.
+                binding.ready.clear()
                 raise PermissionError('owned_gate_status_invalid')
-            binding.ready.set()
+            if control is not None and control.pending():binding.ready.clear()
+            else:binding.ready.set()
             await asyncio.sleep(.2)

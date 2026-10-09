@@ -293,5 +293,34 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             for name,entry in binding._entries:original(name,entry,None,scope=binding._scope)
             self.bindings.remove(binding)  # Failed cleanup remains failed, not a green retry.
 
+    async def test_HA016_native_dispatch_preserves_raw_json_types_and_schema(self):
+        from tools.registry import registry
+        from model_tools import handle_function_call
+        from jsonschema import Draft202012Validator
+        self.registry=registry
+        peer=Peer();session=peer.session
+        original={'type':'object','properties':{
+            'flag':{'type':'boolean'},'count':{'type':'integer'},'fraction':{'type':'number'},
+            'rows':{'type':'array','items':{'type':'object','properties':{'enabled':{'type':'boolean'}}}},
+            'nested':{'type':'object','properties':{'rows':{'type':'array','items':{'type':'object'}}}},
+            'optional':{'anyOf':[{'type':'integer'},{'type':'null'}]}},'additionalProperties':False}
+        async def catalog():
+            return SimpleNamespace(tools=[SimpleNamespace(name='agent_status',description='fixture raw types',input_schema=original)],next_cursor=None)
+        session.list_tools=catalog
+        binding=await self.make(peer);name=binding.snapshot()[0]['function']['name']
+        samples=[{'flag':'false'},{'count':'1'},{'fraction':'1.25'},{'rows':'[]'},
+            {'rows':'[{}]'},{'rows':['{}']},{'rows':{}},{'nested':'{}'},
+            {'nested':{'rows':['{}']}},{'optional':'null'},{'optional':'1'},
+            {'flag':False,'count':1,'fraction':1.25,'rows':[{'enabled':True}],'optional':None}]
+        exported=binding.snapshot()[0]['function']['parameters']
+        Draft202012Validator.check_schema(exported)
+        for raw in samples:
+            with self.subTest(raw=raw):
+                self.assertEqual(Draft202012Validator(original).is_valid(raw),Draft202012Validator(exported).is_valid(raw),'schema meanings changed')
+                before=json.loads(json.dumps(raw))
+                response=await asyncio.to_thread(handle_function_call,name,json.loads(json.dumps(raw)),session_id='chat-a',enabled_tools=[name])
+                self.assertIn('mcp',json.loads(response))
+                self.assertEqual(session.calls[-1],('agent_status',before),'native host coerced raw arguments before candidate authority')
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

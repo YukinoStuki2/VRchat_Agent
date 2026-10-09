@@ -46,15 +46,16 @@
                  # Stop the ping loop for this session
                  ping_task = cls._ping_tasks.pop(session_id, None)
                  if ping_task and not ping_task.done():
-@@ -329,6 +338,7 @@
+@@ -329,6 +338,8 @@
              cls._pending[command_id] = {
                  "future": future, "session_id": session_id}
  
 +        result_valid = False
++        result = None
          try:
              msg = ExecuteCommandMessage(
                  id=command_id,
-@@ -336,8 +346,15 @@
+@@ -336,8 +347,15 @@
                  params=params,
                  timeout=unity_timeout_s,
              )
@@ -71,7 +72,7 @@
              except Exception as exc:
                  # If send fails (socket already closing), fail the future so callers don't hang.
                  if not future.done():
-@@ -345,6 +362,8 @@
+@@ -345,6 +363,8 @@
                  raise
              try:
                  result = await asyncio.wait_for(future, timeout=server_wait_s)
@@ -80,18 +81,18 @@
                  return result
              except PluginDisconnectedError as exc:
                  return MCPResponse(success=False, error=str(exc), hint="retry").model_dump()
-@@ -357,6 +376,10 @@
+@@ -357,6 +377,10 @@
                      ).model_dump()
                  raise
          finally:
 +            if not result_valid and cls.command_failed is not None:
-+                cls.command_failed()
++                cls.command_failed(result)
 +            if future.done() and not future.cancelled():
 +                future.exception()  # Drain send failures even when native caller returns an error.
              async with lock:
                  cls._pending.pop(command_id, None)
  
-@@ -459,6 +482,8 @@
+@@ -459,6 +483,8 @@
              # so they don't linger as orphans after a domain-reload reconnection race.
              if evicted_session_id:
                  evicted_ws = cls._connections.pop(evicted_session_id, None)
@@ -100,7 +101,7 @@
                  old_ping = cls._ping_tasks.pop(evicted_session_id, None)
                  if old_ping and not old_ping.done():
                      old_ping.cancel()
-@@ -1005,6 +1030,11 @@
+@@ -1005,6 +1031,11 @@
              user_id: User ID for session isolation in remote-hosted mode
              retry_on_reload: If False, do not wait for session reconnect on reload.
          """

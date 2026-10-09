@@ -25,10 +25,11 @@ def environment():
 
 
 class EditorOwnerTests(unittest.IsolatedAsyncioTestCase):
-    async def spawn(self,parent=None):
+    async def spawn(self,parent=None,*,reload=False):
         self.assertTrue(ENTRY.exists(),'editor owner entry missing')
         return await asyncio.create_subprocess_exec(EXECUTABLE,'-B',str(ENTRY),
             '--project',PROJECT,'--parent-pid',str(os.getpid() if parent is None else parent),
+            *(['--reload-control'] if reload else []),
             env=environment(),stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
 
     async def stop(self,p):
@@ -176,5 +177,35 @@ print(json.dumps(row),flush=True)
             _,err=await asyncio.wait_for(p.communicate(b'start\n'),5)
             output.seek(0);out=output.read()
             self.assertNotEqual(p.returncode,0);self.assertNotIn(b'unity_bearer',out+err)
+
+    async def test_EB009_opt_in_private_control_binds_original_parent_and_cleans(self):
+        from launcher.peer_identity import PeerProcess
+        from launcher.peer_channel import PeerChannel
+        p=await self.spawn(reload=True);channel=None
+        try:
+            p.stdin.write(b'start\n');await p.stdin.drain()
+            line=await asyncio.wait_for(p.stdout.readline(),10)
+            self.assertTrue(line,'missing opt-in editor control bootstrap')
+            bundle=json.loads(line)
+            self.assertEqual(bundle['version'],3)
+            self.assertEqual(set(bundle['reload']),{'address','created'})
+            self.assertEqual(bundle['owner_pid'],p.pid)
+            with PeerProcess(p.pid) as held:
+                self.assertEqual(bundle['reload']['created'],held.identity[1])
+                channel=await asyncio.to_thread(PeerChannel.connect,bundle['reload']['address'],held,deadline=time.monotonic()+10)
+                def exchange(message):
+                    channel.send(json.dumps(message).encode());return json.loads(channel.receive())
+                self.assertEqual(await asyncio.to_thread(exchange,{'kind':'hello','version':1,'project':PROJECT}),
+                    {'kind':'editor_control_ready','version':1})
+                self.assertEqual(await asyncio.to_thread(exchange,{'kind':'status'}),{'kind':'editor_control_status','phase':'idle'})
+                out,err=await self.stop(p)
+                final=json.loads(out.decode().splitlines()[-1])
+                self.assertTrue(final['editor_control_cleanup_complete'])
+                self.assertTrue(final['process_cleanup_complete'])
+                self.assertEqual(p.returncode,0,err.decode())
+                self.assertNotIn(bundle['unity_bearer'].encode(),out+err)
+        finally:
+            if channel is not None:channel.close()
+            if p.returncode is None:await self.stop(p)
 
 if __name__=='__main__':unittest.main(verbosity=2)

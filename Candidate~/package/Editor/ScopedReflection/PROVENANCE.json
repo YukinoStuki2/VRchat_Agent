@@ -1,0 +1,26 @@
+{
+  "upstream_commit": "30d22075093d1d35dfb0091c1c7550e9ad948577",
+  "upstream_path": "Editor/Tools/UnityReflect.cs",
+  "upstream_sha256": "b42f5b8de353eec2e6ce26bbfa72a4e235ecedcf7fabffbda548244f10f838ef",
+  "additive_type": "CandidateScopedUnityReflect",
+  "source_sha256": "de81f33bce57e48c9369c6d00e0ca0437adeb548f02976edca4188a5b9c671c5",
+  "allowed_types": [
+    "UnityEngine.Object",
+    "UnityEngine.Component",
+    "UnityEngine.GameObject",
+    "UnityEngine.Transform",
+    "UnityEngine.Animator",
+    "UnityEngine.RuntimeAnimatorController",
+    "UnityEngine.AnimationClip",
+    "UnityEngine.Material",
+    "UnityEngine.Shader",
+    "UnityEngine.SkinnedMeshRenderer",
+    "UnityEngine.Vector3",
+    "UnityEngine.Quaternion",
+    "UnityEngine.Color"
+  ],
+  "extension_discovery": false,
+  "assembly_reference_guid": "98f702da6ca044be59a864a9419c4eab",
+  "installed_upstream_files_modified": false,
+  "unity_import_verified": false
+}

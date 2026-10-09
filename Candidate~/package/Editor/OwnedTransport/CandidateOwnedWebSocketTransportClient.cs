@@ -688,6 +688,10 @@ namespace MCPForUnity.Editor.Services.Transport.Transports
                         if (!_isConnected || string.IsNullOrEmpty(_sessionId)) throw new InvalidOperationException("owned_disconnected");
                         return _ownedDispatch(commandName, parameters);
                     }, timeoutCts.Token).ConfigureAwait(false);
+                    // The local delegate can return the owned non-cached discovery task.
+                    // Await actual completion/cleanup; cancellation is not cleanup proof.
+                    if (response is Task<object> pending) response = await pending.ConfigureAwait(false);
+                    timeoutCts.Token.ThrowIfCancellationRequested();
                     responseJson = JsonConvert.SerializeObject(new { status = "success", result = response });
                 }
             }

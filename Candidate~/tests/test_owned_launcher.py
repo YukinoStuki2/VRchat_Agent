@@ -57,7 +57,7 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(request['project_id'],owner.project)
                 self.assertEqual(request['connection_id'],registered['session_id'])
                 await ws.send(json.dumps({'type':'command_result','id':message['id'],
-                    'result':{'status':'success','result':{'success':True,'data':{'read_only':True}}}}))
+                    'result':{'status':'success','result':{'success':True,'data':getattr(self,'probe_data',{'read_only':True})}}}))
                 ready.set()
                 if disconnect:
                     await asyncio.sleep(.3);await ws.close();return
@@ -66,19 +66,23 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await ws.close()
 
-    async def exercise(self,disconnect=False):
+    async def exercise(self,disconnect=False,expect_running=True):
         module=self.module();raw=self.config();owned=module.create_owned_run(raw)
         stop=threading.Event();reports=[];peer_ready=asyncio.Event()
         loop=asyncio.get_running_loop()
         def report(value):
             reports.append(value)
-            if value['phase']=='running' and not disconnect:stop.set()
+            if value['phase']=='running' and not disconnect:
+                if hasattr(self,'after_running'):
+                    self.probe_data=self.after_running
+                    loop.call_soon_threadsafe(loop.call_later,.7,stop.set)
+                else:stop.set()
         task=asyncio.create_task(asyncio.to_thread(module.supervise_owned,raw,
             owned=owned,stop=stop,report=report))
         peer=asyncio.create_task(self.run_peer(owned.owner,peer_ready,disconnect))
         try:
             result=await asyncio.wait_for(asyncio.shield(task),16)
-            self.assertTrue(any(x['phase']=='running' for x in reports), {'supervisor_code':result.get('code')})
+            self.assertEqual(any(x['phase']=='running' for x in reports),expect_running, {'supervisor_code':result.get('code')})
             await asyncio.wait_for(peer,3)
         finally:
             stop.set()
@@ -86,7 +90,7 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
             if not peer.done():peer.cancel()
             await asyncio.gather(peer,return_exceptions=True)
         self.assertTrue(peer_ready.is_set())
-        self.assertTrue(any(x['phase']=='running' for x in reports),reports)
+        self.assertEqual(any(x['phase']=='running' for x in reports),expect_running,reports)
         self.assertTrue(result['process_cleanup_complete'],result)
         self.assertTrue(result['probe_cleanup_complete'],result)
         self.assertFalse(owned.binding.ready.is_set(),'stopped binding must not retain a ready latch')
@@ -132,5 +136,40 @@ class OwnedLauncherTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(received,[])
         finally:
             server.close();await server.wait_closed()
+
+    async def test_BL005_frozen_status_is_not_readiness_without_owner_handoff(self):
+        self.probe_data={'read_only':True,'ready':False,'status':'planned_reload_frozen'}
+        result=await self.exercise(expect_running=False)
+        self.assertEqual(result['code'],'BINDING_FAILED',result)
+        self.assertTrue(result.get('probe_session_cleanup_confirmed'),result)
+
+    async def test_BL006_not_ready_alone_refuses_readiness(self):
+        self.probe_data={'read_only':True,'ready':False,'status':'active'}
+        result=await self.exercise(expect_running=False)
+        self.assertEqual(result['code'],'BINDING_FAILED',result)
+        self.assertTrue(result.get('probe_session_cleanup_confirmed'),result)
+
+    async def test_BL007_frozen_status_alone_refuses_readiness(self):
+        self.probe_data={'read_only':True,'ready':True,'status':'planned_reload_frozen'}
+        result=await self.exercise(expect_running=False)
+        self.assertEqual(result['code'],'BINDING_FAILED',result)
+        self.assertTrue(result.get('probe_session_cleanup_confirmed'),result)
+
+    async def test_BL008_effect_capabilities_allow_readiness_and_live_transition(self):
+        for effect in ('asset_load_callbacks','prefab_contents_callbacks','test_discovery_callbacks','project_test_job_maintenance'):
+            with self.subTest(effect=effect):
+                self.probe_data={'read_only':False,effect:True}
+                result=await self.exercise()
+                self.assertEqual(result['code'],'STOPPED',result)
+                self.assertTrue(result['probe_session_cleanup_confirmed'])
+        self.probe_data={'read_only':True}
+        self.after_running={'read_only':False,'asset_load_callbacks':True}
+        result=await self.exercise()
+        self.assertEqual(result['code'],'STOPPED',result)
+
+    async def test_BL009_malformed_readonly_is_not_ready(self):
+        self.probe_data={'read_only':0}
+        result=await self.exercise(expect_running=False)
+        self.assertEqual(result['code'],'BINDING_FAILED',result)
 
 if __name__=='__main__':unittest.main(verbosity=2)

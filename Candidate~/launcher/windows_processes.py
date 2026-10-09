@@ -130,7 +130,7 @@ class WinAPI:
                 process,thread=info.hProcess,info.hThread
             finally:
                 self.k.DeleteProcThreadAttributeList(attributes)
-            result=NativeProcess(self,process,thread,readfd,callback);readfd=None
+            result=NativeProcess(self,process,thread,readfd,callback,pid=info.dwProcessId);readfd=None
             return result
         except BaseException:
             if process is not None:
@@ -143,8 +143,9 @@ class WinAPI:
                 if fd is not None:os.close(fd)
 
 class NativeProcess:
-    def __init__(self,api,handle,thread,readfd,callback):
+    def __init__(self,api,handle,thread,readfd,callback,*,pid):
         self.api,self.handle,self.thread=api,handle,thread
+        self.pid=pid  # CreateProcessW identity; ownership/termination still use HANDLEs.
         self.readfd,self.callback=readfd,callback
         self.reader=None
     def poll(self):

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 namespace UnityEngine {
  public class AnimationClip:Object {}
+ public static class Resources {public static T[] FindObjectsOfTypeAll<T>() where T:Object=>Array.Empty<T>();}
  public class RuntimeAnimatorController:Object {public AnimationClip[] animationClips=Array.Empty<AnimationClip>();}
  public class Animator:Component {public int parameterCount,layerCount;public RuntimeAnimatorController runtimeAnimatorController;}
 
@@ -11,7 +12,7 @@ namespace UnityEngine {
  public class Component : Object {}
  public class Transform : Component { public int childCount=>0; }
  public class GameObject : Object { public UnityEngine.SceneManagement.Scene scene; public Transform transform=>new Transform(); public T[] GetComponents<T>() where T:Component=>Array.Empty<T>(); }
- public static class Application { public static string dataPath; }
+ public static class Application { public static string dataPath; public static string unityVersion="fixture-2022.3"; }
  public struct Vector2 {}
  public static class GUILayout {
   public static string NextButton; public static Action BeforeClick;
@@ -42,6 +43,9 @@ namespace UnityEditor {
  public static class AssemblyReloadEvents { public static event Action beforeAssemblyReload; public static void Reload() => beforeAssemblyReload?.Invoke(); }
  public static class AssetDatabase {
   public static UnityEngine.Object Asset = new UnityEngine.Object();
+  public static Type GetMainAssetTypeAtPath(string path)=>null;
+  public static bool IsMainAsset(UnityEngine.Object o)=>false;
+  public static string GetAssetPath(UnityEngine.Object o)=>"";
   public static string AssetPathToGUID(string path) => "fixture-guid";
   public static string GetAssetDependencyHash(string path) => "fixture-dependency-hash";
   public static UnityEngine.Object[] LoadAllAssetsAtPath(string path) => new[] { Asset };

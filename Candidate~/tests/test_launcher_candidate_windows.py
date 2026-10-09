@@ -24,6 +24,9 @@ class RealWindowsTests(unittest.TestCase):
   grand=None
   try:
    process=owner.spawn([sys.executable,'-B','-I','-c',code],dict(os.environ),line)
+   owner.api.k.GetProcessId.argtypes=[m.HANDLE];owner.api.k.GetProcessId.restype=m.DWORD
+   self.assertEqual(process.pid,owner.api.k.GetProcessId(process.handle))
+   self.assertGreater(process.pid,0)
    self.assertTrue(ready.wait(10),'child stdout redirected, stderr pipe failed')
    self.assertIsNone(process.poll());self.assertTrue(owner.alive())
    grand=owner.api.w.OpenProcess(0x00100000,False,int(rows[0]))

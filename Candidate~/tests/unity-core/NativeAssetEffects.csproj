@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><LangVersion>9.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><Nullable>disable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems><UseSharedCompilation>false</UseSharedCompilation></PropertyGroup>
+ <PropertyGroup Condition="'$(CandidateAsset)'=='true'"><DefineConstants>$(DefineConstants);CANDIDATE_ASSET</DefineConstants></PropertyGroup>
+ <ItemGroup>
+  <Compile Include="NativeAssetEffects.cs"/><Compile Include="../../package/Editor/AssetObservation*.cs"/><Compile Include="../../package/Editor/Core/CandidateGate.cs"/>
+  <Compile Include="$(NativeAssetSource)"/>
+  <Compile Include="$(NativeEditorRoot)/Helpers/Response.cs"/>
+  <Reference Include="Newtonsoft.Json"><HintPath>$(MSBuildSDKsPath)/../Newtonsoft.Json.dll</HintPath></Reference>
+ </ItemGroup>
+</Project>

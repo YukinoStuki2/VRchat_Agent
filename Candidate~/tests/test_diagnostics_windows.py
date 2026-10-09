@@ -237,12 +237,21 @@ class WindowsBoundaryTests(unittest.TestCase):
         from unittest.mock import patch
         import snapshot
         import tempfile
+        from contextlib import contextmanager
+        import lifetime
+        import time
+        # HANDLE/ACL routing double only; real guarded_container launches a
+        # separate platform-matched keeper, which cannot be mocked via sys.platform.
+        @contextmanager
+        def in_process_keeper(parent):
+            with snapshot.private_container(parent) as private:
+                yield private, time.monotonic() + 300, lambda: True, lambda: None
         made = []
         def mkdir(path):
             made.append(Path(path))
             Path(path).mkdir(mode=0o700)
         with tempfile.TemporaryDirectory(prefix='dw-private-') as temp:
-            with patch.object(snapshot.sys, 'platform', 'win32'), patch.object(self.module(), 'create_private_directory', side_effect=mkdir), patch.object(self.module(), 'Win32', side_effect=HandleAPI):
+            with patch.object(snapshot.sys, 'platform', 'win32'), patch.object(lifetime, 'guarded_container', side_effect=in_process_keeper), patch.object(self.module(), 'create_private_directory', side_effect=mkdir), patch.object(self.module(), 'Win32', side_effect=HandleAPI):
                 with snapshot.capture('C:\\fixture', ['Test.cs'], task_id='fixture', temp_parent=temp) as snap:
                     self.assertEqual(len(made), 1, 'no explicit Windows private ACL container')
                     self.assertTrue(snap.root.is_relative_to(made[0]))

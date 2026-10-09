@@ -23,6 +23,88 @@ def assembler():
 
 
 class SourcePayloadTests(unittest.TestCase):
+    def test_SP015_discovery_reader_in_payload_without_registration(self):
+        files=assembler().collect(ROOT)
+        names=('CandidateDiscoveryJob.cs','CandidateDiscoveryCollector.cs','CandidateLiveTestListProvider.cs','CandidateTests.asmref','PROVENANCE.json','LICENSE-Unity.md','LICENSE-Coplay.md')
+        for name in names:
+            relative='Editor/ScopedTests/'+name
+            self.assertTrue(relative in files,'unshipped discovery reader: '+relative)
+            self.assertEqual(files[relative],(ROOT/'package'/relative).read_bytes())
+        self.assertEqual(json.loads(files['Editor/ScopedTests/CandidateTests.asmref'])['reference'],'GUID:0acc523941302664db1f4e527237feb3')
+        proof=json.loads(files['Editor/ScopedTests/PROVENANCE.json'])
+        for name,digest in proof['outputs'].items():
+            self.assertEqual(hashlib.sha256(files['Editor/ScopedTests/'+name]).hexdigest(),digest)
+        for name in names[:3]:
+            for forbidden in (b'[McpForUnityTool',b'[InitializeOnLoad',b'RegisterCallbacks(',b'CachingTestListProvider',b'AnalyticsReporter',b'Execute(',b'QueuePlayerLoopUpdate'):
+                self.assertNotIn(forbidden,files['Editor/ScopedTests/'+name])
+        self.assertFalse(proof['registered_tool'])
+        self.assertFalse(proof['installed_upstream_files_modified'])
+
+    def test_SP014_prefab_reader_in_payload_without_registration(self):
+        files=assembler().collect(ROOT)
+        for name in ('CandidateScopedPrefabs.cs','CandidatePrefabs.asmref','PROVENANCE.json','LICENSE.md'):
+            relative='Editor/ScopedPrefabs/'+name
+            self.assertTrue(relative in files,'unshipped Prefab reader: '+relative)
+            self.assertEqual(files[relative],(ROOT/'package'/relative).read_bytes())
+        source=files['Editor/ScopedPrefabs/CandidateScopedPrefabs.cs']
+        for forbidden in (b'[McpForUnityTool',b'[InitializeOnLoad',b'HandleCommand(',b'SaveAsPrefabAsset',b'OpenPrefabStage'):
+            self.assertNotIn(forbidden,source)
+        proof=json.loads(files['Editor/ScopedPrefabs/PROVENANCE.json'])
+        self.assertEqual(proof['upstream_commit'],'30d22075093d1d35dfb0091c1c7550e9ad948577')
+        self.assertEqual(hashlib.sha256(source).hexdigest(),proof['source_sha256'])
+        self.assertFalse(proof['registered_tool'])
+        self.assertFalse(proof['installed_upstream_files_modified'])
+
+    def test_SP013_local_review_capture_is_shipped_but_never_registered(self):
+        files=assembler().collect(ROOT)
+        relative='Runtime~/diagnostics/asset_review.py'
+        self.assertTrue(relative in files, 'local review capture missing from actual payload')
+        self.assertEqual(files[relative],(ROOT/'diagnostics/asset_review.py').read_bytes())
+        self.assertEqual(files['Runtime~/diagnostics/snapshot.py'],(ROOT/'diagnostics/snapshot.py').read_bytes())
+        for name in ('Runtime~/runtime/candidate_runtime.py','Runtime~/catalog/catalog.py'):
+            self.assertNotIn(b'asset_review',files[name])
+
+    def test_SP012_asset_reader_in_actual_payload_without_tool_registration(self):
+        files=assembler().collect(ROOT)
+        for name in ('CandidateScopedAssets.cs','CandidateAssets.asmref','PROVENANCE.json','LICENSE.md'):
+            relative='Editor/ScopedAssets/'+name
+            self.assertTrue(relative in files, 'payload member missing: '+relative)
+            self.assertEqual(files[relative],(ROOT/'package'/relative).read_bytes())
+        self.assertTrue('Editor/AssetObservation.cs' in files, 'asset receipt adapter missing from actual payload')
+        self.assertEqual(files['Editor/AssetObservation.cs'],(ROOT/'package/Editor/AssetObservation.cs').read_bytes())
+        self.assertTrue('Editor/Core/AssetCallbackReview.cs' in files, 'local review validator missing from actual payload')
+        self.assertEqual(files['Editor/Core/AssetCallbackReview.cs'],(ROOT/'package/Editor/Core/AssetCallbackReview.cs').read_bytes())
+        proof=json.loads(files['Editor/ScopedAssets/PROVENANCE.json'])
+        self.assertEqual(proof['upstream_commit'],'30d22075093d1d35dfb0091c1c7550e9ad948577')
+        self.assertFalse(proof['registered_tool'])
+        self.assertFalse(proof['installed_upstream_files_modified'])
+        self.assertEqual(hashlib.sha256(files['Editor/ScopedAssets/CandidateScopedAssets.cs']).hexdigest(),proof['source_sha256'])
+        source=files['Editor/ScopedAssets/CandidateScopedAssets.cs'].decode('utf-8')
+        self.assertNotIn('[McpForUnityTool',source)
+        self.assertNotIn('[InitializeOnLoad',source)
+        self.assertNotIn('HandleCommand(',source)
+
+    def test_SP011_job_effect_adapter_and_catalog_in_payload(self):
+        index=json.loads((ROOT/'distribution/source-inputs.json').read_text(encoding='utf-8'))
+        self.assertIn('package/Editor/JobObservation.cs',index['files'])
+        files=assembler().collect(ROOT)
+        self.assertEqual(files['Editor/JobObservation.cs'],(ROOT/'package/Editor/JobObservation.cs').read_bytes())
+        catalog=json.loads(files['Runtime~/catalog/native-inventory.json'])
+        job=next(row for row in catalog['tools'] if row['name']=='get_test_job')
+        self.assertEqual(job['implemented_candidate_effect_actions'],['observe'])
+        self.assertEqual(job['implemented_candidate_read_actions'],[])
+
+    def test_SP010_scoped_native_reader_is_in_actual_payload(self):
+        files=assembler().collect(ROOT)
+        for name in ('CandidateScopedUnityReflect.cs','CandidateReflection.asmref','PROVENANCE.json','LICENSE.md'):
+            relative='Editor/ScopedReflection/'+name
+            self.assertTrue(relative in files, 'payload member missing: '+relative)
+            self.assertEqual(files[relative],(ROOT/'package'/relative).read_bytes())
+        proof=json.loads(files['Editor/ScopedReflection/PROVENANCE.json'])
+        self.assertEqual(len(proof['allowed_types']),13)
+        self.assertFalse(proof['installed_upstream_files_modified'])
+        self.assertEqual(hashlib.sha256(files['Editor/ScopedReflection/CandidateScopedUnityReflect.cs']).hexdigest(),proof['source_sha256'])
+
     def test_SP009_relocated_payload_has_executable_catalog(self):
         files=assembler().collect(ROOT)
         self.assertTrue('Runtime~/runtime/operation_catalog.py' in files, 'catalog runtime missing from copied payload')
@@ -136,6 +218,17 @@ class SourcePayloadTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Symlink'):
                 module.collect(target)
 
+
+    def test_SP016_live_effect_wiring_and_framework_payload_are_explicit(self):
+        files=assembler().collect(ROOT)
+        self.assertIn('Editor/Core/ProjectPluginTrust.cs',files)
+        self.assertIn('Runtime~/runtime/live_effects.py',files)
+        package=json.loads(files['package.json'])
+        self.assertEqual(package['dependencies']['com.unity.test-framework'],'1.1.31')
+        refs=json.loads(files['Editor/Yukino.VRChatAgent.Editor.asmdef'])['references']
+        self.assertIn('UnityEditor.TestRunner',refs)
+        self.assertIn(b'CandidateDiscoveryJob.Begin',files['Editor/CandidateSession.cs'])
+        self.assertIn(b'response = await pending',files['Editor/OwnedTransport/CandidateOwnedWebSocketTransportClient.cs'])
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

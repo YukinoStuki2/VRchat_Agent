@@ -21,19 +21,28 @@ class OwnedRun:
     config: dict = field(repr=False)
     owner: Any = field(repr=False)
     binding: RuntimeBinding = field(repr=False)
+    reload_control: Any = field(default=None,repr=False)
     transport_ready: Any = field(default_factory=threading.Event,init=False,repr=False)
     _used: bool = field(default=False,init=False,repr=False)
     _lock: Any = field(default_factory=threading.Lock,init=False,repr=False)
 
 
-def create_owned_run(raw, *, lifetime=600, clients=()):
+def create_owned_run(raw, *, lifetime=600, clients=(), enable_reload=False):
     c=validate_config(raw)
     # Fixed, packaged modules, never caller-selected paths or installed SDK edits.
     for path in (ROOT/'runtime',ROOT/'dependencies/mcp-1.29.1'):
         if str(path) not in sys.path:sys.path.insert(0,str(path))
     from owner_bootstrap import new_local_run
     owner=new_local_run(c['project'],c['local_port'],lifetime=lifetime,clients=clients)
-    return OwnedRun(c,owner,RuntimeBinding(owner.take_environment(),threading.Event()))
+    if type(enable_reload) is not bool:raise ValueError('invalid_local_reload_mode')
+    binding=RuntimeBinding(owner.take_environment(),threading.Event())
+    control=None
+    if enable_reload:
+        from .reload_owner import OwnerReloadControl
+        control=OwnerReloadControl(c['project'],owner.identity.expires_at,binding)
+        binding.environment.update(control.environment())
+        binding.reload_control=control
+    return OwnedRun(c,owner,binding,reload_control=control)
 
 
 def supervise_owned(raw, *, owned, stop=None, report=None):
@@ -68,6 +77,8 @@ def supervise_owned(raw, *, owned, stop=None, report=None):
         binding.ready.clear()
         thread.join(timeout=10)
         binding.environment.clear()
+    result['reload_control_cleanup_complete']=(owned.reload_control is None or
+        (owned.reload_control.peer is None and owned.reload_control.channel is None and owned.reload_control.listener.closed))
     result['probe_cleanup_complete']=not thread.is_alive()
     result['probe_session_cleanup_confirmed']=receipt.get('session_cleanup_confirmed',False)
     # Remote plan/session cleanup is NOT inferred from a terminated thread.

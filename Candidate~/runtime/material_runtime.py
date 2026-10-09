@@ -99,6 +99,7 @@ class MaterialPlan:
     manifest: dict
     plan_id: str = ''
     approval_client: str = ''
+    approval_digest: str = ''  # Original local gate digest; never rewritten on rebind.
 
 
 class MaterialRuntime:
@@ -139,6 +140,7 @@ class MaterialRuntime:
         invocation = Invocation(self.runtime, ctx.session_id, context.message.name, args,
                                 approval_client=identity)
         token = _CURRENT.set(invocation)
+        self.runtime.inflight[id(invocation)] = invocation
         completed = False
         paused = False
         try:
@@ -160,6 +162,7 @@ class MaterialRuntime:
                     await self.runtime.notify_stop(invocation.client_id, invocation.plan, 'material_stop')
             finally:
                 invocation.active = False
+                self.runtime.inflight.pop(id(invocation), None)
                 _CURRENT.reset(token)
 
     def scope(self, task_id, plan_id, current=False):
@@ -219,7 +222,7 @@ class MaterialRuntime:
             if result.get('success') is not True:
                 return result  # Native failures may include actual transaction evidence.
             returned = MaterialPlan(task_id, connection, pending.expires_at, manifest,
-                                    exact_id(data.get('plan_id')), pending.approval_client)
+                                    exact_id(data.get('plan_id')), pending.approval_client, data.get('digest', ''))
             if data.get('status') != 'pending':
                 raise ToolError('prepare_not_pending')
             current_connection = await self.runtime.connection()
@@ -261,9 +264,13 @@ class MaterialRuntime:
 
     async def stop(self, task_id, plan_id):
         invocation, plan = self.scope(task_id, plan_id)
+        stopped = self.runtime.stop_suspended_handoff(plan)
+        if stopped is not None:
+            return stopped
         invocation.plan = plan
         if self.plans.get(invocation.client_id) is plan:
             self.plans.pop(invocation.client_id)
+        self.runtime.reload_is_frozen()  # Stop invalidates the handoff before I/O.
         return await PluginHub.send_command(plan.connection_id, 'material_stop', {})
 
 

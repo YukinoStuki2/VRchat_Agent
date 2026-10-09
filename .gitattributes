@@ -34,3 +34,4 @@
 # Last rule wins: publisher notice bytes include original Windows CRLF.
 /Candidate~/distribution/python-licenses/** -text
 /Candidate~/dependencies/filesystem-0.6.3/** -text
+/Candidate~/package/Editor/ScopedTests/LICENSE-Unity.md -text

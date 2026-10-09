@@ -579,8 +579,10 @@
       "name_zh": "脚本内容哈希",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "get_sha"
+      ],
+      "audit_note_zh": "仅规范Assets精确文件的受限原生读取；默认拒绝，仍需本地能力和任务批准。文本/SHA采用原生解码语义，非任意文件/写入/导入/编译权限；实机与Windows文件系统边界仍待验。get_sha工具映射清单manage_script/get_sha，不自动授予正文。"
     },
     {
       "name": "get_test_job",
@@ -616,7 +618,14 @@
       "default_decision": "deny",
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "audit_note_zh": "工程级测试作业状态维护，非纯读取：可恢复/改变其他过期作业、写SessionState和裁剪历史；结果只返回指定TestJobs/job_id。默认关闭，独立副作用开关与本地清单批准；不启动/清空测试、不等待或抢焦点，停止不回退。",
+      "implemented_candidate_effect_actions": [
+        "observe"
+      ],
+      "required_effect": {
+        "kind": "project_test_job_maintenance",
+        "version": 1
+      }
     },
     {
       "name": "import_model",
@@ -801,6 +810,7 @@
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [
         "controller_get_info",
+        "clip_get_info",
         "animator_get_info",
         "animator_get_parameter"
       ],
@@ -880,7 +890,11 @@
       "default_decision": "deny",
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "audit_note_zh": "本地明确认可工程插件是信任前提，不是插件沙箱；不保证阻止内部未知回调。默认关闭，独立效果开关和精确本地任务批准；撤销不强停回调、不回退已发生作用。",
+      "implemented_candidate_effect_actions": [
+        "search",
+        "get_info"
+      ]
     },
     {
       "name": "manage_build",
@@ -2035,7 +2049,11 @@
       "default_decision": "deny",
       "enabled_by_catalog": false,
       "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "audit_note_zh": "本地明确认可工程插件是信任前提，不是插件沙箱；不保证阻止内部未知回调。默认关闭，独立效果开关和精确本地任务批准；撤销不强停回调、不回退已发生作用。",
+      "implemented_candidate_effect_actions": [
+        "get_info",
+        "get_hierarchy"
+      ]
     },
     {
       "name": "manage_probuilder",
@@ -2356,8 +2374,10 @@
       "name_zh": "脚本读写",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "audit_note_zh": "仅规范Assets精确文件的受限原生读取；默认拒绝，仍需本地能力和任务批准。文本/SHA采用原生解码语义，非任意文件/写入/导入/编译权限；实机与Windows文件系统边界仍待验。"
     },
     {
       "name": "manage_script_capabilities",
@@ -2471,8 +2491,10 @@
       "name_zh": "着色器读写",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "read"
+      ],
+      "audit_note_zh": "仅规范Assets精确文件的受限原生读取；默认拒绝，仍需本地能力和任务批准。文本/SHA采用原生解码语义，非任意文件/写入/导入/编译权限；实机与Windows文件系统边界仍待验。"
     },
     {
       "name": "manage_texture",
@@ -3186,8 +3208,12 @@
       "name_zh": "类型与成员反射查询",
       "default_decision": "deny",
       "enabled_by_catalog": false,
-      "implemented_candidate_read_actions": [],
-      "audit_note_zh": "仅Python声明清单；不证明C#行为安全或授予权限。候选实机可信绑定未完成。"
+      "implemented_candidate_read_actions": [
+        "get_type",
+        "get_member",
+        "search"
+      ],
+      "audit_note_zh": "受限核心类型元数据：复用固定原生get_type/get_member/search主体，候选独立附加类型仅查unity-engine-core-v1固定13类型，禁止全局程序集解析与扩展方法发现。默认关闭，ApiMetadata独立批准；返回candidate_scope明确不是全工程API。通用上游反射、用户脚本类型、方法/getter执行均未开放；.NET对照测试不替代Unity实机验收。"
     },
     {
       "name": "validate_script",
@@ -3441,6 +3467,29 @@
         "start_line": 1,
         "end_line": 35,
         "sha256": "36e6f8bc14ec1bb391e6015c26d1b9846344877d324ae78c6f43a87ffdf566e8"
+      }
+    },
+    {
+      "name": "get_tests",
+      "name_zh": "非缓存实时测试发现",
+      "unity_target": "get_tests",
+      "group": "testing",
+      "declared_actions": [],
+      "has_action_parameter": false,
+      "default_decision": "deny",
+      "enabled_by_catalog": false,
+      "implemented_candidate_read_actions": [],
+      "upstream_uri": "mcpforunity://tests/{mode}",
+      "provenance_kind": "native_resource_tool_facade",
+      "audit_note_zh": "本地明确认可工程插件是信任前提，不是插件沙箱；不保证阻止内部未知回调。默认关闭，独立效果开关和精确本地任务批准；撤销不强停回调、不回退已发生作用。 候选附加非缓存provider，不调用可能缓存的公开资源；不运行测试、不维护作业、不抢焦点。",
+      "implemented_candidate_effect_actions": [
+        "discover"
+      ],
+      "source": {
+        "path": "Server/src/services/resources/tests.py",
+        "start_line": 1,
+        "end_line": 88,
+        "sha256": "290e2050f302f8c63c5554fe7fa28571a26d39ece422b2c67459f08a24e5b4e6"
       }
     }
   ],

@@ -21,13 +21,14 @@ def page(offset=0, limit=12):
         facades = inventory['resource_facades']
         resource_files={'get_gameobject':'gameobject.py','get_gameobject_components':'gameobject.py',
                         'get_project_info':'project_info.py','get_tags':'tags.py','get_layers':'layers.py',
-                        'get_selection':'selection.py','get_windows':'windows.py','get_active_tool':'active_tool.py','get_prefab_stage':'prefab_stage.py','get_menu_items':'menu_items.py'}
+                        'get_selection':'selection.py','get_windows':'windows.py','get_active_tool':'active_tool.py','get_prefab_stage':'prefab_stage.py','get_menu_items':'menu_items.py','get_tests':'tests.py'}
         if (type(facades) is not list or len(facades) != len(resource_files) or
                 [row['name'] for row in facades] != list(resource_files) or
                 any(row['provenance_kind'] != 'native_resource_tool_facade' or
                     row['source']['path'] != 'Server/src/services/resources/'+resource_files[row['name']] or
                     row['unity_target'] != row['name'] or row['has_action_parameter'] is not False or
-                    row['declared_actions'] != [] or row['implemented_candidate_read_actions'] != ['read']
+                    row['declared_actions'] != [] or row['implemented_candidate_read_actions'] != ([] if row['name']=='get_tests' else ['read']) or
+                    (row['name']=='get_tests' and row.get('implemented_candidate_effect_actions')!=['discover'])
                     for row in facades)):
             raise ValueError('catalog_invalid')
         sources = {}
@@ -58,6 +59,9 @@ def page(offset=0, limit=12):
     rows = [{k: row[k] for k in ('name','name_zh','unity_target','group','declared_actions',
              'has_action_parameter','source','default_decision','enabled_by_catalog',
              'implemented_candidate_read_actions','audit_note_zh')} for row in tools[offset:offset+limit]]
+    for result, source in zip(rows, tools[offset:offset+limit]):
+        for field in ('implemented_candidate_effect_actions','required_effect'):
+            if field in source: result[field]=source[field]
     next_offset = offset + len(rows)
     return {'schema_version': 1, 'permission_grant': False, 'product_ready': False,
             'scope_zh': inventory['scope_zh'], 'total': len(tools), 'offset': offset,

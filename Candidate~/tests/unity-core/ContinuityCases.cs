@@ -127,5 +127,64 @@ static class ContinuityCases
   var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Invoke(n,"ImportTaskRecords",records);n.SetCapability("edit",true);
   Check((bool?)n.Dispatch(RequestAt("prepare",m))["success"]==true,"superseded_record_caused_ambiguity");
  }
- public static int Main(string[] args){try{SupersededRecordsCannotCompete();Console.WriteLine("PASS PC010 superseded_records_not_recoverable");RecoveryRevalidates();Console.WriteLine("PASS PC008 recovery_revalidates_scope_and_live_evidence");InvalidRecoveryRecords();Console.WriteLine("PASS PC009 invalid_and_failed_records_denied");RecoverMaterialInNewBinding();Console.WriteLine("PASS PC007 explicit_local_new_binding_recovery");MaterialRecordsAreNotGrants();Console.WriteLine("PASS PC006 reload_records_are_not_grants");ReadContinuity();Console.WriteLine("PASS PC001 read_plan_identity_survives_pause");MaterialContinuity();Console.WriteLine("PASS PC002 material_plan_and_postimage_survive_pause");ReadBoundaries();Console.WriteLine("PASS PC003 read_revalidation_lifecycle_boundaries");MaterialBoundaries();Console.WriteLine("PASS PC004 material_revalidation_lifecycle_boundaries");LocalOnlyAndSerialWriter();Console.WriteLine("PASS PC005 local_only_and_single_writer");return 0;}catch(Exception e){Console.WriteLine("FAIL "+e.GetBaseException().Message);return 1;}}
+ static void TransactionHistorySurvivesWithoutUndo()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];Check(g.Approve((string)p["plan_id"],(string)p["digest"]),"history_approve");
+  Write(g,p,"copy");var edit=Write(g,p,"edit","0.4");string tx=(string)edit["data"]["transaction"]["id"];
+  var exported=(JArray)Invoke(g,"ExportTransactionHistory");Check(exported.Count==2,"history_export_count");
+  var restored=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);
+  Check((bool)Invoke(restored,"ImportTransactionHistory",JArray.Parse(exported.ToString())),"history_import");
+  Check(restored.LocalPlans().Count==0 && !restored.Allows("edit") && restored.ExportTaskRecords().Count==0,"history_restored_grant_or_recovery");
+  var rows=restored.LocalTransactions();Check(rows.Count==2,"history_lost");
+  foreach(JObject row in rows){Check((bool?)row["checkpoint_available"]==false && (bool?)row["withdrawal_available"]==false,"history_undo_advertised");Check((bool?)row["withdrawn"]==false,"false_withdrawal");Check((string)row["connection_id"]=="connection-A","rewritten_historical_connection");}
+  int writes=f.Writes;var denied=restored.Withdraw(tx);Check((string)denied["error"]=="checkpoint_unavailable_after_reload" && f.Writes==writes && f.Value("Assets/candidate.mat")=="0.4","archive_restore_attempted");
+  exported[0]["task_id"]="mutated";rows[0]["task_id"]="mutated";Check((string)restored.LocalTransactions()[0]["task_id"]=="task-A","history_alias");
+  var m=WriteManifest();m["operations"]=new JArray("edit");restored.SetCapability("edit",true);
+  Check((string)restored.Dispatch(RequestAt("prepare",m))["error"]=="candidate_provenance_conflict","history_used_as_live_provenance");
+ }
+ static void HistoryCapacityCannotResetAtReload()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");
+  var history=(JArray)Invoke(g,"ExportTransactionHistory");var row=(JObject)history[0];history=new JArray();
+  for(int i=0;i<128;i++){var copy=(JObject)row.DeepClone();copy["transaction"]["id"]=Guid.NewGuid().ToString("N");history.Add(copy);}
+  var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Check((bool)Invoke(n,"ImportTransactionHistory",history),"capacity_import");n.SetCapability("copy",true);
+  var m=WriteManifest();m["candidate"]="Assets/next.mat";m["operations"]=new JArray("copy");var pending=(JObject)n.Dispatch(RequestAt("prepare",m))["data"];Check(n.Approve((string)pending["plan_id"],(string)pending["digest"]),"capacity_approve");
+  int writes=f.Writes;var response=n.Dispatch(RequestAt("execute",new JObject{["action"]="copy",["arguments"]=new JObject()},(string)pending["plan_id"]));
+  Check((string)response["error"]=="journal_capacity" && f.Writes==writes && n.LocalTransactions().Count==128,"reload_reset_journal_capacity");
+ }
+ static void InvalidHistoryIsAtomic()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);var m=WriteManifest();m["operations"]=new JArray("copy");
+  var p=(JObject)g.Dispatch(Request("prepare",m))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");var saved=(JArray)Invoke(g,"ExportTransactionHistory");
+  foreach(string bad in new[]{"project","extra","duplicate","count","type","null","transaction","false_withdrawal","size"})
+  {
+   var input=(JArray)saved.DeepClone();
+   if(bad=="project")input[0]["project_id"]="other";if(bad=="extra")input[0]["checkpoint_available"]=true;
+   if(bad=="duplicate")input.Add(input[0].DeepClone());if(bad=="count")while(input.Count<129)input.Add(input[0].DeepClone());
+   if(bad=="type")input[0]["withdrawn"]="false";if(bad=="transaction")input[0]["transaction"]["approved"]=true;
+   if(bad=="false_withdrawal")input[0]["withdrawn"]=true;if(bad=="size")input[0]["manifest"]["source"]=new string('x',65536);
+   if(bad=="null")input=null;
+   var n=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-B",f);Check(!(bool)Invoke(n,"ImportTransactionHistory",new object[]{input}),"history_accepted_"+bad);
+   Check(n.LocalTransactions().Count==0 && n.LocalPlans().Count==0 && !n.Allows("copy"),"partial_history_import");
+   Check((bool)Invoke(n,"ImportTransactionHistory",saved),"invalid_attempt_poisoned_import");
+   Check(!(bool)Invoke(n,"ImportTransactionHistory",saved) && n.LocalTransactions().Count==1,"second_import_changed_history");
+  }
+ }
+ static void WithdrawalHistoryAndNewCheckpoints()
+ {
+  using var f=new WriteFixture();var g=new MaterialCandidateGate(()=>100,()=>"project-A",()=>"connection-A",f);g.SetCapability("copy",true);g.SetCapability("edit",true);
+  var p=(JObject)g.Dispatch(Request("prepare",WriteManifest()))["data"];g.Approve((string)p["plan_id"],(string)p["digest"]);Write(g,p,"copy");var edit=Write(g,p,"edit","0.4");
+  Check((bool?)g.Withdraw((string)edit["data"]["transaction"]["id"])["success"]==true,"history_withdraw");
+  var saved=(JArray)Invoke(g,"ExportTransactionHistory");var n=new MaterialCandidateGate(()=>120,()=>"project-A",()=>"connection-B",f);Check((bool)Invoke(n,"ImportTransactionHistory",JArray.Parse(saved.ToString())),"withdrawn_import");
+  Check((bool?)n.LocalTransactions()[1]["withdrawn"]==true && JToken.DeepEquals(n.LocalTransactions()[1]["transaction"],saved[1]["transaction"]),"withdrawal_report_lost");
+  n.SetCapability("copy",true);n.SetCapability("edit",true);var m=WriteManifest();m["candidate"]="Assets/new.mat";var pending=(JObject)n.Dispatch(RequestAt("prepare",m))["data"];Check(n.Approve((string)pending["plan_id"],(string)pending["digest"]),"new_history_approve");
+  var copy=new JObject{["action"]="copy",["arguments"]=new JObject()};Check((bool?)n.Dispatch(RequestAt("execute",copy,(string)pending["plan_id"]))["success"]==true,"new_history_copy");
+  var cmd=new JObject{["action"]="edit",["arguments"]=new JObject{["property"]="_Value",["value"]="0.9"}};Check((bool?)n.Dispatch(RequestAt("execute",cmd,(string)pending["plan_id"]))["success"]==true,"new_history_edit");
+  var rows=n.LocalTransactions();Check(rows.Count==4 && (bool?)rows[3]["withdrawal_available"]==true && (bool?)rows[1]["withdrawal_available"]==false,"new_checkpoint_not_distinct");
+  Check((bool?)n.Withdraw((string)rows[3]["transaction"]["id"])["success"]==true && f.Value("Assets/new.mat")=="original","new_checkpoint_unusable");
+  var again=new MaterialCandidateGate(()=>130,()=>"project-A",()=>"connection-C",f);Check((bool)Invoke(again,"ImportTransactionHistory",Invoke(n,"ExportTransactionHistory")) && again.LocalTransactions().Count==4,"second_reload_history_lost");
+ }
+ public static int Main(string[] args){try{InvalidHistoryIsAtomic();Console.WriteLine("PASS PC013 invalid_history_atomic_and_bounded");WithdrawalHistoryAndNewCheckpoints();Console.WriteLine("PASS PC014 old_withdrawals_preserved_new_checkpoints_usable");HistoryCapacityCannotResetAtReload();Console.WriteLine("PASS PC012 history_counts_toward_journal_capacity");TransactionHistorySurvivesWithoutUndo();Console.WriteLine("PASS PC011 transaction_history_without_authority_or_checkpoint");SupersededRecordsCannotCompete();Console.WriteLine("PASS PC010 superseded_records_not_recoverable");RecoveryRevalidates();Console.WriteLine("PASS PC008 recovery_revalidates_scope_and_live_evidence");InvalidRecoveryRecords();Console.WriteLine("PASS PC009 invalid_and_failed_records_denied");RecoverMaterialInNewBinding();Console.WriteLine("PASS PC007 explicit_local_new_binding_recovery");MaterialRecordsAreNotGrants();Console.WriteLine("PASS PC006 reload_records_are_not_grants");ReadContinuity();Console.WriteLine("PASS PC001 read_plan_identity_survives_pause");MaterialContinuity();Console.WriteLine("PASS PC002 material_plan_and_postimage_survive_pause");ReadBoundaries();Console.WriteLine("PASS PC003 read_revalidation_lifecycle_boundaries");MaterialBoundaries();Console.WriteLine("PASS PC004 material_revalidation_lifecycle_boundaries");LocalOnlyAndSerialWriter();Console.WriteLine("PASS PC005 local_only_and_single_writer");return 0;}catch(Exception e){Console.WriteLine("FAIL "+e.GetBaseException().Message);return 1;}}
 }

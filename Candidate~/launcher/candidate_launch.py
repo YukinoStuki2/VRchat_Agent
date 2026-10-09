@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import time
+from . import direct_python
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / 'runtime'
@@ -56,7 +57,7 @@ def validate_config(raw):
 
 def build_commands(raw):
     c = validate_config(raw)
-    runtime = [sys.executable, '-B', str(RUNTIME), '--project', c['project'], '--port', str(c['local_port'])]
+    runtime = [direct_python.current()['executable'], '-B', str(RUNTIME), '--project', c['project'], '--port', str(c['local_port'])]
     ssh = None
     if 'ssh' in c:
         s = c['ssh']
@@ -266,6 +267,7 @@ def supervise(raw, *, binding=None, stop=None, report=None):
                 status['code'] = 'STOPPED' if stop.is_set() else 'PARENT_EXITED'
             else:
                 runtime_argv, ssh_argv = build_commands(c)
+                env.update(direct_python.environment_hint())
                 status.update(stage='runtime_starting', component='runtime', phase='starting',
                               code='RUNTIME_STARTING', process_cleanup_complete=False)
                 runtime = owner.spawn(runtime_argv, env, runtime_progress.line)

@@ -43,6 +43,25 @@ def workflow_native_inputs(work, opener):
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP023_handoff_suite_inventory_and_explicit_utf8(self):
+        import ast
+        tree=workflow_step('Real Windows owned handoff pipes and editor delivery contracts')
+
+        assignment=next(n for n in tree.body if isinstance(n,ast.Assign)
+            and any(isinstance(t,ast.Name) and t.id=='suites' for t in n.targets))
+        namespace={};exec(compile(ast.Module(body=[assignment],type_ignores=[]),'ci-suite-declarations','exec'),namespace)
+        for path,expected in namespace['suites']:
+            source=ast.parse((ROOT.parent/path).read_bytes())
+            actual=sorted(m.name.split('_')[1] for cls in source.body if isinstance(cls,ast.ClassDef)
+                for m in cls.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef)) and m.name.startswith('test_'))
+            self.assertEqual(sorted(expected),actual,path)
+        call=next(n for n in ast.walk(tree) if isinstance(n,ast.Call) and ast.unparse(n.func)=='subprocess.run')
+        assert isinstance(call.args[0],ast.List)
+        values=[n.value for n in call.args[0].elts if isinstance(n,ast.Constant)]
+        self.assertIn('utf8',values)
+        self.assertIn('-X',values)
+        self.assertEqual(next(ast.literal_eval(k.value) for k in call.keywords if k.arg=='encoding'),'utf-8')
+
     def test_VP022_windows_suite_inventory_matches_current_tests(self):
         import ast, re
         flow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
@@ -381,7 +400,7 @@ class PortableVerifierTests(unittest.TestCase):
     def test_VP010_ci_executes_catalog_and_freezes_inventory(self):
         workflow=(ROOT.parent/'.github/workflows/candidate-dependencies.yml').read_text(encoding='utf-8')
         self.assertGreaterEqual(workflow.count('tests/test_operation_catalog.py'),3)
-        self.assertIn("['OC001']", workflow)
+        self.assertIn("['OC001','OC002','OC003']", workflow)
         self.assertGreaterEqual(workflow.count("'Candidate~/catalog'"),2)
         unity=(ROOT/'tests/verify_unity.py').read_text(encoding='utf-8')
         # UA012/UA013 cover the new find scope and UI gate, not optional IDs.

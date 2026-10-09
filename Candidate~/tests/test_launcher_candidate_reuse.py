@@ -8,6 +8,30 @@ from test_launcher_candidate import ROOT, module
 
 
 class ReusedOwnership(unittest.TestCase):
+    def test_L026_runtime_uses_direct_child_and_local_venv_hint_only(self):
+        import socket,threading
+        from unittest.mock import patch
+        from launcher import direct_python
+        m=module(self);stop=threading.Event();owner=Mock();child=Mock(pid=4242)
+        child.poll.return_value=None;owner.spawn.return_value=child;owner.close.return_value=True
+        binding=m.RuntimeBinding({'VRCHAT_AGENT_TEST':'fixture'},threading.Event())
+        binding.reload_control=Mock();binding.reload_control.bind.side_effect=lambda pid:binding.ready.set()
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
+        info={'executable':'C:/Python311/python.exe','selected':'C:/fixture/Scripts/python.exe','windows':True}
+        def report(row):
+            if row['phase']=='running':stop.set()
+        with patch.object(direct_python,'current',return_value=info),patch.object(m,'make_owner',return_value=owner):
+            result=m.supervise({'project':'direct-child-'+str(os.getpid()),'parent_pid':os.getpid(),'local_port':port},binding=binding,stop=stop,report=report)
+        self.assertEqual(result['code'],'STOPPED',result)
+        argv,env,_=owner.spawn.call_args.args
+        self.assertEqual(argv[0],info['executable'])
+        self.assertEqual(env['__PYVENV_LAUNCHER__'],info['selected'])
+        self.assertEqual(env['VRCHAT_AGENT_TEST'],'fixture')
+        self.assertNotIn('__PYVENV_LAUNCHER__',m.child_environment(source={'__PYVENV_LAUNCHER__':'untrusted'}))
+        binding.reload_control.bind.assert_called_once_with(4242)
+        self.assertTrue(result['process_cleanup_complete'])
+
     def test_L025_windows_pid_reaches_reload_supervisor_and_cleanup(self):
         import socket,threading
         from unittest.mock import patch

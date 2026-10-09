@@ -27,7 +27,7 @@ class Commands(unittest.TestCase):
         raw = config(ssh={'host': 'fixture.invalid', 'user': 'fixture', 'port': 22022,
                           'remote_port': 34124})
         runtime, ssh = m.build_commands(raw)
-        self.assertEqual(runtime, [sys.executable, '-B', str(ROOT / 'runtime'),
+        self.assertEqual(runtime, [m.direct_python.current()['executable'], '-B', str(ROOT / 'runtime'),
                                    '--project', raw['project'], '--port', '34123'])
         self.assertEqual(ssh[:6], [str(m.SSH), '-F', os.devnull, '-v', '-N', '-T'])
         self.assertIn('BatchMode=yes', ssh)

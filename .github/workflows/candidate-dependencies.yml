@@ -239,12 +239,12 @@ jobs:
           suites=[('Candidate~/tests/test_private_process_pipes.py',['PP001','PP002','PP003','PP004']),
                   ('Candidate~/tests/test_editor_delivery.py',['ED001','ED002','ED003','ED004','ED005']),
                   ('Candidate~/tests/test_codex_local.py',['CX001','CX002','CX003','CX004','CX005','CX006','CX007']),
-                  ('Candidate~/tests/test_operation_catalog.py',['OC001']),
+                  ('Candidate~/tests/test_operation_catalog.py',['OC001','OC002','OC003']),
                   ('Candidate~/tests/test_native_peer_cleanup.py',['NPC001','NPC002','NPC003','NPC004']),
                   ('Candidate~/tests/test_runtime_reload.py',[f'RL{i:03d}' for i in range(1,15)])]
           for script,expected in suites:
               try:
-                  run=subprocess.run([str(python),'-I','-B','-W','always::ResourceWarning',script,'-v'],capture_output=True,text=True,timeout=45)
+                  run=subprocess.run([str(python),'-I','-B','-X','utf8','-W','always::ResourceWarning',script,'-v'],capture_output=True,text=True,encoding='utf-8',timeout=45)
                   ids=re.findall(r'(?m)^test_((?:PP|ED|CX|OC|NPC|RL)\d{3})_.* \.\.\. ',run.stderr)
                   passed=run.returncode==0 and sorted(ids)==expected and re.search(rf'Ran {len(expected)} tests?\b',run.stderr) is not None and not any(x in run.stdout+run.stderr for x in ('ResourceWarning','skipped','FAILED'))
                   row={'script':script,'expected_ids':expected,'passed_ids':ids,'exit_code':run.returncode,'passed':passed,'stdout':run.stdout,'stderr':run.stderr,'timed_out':False}

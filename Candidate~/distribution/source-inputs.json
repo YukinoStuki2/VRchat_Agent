@@ -137,7 +137,7 @@
     "launcher/PROVENANCE.json": "aede8e7c1a34b8694674d57d8a6485aee7bbc595f09d5c997318a3183d62cf01",
     "launcher/__init__.py": "1a609d6b19d00fbc2cd12553ff0db6aad89cf07d4f961690cc349cee1c5672f4",
     "launcher/__main__.py": "a277fe2fbe2d1bfed3c7cb1bb300f93d18e126d52c01729e817cda4c1981e335",
-    "launcher/candidate_launch.py": "b793906e164f10423fbb5a6f5967561371cf6e1ad8b537f7e5e80ecea8de433d",
+    "launcher/candidate_launch.py": "db110876d7eb1682e8370ea82560f43a67fdc2868562746b5e85bce599909494",
     "launcher/cli.py": "adbfcd180bffc9f96697fb3c50b482eadc682f830854440e4ac237f21cffcb8f",
     "launcher/codex_local.py": "2bf57cf516287abeb6ec2aae827d29207e33f7a63f3afae6074ae1790263a1f1",
     "launcher/direct_python.py": "a3a3ab277d097e94bd172657a0b0042a7e75a251ce1c4770be71ae37ab4b3e62",

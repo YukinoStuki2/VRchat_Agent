@@ -11,6 +11,8 @@ internal static class WirePeer
  static void Trace(string phase){if(Environment.GetEnvironmentVariable("VRC_FIXTURE_TRACE")=="1")Console.Error.WriteLine("VRC_WIRE_PHASE:"+phase);}
  static void Main()
  {
+  Console.InputEncoding=new System.Text.UTF8Encoding(false,true);
+  Console.OutputEncoding=new System.Text.UTF8Encoding(false,true);
   Trace("main");
   string connection=""; var timer=Stopwatch.StartNew(); int calls=0;
   using var backend=new WriteFixture(); Trace("fixture");

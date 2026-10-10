@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -27,9 +28,17 @@ def observer(check,snapshot,rows,*,sleep=time.sleep):
     return observe
 
 
+def probe_plan(mode):
+    if mode=='baseline':return 64,20,.02
+    if mode=='signal-race':return 512,0,0
+    raise ValueError('unknown_probe_mode')
+
+
 def main():
-    if os.name!='nt' or len(sys.argv)!=2:
-        raise SystemExit('Windows and new output directory required')
+    if os.name!='nt' or len(sys.argv) not in (2,3):
+        raise SystemExit('Windows, new output directory and optional fixed mode required')
+    mode=sys.argv[2] if len(sys.argv)==3 else 'baseline'
+    simple_limit,build_limit,poll_sleep=probe_plan(mode)
     out=Path(sys.argv[1]);out.mkdir(exist_ok=False)
     sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
     import verify_peer
@@ -39,13 +48,16 @@ def main():
     def hashes():return {name:hashlib.sha256((ROOT.parent/name).read_bytes()).hexdigest() for name in files if name}
     report={'scope':'bounded original Windows Job verdict investigation, not product acceptance',
         'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent,text=True).strip(),
-        'platform':sys.platform,'source_before':hashes(),'controls':[],'simple':[],'builds':[],'observations':[],
+        'platform':sys.platform,'mode':mode,'simple_limit':simple_limit,'build_limit':build_limit,'poll_sleep':poll_sleep,'source_before':hashes(),'controls':[],'simple':[],'builds':[],'observations':[],
         'historical_root_cause_proven':False}
     def save():
         (out/'probe.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     check=verify_peer.natural_tree_exit
     try:
-        with patch.object(verify_peer,'natural_tree_exit',observer(check,verify_peer.failed_job_snapshot,report['observations'])):
+        # Stress changes only this test driver's poll interval, not owner cleanup,
+        # deadlines, native predicates or any production module's time object.
+        with patch.object(verify_peer,'time',SimpleNamespace(monotonic=time.monotonic,sleep=lambda _:time.sleep(poll_sleep))), \
+                patch.object(verify_peer,'natural_tree_exit',observer(check,verify_peer.failed_job_snapshot,report['observations'])):
             # One live descendant lasts beyond the existing 40s parent deadline.
             # Avoid a short sleep-based control that can itself race the observer.
             for label,seconds in [('live-descendant',60)]:
@@ -54,12 +66,12 @@ def main():
                 report['controls'].append({'label':label,'row':row});save()
                 assert row['exit_code']==0 and not row['natural_tree_exit'] and row['cleanup_complete'] and row['temporary_home_absent']
                 assert not row['timed_out'] and 'ResourceWarning' not in row['stdout']+row['stderr']
-            for number in range(64):
+            for number in range(simple_limit):
                 row=verify_peer.run_case(Path(__file__),'raise SystemExit(0)')
                 report['simple'].append(row);save()
                 assert row['exit_code']==0 and row['cleanup_complete'] and row['temporary_home_absent'] and not row['timed_out']
                 if not row['natural_tree_exit']:break
-            for number in range(20):
+            for number in range(build_limit):
                 label=f'job-probe-{number:02}'
                 with patch.object(sys,'argv',['verify_editor_wire.py',label,'rw','RW001']):
                     result=verify_editor_wire.main()
@@ -74,7 +86,7 @@ def main():
     finally:
         report['source_after']=hashes()
         report['source_unchanged']=report['source_before']==report['source_after']
-        report['collection_complete']='error_type' not in report and bool(report['builds']) and report['source_unchanged']
+        report['collection_complete']='error_type' not in report and len(report['controls'])==1 and bool(report['simple']) and (not build_limit or bool(report['builds'])) and report['source_unchanged']
         report['unexpected_failure']=any(not row['natural_tree_exit'] for row in report['simple']) or any(not row['passed'] for row in report['builds'])
         save()
     print(json.dumps({k:report[k] for k in ('collection_complete','unexpected_failure','historical_root_cause_proven')}))

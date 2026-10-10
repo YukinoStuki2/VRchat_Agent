@@ -33,6 +33,13 @@ class JobProbeTests(unittest.TestCase):
         self.assertIs(observe(object(),SimpleNamespace(pid=1)),True)
         self.assertEqual(rows[0]['snapshots'],[])
 
+    def test_JP005_modes_have_fixed_limits_and_no_unknown_fallback(self):
+        module=self.load()
+        self.assertTrue(hasattr(module,'probe_plan'),'missing bounded timing mode')
+        self.assertEqual(module.probe_plan('baseline'),(64,20,.02))
+        self.assertEqual(module.probe_plan('signal-race'),(512,0,0))
+        with self.assertRaises(ValueError):module.probe_plan('unbounded')
+
     def test_JP004_control_keeps_popen_alive_until_abrupt_exit(self):
         import ast
         import inspect

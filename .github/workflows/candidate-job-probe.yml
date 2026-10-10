@@ -41,7 +41,7 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP/candidate-job-probe-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/experiments/test_job_exit_probe.py' 2>&1 | Tee-Object job-evidence/control-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:RUNNER_TEMP/candidate-job-probe-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/experiments/job_exit_probe.py' job-evidence/probe 2>&1 | Tee-Object job-evidence/probe.txt
+          & "$env:RUNNER_TEMP/candidate-job-probe-env/Scripts/python.exe" -I -B -W always::ResourceWarning 'Candidate~/experiments/job_exit_probe.py' job-evidence/probe signal-race 2>&1 | Tee-Object job-evidence/probe.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Remove only owned environment
         if: always()

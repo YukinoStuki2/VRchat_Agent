@@ -43,6 +43,54 @@ def workflow_native_inputs(work, opener):
 
 
 class PortableVerifierTests(unittest.TestCase):
+    def test_VP033_waits_for_whole_job_within_original_deadline(self):
+        import sys
+        from types import SimpleNamespace
+        spec=importlib.util.spec_from_file_location('peer_wait',ROOT/'tests/verify_peer.py')
+        assert spec is not None and spec.loader is not None
+        m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        clock=[0.0];closed=[]
+        def sleep(delay):
+            self.assertEqual(delay,.02);clock[0]+=delay
+        owner=SimpleNamespace(job=7,api=SimpleNamespace(job_empty=lambda job:clock[0]>=.04),
+            spawn=lambda *a,**k:SimpleNamespace(pid=42,poll=lambda:0),close=lambda:closed.append(clock[0]) or True)
+        modules={'launcher.candidate_launch':SimpleNamespace(make_owner=lambda pid:owner,child_environment=lambda:{}),
+            'launcher.direct_python':SimpleNamespace(current=lambda:{'executable':sys.executable},environment_hint=lambda:{})}
+        with patch.dict(sys.modules,modules),patch.object(m,'os',SimpleNamespace(name='nt',getpid=os.getpid,devnull=os.devnull)),                patch.object(m,'time',SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep)):
+            row=m.run_case(Path('fixture.py'),'fixture-not-executed')
+        self.assertTrue(row['natural_tree_exit'])
+        self.assertEqual(closed,[.04,.04])
+        self.assertEqual(row['exit_code'],0);self.assertFalse(row['timed_out'])
+        self.assertNotIn('failed_job_snapshot',row)
+        self.assertTrue(row['cleanup_complete']);self.assertTrue(row['temporary_home_absent'])
+
+    def test_VP034_live_job_fails_at_original_deadline_before_cleanup(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        spec=importlib.util.spec_from_file_location('peer_wait',ROOT/'tests/verify_peer.py')
+        assert spec is not None and spec.loader is not None
+        m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        for root_running in (False,True):
+            with self.subTest(root_running=root_running):
+                clock=[0];closed=[]
+                def sleep(delay):
+                    self.assertEqual(delay,.02);clock[0]+=1
+                owner=SimpleNamespace(job=7,api=SimpleNamespace(job_empty=lambda job:False),
+                    spawn=lambda *a,**k:SimpleNamespace(pid=42,poll=lambda:None if root_running else 0),
+                    close=lambda:closed.append(clock[0]) or True)
+                modules={'launcher.candidate_launch':SimpleNamespace(make_owner=lambda pid:owner,child_environment=lambda:{}),
+                    'launcher.direct_python':SimpleNamespace(current=lambda:{'executable':sys.executable},environment_hint=lambda:{})}
+                snapshot=Mock(return_value={'accounting':{'ActiveProcesses':0}})
+                with patch.dict(sys.modules,modules),patch.object(m,'os',SimpleNamespace(name='nt',getpid=os.getpid,devnull=os.devnull)),                        patch.object(m,'time',SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep)),patch.object(m,'failed_job_snapshot',snapshot):
+                    row=m.run_case(Path('fixture.py'),'fixture-not-executed')
+                self.assertFalse(row['natural_tree_exit'])
+                self.assertEqual(closed,[40,40]);self.assertEqual(snapshot.call_count,1)
+                self.assertEqual(row['timed_out'],root_running)
+                self.assertTrue(row['cleanup_complete']);self.assertTrue(row['temporary_home_absent'])
+                row['result']={'ids':['fixture.method'],'tests':1,'skipped':[],'errors':[],'failures':[]}
+                self.assertFalse(m.case_passed(row,['fixture.method']))
+
     def test_VP031_failed_job_snapshot_is_read_only_and_handles_close(self):
         import sys
         from types import SimpleNamespace
@@ -88,7 +136,8 @@ class PortableVerifierTests(unittest.TestCase):
         for natural in (False,True):
             with self.subTest(natural=natural):
                 close=Mock(return_value=True)
-                owner=SimpleNamespace(spawn=Mock(return_value=SimpleNamespace(poll=lambda:0)),close=close)
+                owner=SimpleNamespace(spawn=Mock(return_value=SimpleNamespace(poll=lambda:0)),close=close,
+                    job=7,api=SimpleNamespace(job_empty=lambda job:True))
                 modules={'launcher.candidate_launch':SimpleNamespace(make_owner=lambda pid:owner,child_environment=lambda:{}),
                     'launcher.direct_python':SimpleNamespace(current=lambda:{'executable':sys.executable},environment_hint=lambda:{})}
                 snapshot=Mock(return_value={'accounting':{'ActiveProcesses':0},'members':[]})

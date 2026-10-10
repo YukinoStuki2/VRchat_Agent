@@ -2,7 +2,7 @@ name: Candidate bounded Windows Job investigation (not approval)
 on:
   push:
     branches: [candidate-alcom-20260928]
-    paths: ['Candidate~/experiments/job_exit_probe.py', 'Candidate~/experiments/test_job_exit_probe.py', '.github/workflows/candidate-job-probe.yml']
+    paths: ['Candidate~/experiments/job_exit_probe.py', 'Candidate~/experiments/test_job_exit_probe.py', 'Candidate~/tests/verify_peer.py', 'Candidate~/tests/test_portable_verifier.py', '.github/workflows/candidate-job-probe.yml']
 permissions:
   contents: read
 concurrency:

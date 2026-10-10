@@ -103,7 +103,9 @@ def run_case(script, child_code, *, filters=()):
                     child=owner.spawn([current()['executable'],'-I','-B','-W','always::ResourceWarning',
                         '-c',child_code,str(script),'-',*filters],env,stderr.append,stdio=(stdin.fileno(),stdout.fileno()))
                     deadline=time.monotonic()+40
-                    while child.poll() is None and time.monotonic()<deadline:
+                    # A signaled child can precede its console host's natural exit.
+                    # Observe the whole Job within the SAME deadline, before verdict/cleanup.
+                    while (child.poll() is None or (os.name=='nt' and not owner.api.job_empty(owner.job))) and time.monotonic()<deadline:
                         time.sleep(.02)
                     row['exit_code']=child.poll()
                     row['timed_out']=row['exit_code'] is None

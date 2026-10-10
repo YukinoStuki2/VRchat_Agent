@@ -35,6 +35,10 @@ def validate_sources(files):
                 raise ValueError('duplicate meta GUID')
             guids.add(guid)
             continue
+        # Unity ignores this exact external-runtime directory, including its contents.
+        # Supplied .meta GUIDs above are still validated; visible assets stay strict.
+        if name.startswith('Runtime~/'):
+            continue
         required_meta = {name + '.meta'}
         required_meta.update(str(parent) + '.meta' for parent in PurePosixPath(name).parents if str(parent) != '.')
         if not required_meta <= files.keys():

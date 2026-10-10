@@ -67,6 +67,22 @@ class CandidatePackagingTests(unittest.TestCase):
                     builder.build(package, proof, 'http://127.0.0.1:9000/packages/')
 
 
+    def test_unity_ignored_runtime_contents_need_no_meta(self):
+        builder = self.builder()
+        with tempfile.TemporaryDirectory(prefix='candidate-runtime-meta-') as td:
+            package = self.fixture(Path(td))
+            (package/'Runtime~/python').mkdir(parents=True)
+            (package/'Runtime~/python/python.exe').write_bytes(b'fixture, not executable')
+            (package/'Runtime~.meta').write_text('fileFormatVersion: 2\nguid: ' + '2'*32 + '\nfolderAsset: yes\n')
+            files = {p.relative_to(package).as_posix(): p.read_bytes()
+                     for p in package.rglob('*') if p.is_file()}
+            manifest = builder.validate_sources(files)
+            self.assertEqual(manifest['name'], 'com.yukino.vrchat-agent')
+            # Visible Runtime is different; the exception must stay exact.
+            files['Runtime/python.exe'] = b'visible fixture'
+            with self.assertRaisesRegex(ValueError, 'meta'):
+                builder.validate_sources(files)
+
     def test_invalid_or_duplicate_guid_is_rejected(self):
         builder = self.builder()
         for content in ('fileFormatVersion: 2\nguid: not-a-guid\n',

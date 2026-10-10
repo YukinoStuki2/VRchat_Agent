@@ -1,0 +1,84 @@
+"""Bounded investigation, not acceptance or a fix. Original verdict is immutable."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+from unittest.mock import patch
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+def observer(check,snapshot,rows,*,sleep=time.sleep):
+    def observe(owner,child):
+        result=check(owner,child)  # Original check always happens first.
+        row={'pid':child.pid,'original_natural_tree_exit':result,'snapshots':[]}
+        rows.append(row)
+        if not result:
+            start=time.monotonic()
+            for attempt in range(11):
+                if attempt:sleep(.02)
+                state=snapshot(owner)
+                row['snapshots'].append({'elapsed':time.monotonic()-start,'state':state})
+                if state.get('accounting',{}).get('ActiveProcesses')==0:break
+        return result  # Later empty accounting NEVER replaces the initial failure.
+    return observe
+
+
+def main():
+    if os.name!='nt' or len(sys.argv)!=2:
+        raise SystemExit('Windows and new output directory required')
+    out=Path(sys.argv[1]);out.mkdir(exist_ok=False)
+    sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
+    import verify_peer
+    import verify_editor_wire
+    from launcher.direct_python import current
+    files=subprocess.check_output(['git','ls-files','-z','Candidate~','.github/workflows'],cwd=ROOT.parent).decode().split('\0')
+    def hashes():return {name:hashlib.sha256((ROOT.parent/name).read_bytes()).hexdigest() for name in files if name}
+    report={'scope':'bounded original Windows Job verdict investigation, not product acceptance',
+        'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent,text=True).strip(),
+        'platform':sys.platform,'source_before':hashes(),'controls':[],'simple':[],'builds':[],'observations':[],
+        'historical_root_cause_proven':False}
+    def save():
+        (out/'probe.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+    check=verify_peer.natural_tree_exit
+    try:
+        with patch.object(verify_peer,'natural_tree_exit',observer(check,verify_peer.failed_job_snapshot,report['observations'])):
+            # One live descendant lasts beyond the existing 40s parent deadline.
+            # Avoid a short sleep-based control that can itself race the observer.
+            for label,seconds in [('live-descendant',60)]:
+                code='import os,subprocess;subprocess.Popen('+repr([current()['executable'],'-I','-B','-c',f'import time;time.sleep({seconds})'])+');os._exit(0)'
+                row=verify_peer.run_case(Path(__file__),code)
+                report['controls'].append({'label':label,'row':row});save()
+                assert row['exit_code']==0 and not row['natural_tree_exit'] and row['cleanup_complete'] and row['temporary_home_absent']
+                assert not row['timed_out'] and 'ResourceWarning' not in row['stdout']+row['stderr']
+            for number in range(64):
+                row=verify_peer.run_case(Path(__file__),'raise SystemExit(0)')
+                report['simple'].append(row);save()
+                assert row['exit_code']==0 and row['cleanup_complete'] and row['temporary_home_absent'] and not row['timed_out']
+                if not row['natural_tree_exit']:break
+            for number in range(20):
+                label=f'job-probe-{number:02}'
+                with patch.object(sys,'argv',['verify_editor_wire.py',label,'rw','RW001']):
+                    result=verify_editor_wire.main()
+                payload=(ROOT/'evidence'/('editor-wire-'+label+'.json')).read_bytes()
+                (out/f'build-{number:02}.json').write_bytes(payload)
+                doc=json.loads(payload)
+                report['builds'].append({'number':number,'returncode':result,'passed':doc['passed'],'build':doc.get('build'),
+                    'build_root_absent':doc.get('build_root_absent'),'source_unchanged':doc['source_unchanged']});save()
+                if result!=0:break
+    except Exception as error:
+        report['error_type']=type(error).__name__
+    finally:
+        report['source_after']=hashes()
+        report['source_unchanged']=report['source_before']==report['source_after']
+        report['collection_complete']='error_type' not in report and bool(report['builds']) and report['source_unchanged']
+        report['unexpected_failure']=any(not row['natural_tree_exit'] for row in report['simple']) or any(not row['passed'] for row in report['builds'])
+        save()
+    print(json.dumps({k:report[k] for k in ('collection_complete','unexpected_failure','historical_root_cause_proven')}))
+    return 0 if report['collection_complete'] and not report['unexpected_failure'] else 1
+
+
+if __name__=='__main__':raise SystemExit(main())

@@ -33,6 +33,28 @@ class JobProbeTests(unittest.TestCase):
         self.assertIs(observe(object(),SimpleNamespace(pid=1)),True)
         self.assertEqual(rows[0]['snapshots'],[])
 
+    def test_JP004_control_keeps_popen_alive_until_abrupt_exit(self):
+        import ast
+        import inspect
+        import sys
+        from unittest.mock import patch
+        module=self.load();events=[]
+        class Child:
+            def __init__(self,*args):events.append('spawn')
+            def __del__(self):events.append('released')
+        class Exit(BaseException):pass
+        def exit_now(code):
+            events.append('exit');raise Exit()
+        expr=next(n.value for n in ast.walk(ast.parse(inspect.getsource(module.main)))
+            if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='code' for t in n.targets))
+        code=eval(compile(ast.Expression(expr),'control-code','eval'),
+            {'current':lambda:{'executable':'fixture-python'},'seconds':60})
+        namespace={}
+        with patch.dict(sys.modules,{'os':SimpleNamespace(_exit=exit_now),'subprocess':SimpleNamespace(Popen=Child)}):
+            with self.assertRaises(Exit):exec(code,namespace)
+        namespace.clear()
+        self.assertEqual(events,['spawn','exit','released'])
+
     def test_JP003_live_or_unavailable_job_has_bounded_observation(self):
         module=self.load()
         for state in ({'accounting':{'ActiveProcesses':1}},{'error_type':'OSError'}):

@@ -49,7 +49,7 @@ def main():
             # One live descendant lasts beyond the existing 40s parent deadline.
             # Avoid a short sleep-based control that can itself race the observer.
             for label,seconds in [('live-descendant',60)]:
-                code='import os,subprocess;subprocess.Popen('+repr([current()['executable'],'-I','-B','-c',f'import time;time.sleep({seconds})'])+');os._exit(0)'
+                code='import os,subprocess;child=subprocess.Popen('+repr([current()['executable'],'-I','-B','-c',f'import time;time.sleep({seconds})'])+');os._exit(0)'
                 row=verify_peer.run_case(Path(__file__),code)
                 report['controls'].append({'label':label,'row':row});save()
                 assert row['exit_code']==0 and not row['natural_tree_exit'] and row['cleanup_complete'] and row['temporary_home_absent']

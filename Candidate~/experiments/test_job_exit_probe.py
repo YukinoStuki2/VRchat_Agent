@@ -33,6 +33,24 @@ class JobProbeTests(unittest.TestCase):
         self.assertIs(observe(object(),SimpleNamespace(pid=1)),True)
         self.assertEqual(rows[0]['snapshots'],[])
 
+    def test_JP006_image_queries_recheck_membership_and_close(self):
+        module=self.load();events=[]
+        self.assertTrue(hasattr(module,'snapshot_images'),'missing safe image observation')
+        def query(handle,flags,buffer,size):
+            events.append(('query',handle));buffer.value=r'C:\Windows\System32\conhost.exe';return 1
+        def membership(job,handle):
+            events.append(('member',handle))
+            if handle==12:raise OSError('sensitive error')
+        api=SimpleNamespace(k=SimpleNamespace(QueryFullProcessImageNameW=query),
+            w=SimpleNamespace(OpenProcess=lambda access,inherit,pid:pid+10),assign=membership,
+            checked=lambda result:result,close_handle=lambda handle:events.append(('close',handle)))
+        state={'members':[{'pid':1,'member_verified':True},{'pid':2,'member_verified':True}]}
+        result=module.snapshot_images(SimpleNamespace(api=api,job=99),lambda owner:state)
+        self.assertEqual(result['members'][0]['image_basename'],'conhost.exe')
+        self.assertEqual(result['members'][1]['image_error_type'],'OSError')
+        self.assertNotIn('image_basename',result['members'][1])
+        self.assertEqual(events,[('member',11),('query',11),('close',11),('member',12),('close',12)])
+
     def test_JP005_modes_have_fixed_limits_and_no_unknown_fallback(self):
         module=self.load()
         self.assertTrue(hasattr(module,'probe_plan'),'missing bounded timing mode')

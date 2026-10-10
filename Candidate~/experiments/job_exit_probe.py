@@ -28,6 +28,29 @@ def observer(check,snapshot,rows,*,sleep=time.sleep):
     return observe
 
 
+def snapshot_images(owner,snapshot):
+    import ctypes as c
+    import ntpath
+    state=snapshot(owner)
+    for row in state.get('members',[]):
+        if not row.get('member_verified'):continue
+        handle=None
+        try:
+            handle=owner.api.w.OpenProcess(0x101000,False,row['pid'])
+            owner.api.assign(owner.job,handle)
+            query=owner.api.k.QueryFullProcessImageNameW
+            query.argtypes=[c.c_void_p,c.c_uint32,c.c_wchar_p,c.POINTER(c.c_uint32)]
+            query.restype=c.c_int
+            size=c.c_uint32(32768);buffer=c.create_unicode_buffer(size.value)
+            owner.api.checked(query(handle,0,buffer,c.byref(size)))
+            row['image_basename']=ntpath.basename(buffer.value)
+        except Exception as error:
+            row['image_error_type']=type(error).__name__
+        finally:
+            if handle is not None:owner.api.close_handle(handle)
+    return state
+
+
 def probe_plan(mode):
     if mode=='baseline':return 64,20,.02
     if mode=='signal-race':return 512,0,0
@@ -57,7 +80,7 @@ def main():
         # Stress changes only this test driver's poll interval, not owner cleanup,
         # deadlines, native predicates or any production module's time object.
         with patch.object(verify_peer,'time',SimpleNamespace(monotonic=time.monotonic,sleep=lambda _:time.sleep(poll_sleep))), \
-                patch.object(verify_peer,'natural_tree_exit',observer(check,verify_peer.failed_job_snapshot,report['observations'])):
+                patch.object(verify_peer,'natural_tree_exit',observer(check,lambda owner:snapshot_images(owner,verify_peer.failed_job_snapshot),report['observations'])):
             # One live descendant lasts beyond the existing 40s parent deadline.
             # Avoid a short sleep-based control that can itself race the observer.
             for label,seconds in [('live-descendant',60)]:

@@ -49,6 +49,9 @@ def recorded_directory(report, output):
             work = Path(td)
             report['temporary_root'] = str(work)
             yield work
+    except BaseException:
+        report['passed'] = False
+        raise
     finally:
         report['temporary_root_absent'] = work is not None and not work.exists()
         if not report['temporary_root_absent']:
@@ -66,6 +69,38 @@ def regression_arguments(suite):
     return []
 
 
+def export_payload(package, expected, destination, report):
+    """Retain verified build bytes, never issue installable-product approval."""
+    if any(report.get(key) is not True for key in ('passed', 'source_unchanged', 'payload_unchanged')):
+        raise ValueError('unverified_payload')
+    package, destination = Path(package).absolute(), Path(destination).absolute()
+    if '..' in destination.parts or destination.resolve().is_relative_to(package.resolve()):
+        raise ValueError('unsafe_export_destination')
+    def reject_links(paths):
+        for path in paths:
+            if path.is_symlink() or getattr(path.lstat(), 'st_file_attributes', 0) & 0x400:
+                raise ValueError('export_link_or_reparse_point')
+    reject_links((destination.parent, *destination.parent.parents))
+    reject_links((package, *package.parents, *package.rglob('*')))
+    expected = {name.replace('\\', '/'): digest for name, digest in expected.items()}
+    def snapshot(folder):
+        reject_links((folder, *folder.rglob('*')))
+        return {p.relative_to(folder).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in folder.rglob('*') if p.is_file()}
+    if snapshot(package) != expected:
+        raise ValueError('export_payload_drift')
+    destination.mkdir()  # Refuse pre-existing paths before entering owned cleanup.
+    try:
+        shutil.copytree(package, destination, dirs_exist_ok=True)
+        actual = snapshot(destination)
+        if actual != expected or snapshot(package) != expected:
+            raise ValueError('export_payload_drift')
+        return {'scope': 'verified development payload; not installable approval',
+                'product_approved': False, 'inventory': actual}
+    except BaseException:
+        shutil.rmtree(destination)
+        raise
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--archive',required=True,type=Path)
@@ -73,6 +108,7 @@ def main():
     parser.add_argument('--wheelhouse', type=Path)
     parser.add_argument('--node-archive',type=Path)
     parser.add_argument('--output',required=True,type=Path)
+    parser.add_argument('--retain-payload', type=Path, help='Opt-in verified development output, not product approval')
     args=parser.parse_args()
     if args.output.exists():raise FileExistsError(args.output)
     spec=importlib.util.spec_from_file_location('portable',ROOT/'distribution/portable_python.py')
@@ -233,6 +269,8 @@ def main():
         report['source_unchanged']=all(hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest for name,digest in hashes.items())
         assert report['payload_unchanged'] and report['source_unchanged']
         report['passed']=True
+        if args.retain_payload:
+            report['payload_export'] = export_payload(relocated/'package', before, args.retain_payload, report)
     print(json.dumps({'passed':report['passed'],'temporary_root_absent':report['temporary_root_absent'],'evidence':str(args.output)}))
 
 if __name__=='__main__':main()

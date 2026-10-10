@@ -14,6 +14,12 @@ on:
       - '.github/workflows/candidate-portable.yml'
       - '.gitattributes'
   workflow_dispatch:
+    inputs:
+      retain_payload:
+        description: Retain verified development bytes, NOT approved installation
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 jobs:
@@ -22,6 +28,7 @@ jobs:
     timeout-minutes: 20
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      RETAIN_PAYLOAD: ${{ inputs.retain_payload && '1' || '0' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -39,6 +46,8 @@ jobs:
           foreach ($file in $files) { $hashes[$file] = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower() }
           $hashes | ConvertTo-Json | Set-Content artifacts/source-before.json
           python -I -B -W always::ResourceWarning Candidate~/tests/test_portable_python.py 2>&1 | Tee-Object artifacts/unit-tests.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -I -B -W always::ResourceWarning Candidate~/tests/test_payload_export.py 2>&1 | Tee-Object artifacts/export-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile host adapter syntax only (not Windows Hermes)
         shell: pwsh
@@ -71,7 +80,9 @@ jobs:
           Invoke-WebRequest -Uri $nodePin.url -OutFile $nodeArchive
           if ((Get-FileHash -Algorithm SHA256 $nodeArchive).Hash.ToLower() -ne $nodePin.sha256) { throw 'node_archive_hash' }
           $dotnet = (Get-Command dotnet).Source
-          python -I -B -W always::ResourceWarning Candidate~/tests/verify_portable.py --archive $archive --node-archive $nodeArchive --dotnet $dotnet --output artifacts/portable.json 2>&1 | Tee-Object artifacts/portable-tests.txt
+          $exportArgs = @()
+          if ($env:RETAIN_PAYLOAD -eq '1') { $exportArgs = @('--retain-payload', (Join-Path $pwd 'payload')) }
+          python -I -B -W always::ResourceWarning Candidate~/tests/verify_portable.py @exportArgs --archive $archive --node-archive $nodeArchive --dotnet $dotnet --output artifacts/portable.json 2>&1 | Tee-Object artifacts/portable-tests.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Read back cleanup and freeze
         if: always()
@@ -97,3 +108,12 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
+      - name: Retain verified development payload (not installation approval)
+        if: success() && env.RETAIN_PAYLOAD == '1'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: development-payload-unapproved-${{ github.sha }}
+          path: payload/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

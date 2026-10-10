@@ -19,6 +19,93 @@ def module():
     return mod
 
 class PortableArchiveTests(unittest.TestCase):
+    def test_PP011_windows_crt_is_excluded_before_distribution(self):
+        m = module()
+        self.assertTrue(callable(getattr(m, 'strip_windows_crt', None)),
+                        'missing explicit Windows CRT exclusion')
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            excluded = {}
+            for name in ('vcruntime140.dll', 'vcruntime140_1.dll'):
+                data = ('fixture ' + name).encode()
+                (root/name).write_bytes(data)
+                excluded[name] = hashlib.sha256(data).hexdigest()
+            (root/'python.exe').write_bytes(b'keep interpreter')
+            result = m.strip_windows_crt(root, {'excluded_crt_files': excluded})
+            self.assertEqual(result, excluded)
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ['python.exe'])
+            self.assertEqual((root/'python.exe').read_bytes(), b'keep interpreter')
+
+    def test_PP012_crt_exclusion_validates_all_files_before_deletion(self):
+        from unittest.mock import patch
+        m = module()
+        for bad in ('missing', 'drift', 'link', 'scope'):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                names = ('vcruntime140.dll', 'vcruntime140_1.dll')
+                expected = {}
+                for name in names:
+                    (root/name).write_bytes(b'fixture')
+                    expected[name] = hashlib.sha256(b'fixture').hexdigest()
+                last = root/names[1]
+                if bad == 'missing': last.unlink()
+                if bad == 'drift': last.write_bytes(b'changed')
+                if bad == 'scope': expected = {'../outside': expected[names[0]]}
+                before = {p.name: p.read_bytes() for p in root.iterdir()}
+                original = Path.is_symlink
+                with patch.object(Path, 'is_symlink', lambda p: (bad == 'link' and p == last) or original(p)):
+                    with self.assertRaisesRegex(ValueError, 'crt_exclusion'):
+                        m.strip_windows_crt(root, {'excluded_crt_files': expected})
+                self.assertEqual({p.name: p.read_bytes() for p in root.iterdir()}, before)
+
+    def test_PP013_builder_strips_crt_before_any_interpreter_execution(self):
+        from unittest.mock import patch
+        m = module()
+        pins = m.read_json(ROOT/'distribution/python-standalone.lock.json')
+        excluded = {name: hashlib.sha256(b'fixture').hexdigest()
+                    for name in ('vcruntime140.dll', 'vcruntime140_1.dll')}
+        pins['platforms']['windows-x86_64']['excluded_crt_files'] = excluded
+        assemble = m.load('crt_source_fixture', ROOT/'distribution/assemble_source.py')
+        def extract_fixture(archive, destination, digest):
+            (destination/'python').mkdir(parents=True)
+            for name in (*excluded, 'python.exe'):
+                (destination/'python'/name).write_bytes(b'fixture')
+        observed = []
+        def identity_probe(executable):
+            self.assertTrue(executable.is_file())
+            self.assertFalse(any((executable.parent/name).exists() for name in excluded),
+                             'bundled CRT reaches interpreter execution')
+            observed.append(executable)
+            raise RuntimeError('identity probe ends isolated fixture')
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td)/'build'
+            with patch.object(m.platform, 'system', return_value='Windows'), \
+                 patch.object(m.platform, 'machine', return_value='AMD64'), \
+                 patch.object(m, 'read_json', return_value=pins), \
+                 patch.object(m, 'load', return_value=assemble), \
+                 patch.object(assemble, 'collect', return_value={'Runtime~/keep.txt': b'fixture'}), \
+                 patch.object(m, 'extract', side_effect=extract_fixture), \
+                 patch.object(m, 'identity', side_effect=identity_probe):
+                with self.assertRaisesRegex(RuntimeError, 'identity probe ends'):
+                    m.build(Path(td)/'fixture.tar.gz', target)
+            self.assertEqual(len(observed), 1)
+            self.assertFalse(target.exists())
+
+    def test_PP014_completed_payload_cannot_reintroduce_crt(self):
+        m = module()
+        self.assertTrue(callable(getattr(m, 'verify_windows_crt_absent', None)),
+                        'missing final Windows CRT absence gate')
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            m.verify_windows_crt_absent(root)
+            for name in ('VCRUNTIME140.DLL', 'vcruntime140_1.dll'):
+                path = root/'nested'/name; path.parent.mkdir(exist_ok=True)
+                path.write_bytes(b'fixture')
+                with self.assertRaisesRegex(ValueError, 'bundled_windows_crt'):
+                    m.verify_windows_crt_absent(root)
+                path.unlink()
+            m.verify_windows_crt_absent(root)
+
     def test_PP010_builder_has_explicit_pinned_diagnostic_input(self):
         import inspect
         self.assertIn('node_archive',inspect.signature(module().build).parameters)

@@ -17,6 +17,7 @@ from urllib.parse import urlparse, unquote
 from urllib.request import url2pathname
 
 ROOT = Path(__file__).resolve().parents[1]
+WINDOWS_CRT_FILES = {'vcruntime140.dll', 'vcruntime140_1.dll'}
 
 
 def read_json(path):
@@ -96,6 +97,26 @@ def write_launch_descriptor(package, platform_key, version):
         json.dump({'schema':1, 'platform':platform_key, 'python_version':version, 'files':files}, output, indent=2)
 
 
+def strip_windows_crt(python_root, pin):
+    """Only remove the two pinned app-local CRT files from an owned build."""
+    excluded = pin.get('excluded_crt_files')
+    if type(excluded) is not dict or set(excluded) != WINDOWS_CRT_FILES:
+        raise ValueError('crt_exclusion_scope')
+    for name, expected in excluded.items():
+        path = python_root/name
+        if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError('crt_exclusion_source_mismatch')
+    for name in excluded:
+        (python_root/name).unlink()
+    return dict(excluded)
+
+
+def verify_windows_crt_absent(package):
+    # Wheels/diagnostic assembly must not reintroduce app-local CRT copies.
+    if any(path.name.lower() in WINDOWS_CRT_FILES for path in package.rglob('*')):
+        raise ValueError('bundled_windows_crt')
+
+
 def build(archive, destination, wheelhouse=None, node_archive=None):
     """Task-owned dev directory only. No ZIP, VPM, config or existing env writes."""
     system = platform.system().lower()
@@ -122,6 +143,7 @@ def build(archive, destination, wheelhouse=None, node_archive=None):
         python_root = package/'Runtime~/python'
         (destination/'extracted/python').rename(python_root)
         (destination/'extracted').rmdir()
+        excluded_crt = strip_windows_crt(python_root, pin) if system == 'windows' else {}
         executable = package/'Runtime~'/pin['executable']
         observed = identity(executable)
         if observed['version'] != pins['python_version'] or observed['implementation'] != 'cpython':
@@ -160,12 +182,14 @@ def build(archive, destination, wheelhouse=None, node_archive=None):
                 raise ValueError('diagnostic_notices_incomplete')
             shutil.copyfile(package/'Runtime~/diagnostics-backend/inventory.json',
                 evidence/'diagnostic-backend-inventory.json')
+        if system == 'windows': verify_windows_crt_absent(package)
         write_launch_descriptor(package, key, pins['python_version'])
         result = {'scope': 'Local portable development runtime, not product/Unity acceptance',
             'diagnostics_included': diagnostic is not None,
             'platform': key, 'dependency_source': 'offline-wheelhouse' if wheelhouse else 'pypi', 'python_archive_sha256': pin['sha256'], 'python_release': pins['release'],
             'executable': str(executable.relative_to(destination)), 'python_identity': observed,
             'python_notice_records': len(pin['licenses']),
+            'excluded_crt_files': excluded_crt,
             'requirements_sha256': hashlib.sha256((ROOT/'distribution/requirements.lock').read_bytes()).hexdigest(),
             'selected_wheels': selected, 'source_files': len(payload), 'independent_approval': False, 'full_product_accepted': False}
         (evidence/'build.json').write_text(json.dumps(result, indent=2)+'\n')

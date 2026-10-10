@@ -70,7 +70,13 @@
         "python-licenses/windows-x86_64/licenses/LICENSE.tcl.txt": "41613eabfc08921a7da9c4bfd7f3ce5d5406f55214b253d89f392ed86eebeb8f",
         "python-licenses/windows-x86_64/licenses/LICENSE.tix.txt": "8cdff3addb9e9eb108c78e2cf5e05f26b216c098304945733bbec382b2eaef66",
         "python-licenses/windows-x86_64/licenses/LICENSE.zlib.txt": "365e36720db366054863235aea5d6f440142ab968834bfaf81fa9d187c99b9b8"
-      }
+      },
+      "excluded_crt_files": {
+        "vcruntime140.dll": "d5e4d9a3e835fa679450145d6a7d94e36573a509317111904d9b3712c30d9066",
+        "vcruntime140_1.dll": "1f2d41c4aa5db0bc33ebf7b66d72943a817d7ce6cbe880502a9403823633093f"
+      },
+      "crt_distribution_policy": "external Microsoft Visual C++ v14 x64 prerequisite; manual installation only",
+      "full_comparison_scope": "Original publisher install archive before product CRT exclusions"
     }
   }
 }

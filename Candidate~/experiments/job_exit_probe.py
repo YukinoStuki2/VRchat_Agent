@@ -51,11 +51,12 @@ def snapshot_images(owner,snapshot):
     return state
 
 
-def birth_observer(make_owner,snapshot,rows):
+def birth_observer(make_owner,snapshot,rows,*,settle=0,sleep=time.sleep):
     def create(parent_pid):
         owner=make_owner(parent_pid);original=owner.spawn
         def spawn(*args,**kwargs):
             child=original(*args,**kwargs)
+            if settle:sleep(settle)
             rows.append({'pid':child.pid,'state':snapshot(owner)})
             return child
         owner.spawn=spawn
@@ -95,7 +96,7 @@ def main():
         # deadlines, native predicates or any production module's time object.
         with patch.object(verify_peer,'time',SimpleNamespace(monotonic=time.monotonic,sleep=lambda _:time.sleep(poll_sleep))), \
                 patch.object(verify_peer,'natural_tree_exit',observer(check,snapshot,report['observations'])), \
-                patch.object(launches,'make_owner',birth_observer(launches.make_owner,snapshot,report['birth_observations'])):
+                patch.object(launches,'make_owner',birth_observer(launches.make_owner,snapshot,report['birth_observations'],settle=.02)):
             # One live descendant lasts beyond the existing 40s parent deadline.
             # Avoid a short sleep-based control that can itself race the observer.
             for label,seconds in [('live-descendant',60)]:
@@ -105,7 +106,7 @@ def main():
                 assert row['exit_code']==0 and not row['natural_tree_exit'] and row['cleanup_complete'] and row['temporary_home_absent']
                 assert not row['timed_out'] and 'ResourceWarning' not in row['stdout']+row['stderr']
             for number in range(simple_limit):
-                row=verify_peer.run_case(Path(__file__),'raise SystemExit(0)')
+                row=verify_peer.run_case(Path(__file__),'import time;time.sleep(.1);raise SystemExit(0)')
                 report['simple'].append(row);save()
                 assert row['exit_code']==0 and row['cleanup_complete'] and row['temporary_home_absent'] and not row['timed_out']
                 if not row['natural_tree_exit']:break

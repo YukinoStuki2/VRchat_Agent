@@ -33,6 +33,15 @@ class JobProbeTests(unittest.TestCase):
         self.assertIs(observe(object(),SimpleNamespace(pid=1)),True)
         self.assertEqual(rows[0]['snapshots'],[])
 
+    def test_JP008_delayed_identity_sample_is_explicit_and_readonly(self):
+        module=self.load();events=[];rows=[]
+        child=SimpleNamespace(pid=42)
+        owner=SimpleNamespace(spawn=lambda *a,**kw:child)
+        factory=module.birth_observer(lambda pid:owner,lambda o:events.append('query') or {},rows,
+            settle=.02,sleep=lambda delay:events.append(delay))
+        self.assertIs(factory(7).spawn([],{}),child)
+        self.assertEqual(events,[.02,'query'])
+
     def test_JP007_birth_observation_preserves_original_owner_and_child(self):
         module=self.load();events=[];rows=[]
         self.assertTrue(hasattr(module,'birth_observer'),'missing pre-exit identity capture')

@@ -51,6 +51,18 @@ def snapshot_images(owner,snapshot):
     return state
 
 
+def birth_observer(make_owner,snapshot,rows):
+    def create(parent_pid):
+        owner=make_owner(parent_pid);original=owner.spawn
+        def spawn(*args,**kwargs):
+            child=original(*args,**kwargs)
+            rows.append({'pid':child.pid,'state':snapshot(owner)})
+            return child
+        owner.spawn=spawn
+        return owner
+    return create
+
+
 def probe_plan(mode):
     if mode=='baseline':return 64,20,.02
     if mode=='signal-race':return 512,0,0
@@ -67,20 +79,23 @@ def main():
     import verify_peer
     import verify_editor_wire
     from launcher.direct_python import current
+    import launcher.candidate_launch as launches
     files=subprocess.check_output(['git','ls-files','-z','Candidate~','.github/workflows'],cwd=ROOT.parent).decode().split('\0')
     def hashes():return {name:hashlib.sha256((ROOT.parent/name).read_bytes()).hexdigest() for name in files if name}
     report={'scope':'bounded original Windows Job verdict investigation, not product acceptance',
         'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent,text=True).strip(),
-        'platform':sys.platform,'mode':mode,'simple_limit':simple_limit,'build_limit':build_limit,'poll_sleep':poll_sleep,'source_before':hashes(),'controls':[],'simple':[],'builds':[],'observations':[],
+        'platform':sys.platform,'mode':mode,'simple_limit':simple_limit,'build_limit':build_limit,'poll_sleep':poll_sleep,'source_before':hashes(),'controls':[],'simple':[],'builds':[],'observations':[],'birth_observations':[],
         'historical_root_cause_proven':False}
     def save():
         (out/'probe.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     check=verify_peer.natural_tree_exit
+    snapshot=lambda owner:snapshot_images(owner,verify_peer.failed_job_snapshot)
     try:
         # Stress changes only this test driver's poll interval, not owner cleanup,
         # deadlines, native predicates or any production module's time object.
         with patch.object(verify_peer,'time',SimpleNamespace(monotonic=time.monotonic,sleep=lambda _:time.sleep(poll_sleep))), \
-                patch.object(verify_peer,'natural_tree_exit',observer(check,lambda owner:snapshot_images(owner,verify_peer.failed_job_snapshot),report['observations'])):
+                patch.object(verify_peer,'natural_tree_exit',observer(check,snapshot,report['observations'])), \
+                patch.object(launches,'make_owner',birth_observer(launches.make_owner,snapshot,report['birth_observations'])):
             # One live descendant lasts beyond the existing 40s parent deadline.
             # Avoid a short sleep-based control that can itself race the observer.
             for label,seconds in [('live-descendant',60)]:

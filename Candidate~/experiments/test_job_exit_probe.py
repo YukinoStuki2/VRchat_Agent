@@ -33,6 +33,17 @@ class JobProbeTests(unittest.TestCase):
         self.assertIs(observe(object(),SimpleNamespace(pid=1)),True)
         self.assertEqual(rows[0]['snapshots'],[])
 
+    def test_JP007_birth_observation_preserves_original_owner_and_child(self):
+        module=self.load();events=[];rows=[]
+        self.assertTrue(hasattr(module,'birth_observer'),'missing pre-exit identity capture')
+        child=SimpleNamespace(pid=42)
+        owner=SimpleNamespace(spawn=lambda *a,**kw:events.append(('spawn',a,kw)) or child)
+        factory=module.birth_observer(lambda pid:owner,lambda o:events.append('snapshot') or {'members':[]},rows)
+        self.assertIs(factory(7),owner)
+        self.assertIs(owner.spawn(['fixture'],{},stdio=(1,2)),child)
+        self.assertEqual(events,[('spawn',(['fixture'],{}),{'stdio':(1,2)}),'snapshot'])
+        self.assertEqual(rows,[{'pid':42,'state':{'members':[]}}])
+
     def test_JP006_image_queries_recheck_membership_and_close(self):
         module=self.load();events=[]
         self.assertTrue(hasattr(module,'snapshot_images'),'missing safe image observation')

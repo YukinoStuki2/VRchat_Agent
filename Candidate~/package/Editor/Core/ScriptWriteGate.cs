@@ -69,6 +69,7 @@ namespace Yukino.VRChatAgent
             busy=true;try{Verify(p);Current(p,false);p.Approved=true;LastReason="本地已批准单文件例外及导入/编译效果";return true;}
             catch{StopAll("批准前证据变化；未授权");return false;}finally{busy=false;}
         }
+        internal JArray LocalHistory()=>store.History();
         internal JObject Withdraw(string id)
         {
             if(busy)return Fail("execution_in_progress");busy=true;

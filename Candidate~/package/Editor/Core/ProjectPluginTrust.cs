@@ -60,7 +60,8 @@ namespace Yukino.VRChatAgent
             Observe();if(accepted==null)return null;
             bool valid=purpose=="asset_load_callbacks"&&(CandidateGate.AssetTarget(target)||CandidateGate.PrefabTarget(target)) ||
                 purpose=="prefab_contents_callbacks"&&CandidateGate.PrefabTarget(target) ||
-                purpose=="test_discovery_callbacks"&&(target=="TestDiscovery/EditMode"||target=="TestDiscovery/PlayMode");
+                purpose=="test_discovery_callbacks"&&(target=="TestDiscovery/EditMode"||target=="TestDiscovery/PlayMode") ||
+                purpose=="visual_capture_callbacks"&&target=="SceneView";
             return valid?Digest("local_project_plugin_trust_v1\n"+accepted+"\n"+baseline+"\n"+purpose+"\n"+target):null;
         }
     }

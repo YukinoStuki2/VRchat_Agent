@@ -1,0 +1,29 @@
+name: Candidate script path kernel
+on:
+  push:
+    branches: [candidate-script-path-20261011]
+permissions:
+  contents: read
+concurrency:
+  group: script-path-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  kernel:
+    runs-on: windows-2022
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute exact-source synthetic kernel cases
+        shell: pwsh
+        run: |
+          python -I -B -X utf8 -W always::ResourceWarning 'Candidate~/tests/verify_script_windows.py' script-kernel/report.json
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: script-kernel-${{ github.sha }}
+          path: script-kernel/
+          if-no-files-found: error
+          retention-days: 7

@@ -54,7 +54,7 @@ def execute(dotnet, sources, hashes, report, output):
           env.update(HOME=tmp, USERPROFILE=tmp, TEMP=tmp, TMP=tmp, APPDATA=tmp, LOCALAPPDATA=tmp,
                      DOTNET_CLI_HOME=tmp, DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1',
                      DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1', MSBUILDDISABLENODEREUSE='1')
-          for name, prefix, count in [('ScriptPathCases', 'WP', 7), ('ScriptWriteCases', 'SW', 9)]:
+          for name, prefix, count in [('ScriptPathCases', 'WP', 8), ('ScriptWriteCases', 'SW', 13)]:
               build = subprocess.run([dotnet, 'build', str(ROOT/'tests/unity-core'/(name+'.csproj')),
                   '-c', 'Release', '--disable-build-servers', '-p:UseSharedCompilation=false', '-p:NuGetAudit=false',
                   '-p:RestoreSources=', '-p:RestoreConfigFile='+str(ROOT/'tests/unity-core/ReviewNuGet.Config'),

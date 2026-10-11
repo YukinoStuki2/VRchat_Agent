@@ -62,7 +62,8 @@ static class ScriptWriteCases
             string id=(string)receipt["transaction_id"];
             string journal=Path.Combine(root,"UserSettings/VRChatAgent/ScriptBackups",id,"record.json");
             // Emulate interruption AFTER source flush, BEFORE final journal update.
-            var record=JObject.Parse(File.ReadAllText(journal));record["state"]="prepared";File.WriteAllText(journal,record.ToString());
+            Check((string)JObject.Parse(File.ReadAllText(journal))["state"]=="prepared","prepared journal was updated");
+            File.Delete(Path.Combine(Path.GetDirectoryName(journal),"write-result.json"));
             store=new Yukino.VRChatAgent.ScriptFileStore(root,_=>{});
             Check((string)store.Restore(id,()=>true)["outcome"]=="restored","durable prepared postimage cannot recover");
             Check(File.ReadAllText(target)=="Shader \"Old\" {}\n","interrupted transaction was not restored");
@@ -210,8 +211,76 @@ static class ScriptWriteCases
             Check(!(bool)result["success"]&&File.ReadAllText(file)==before,"rejection failed: "+scenario);
             Check(!Directory.Exists(Path.Combine(root,"UserSettings")),"denied operation created backup: "+scenario);
             if(scenario=="foreign_client")Check(gate.LocalPlans().Count==1,"foreign client revoked another plan");
+            if(scenario=="stale_stop")Check(gate.LocalPlans().Count==1,"stale execute revoked the replacement plan");
         });
     }
+    static void DurableHistory()=>WithFixture((store,root,file)=>
+    {
+        var method=store.GetType().GetMethod("History",BindingFlags.NonPublic|BindingFlags.Instance);
+        Check(method!=null,"missing durable local recovery inventory");
+        Check(((JArray)Call(store,"History")).Count==0&&!Directory.Exists(Path.Combine(root,"UserSettings")),"empty history created storage");
+        var receipt=store.Write("Assets/A.cs",store.Capture("Assets/A.cs"),"class Changed {}\n",()=>true);
+        store=new Yukino.VRChatAgent.ScriptFileStore(root,_=>{});
+        var rows=(JArray)Call(store,"History");
+        Check(rows.Count==1&&(string)rows[0]["transaction_id"]==(string)receipt["transaction_id"]&&
+            (string)rows[0]["outcome"]=="changed"&&(string)rows[0]["target"]=="Assets/A.cs","reload history mismatch");
+        Check(File.ReadAllText(file)=="class Changed {}\n","listing performed recovery");
+        store.Restore((string)receipt["transaction_id"],()=>true);
+        Check((string)((JArray)Call(store,"History"))[0]["outcome"]=="restored","history did not reflect actual recovery");
+    });
+    static void IncompleteHistory()=>WithFixture((store,root,file)=>
+    {
+        var receipt=store.Write("Assets/A.cs",store.Capture("Assets/A.cs"),"class Changed {}\n",()=>true);
+        string backup=Path.Combine(root,"UserSettings/VRChatAgent/ScriptBackups");
+        string missing=Guid.NewGuid().ToString("N"),truncated=Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(Path.Combine(backup,missing));
+        Directory.CreateDirectory(Path.Combine(backup,truncated));
+        File.WriteAllText(Path.Combine(backup,truncated,"record.json"),"{\"version\":");
+        store=new Yukino.VRChatAgent.ScriptFileStore(root,_=>{});
+        var rows=store.History();
+        Check(rows.Count==3,"incomplete entries hid intact history");
+        Check(rows.Single(r=>(string)r["transaction_id"]==(string)receipt["transaction_id"])["outcome"].Value<string>()=="changed","intact history lost");
+        foreach(string id in new[]{missing,truncated})
+        {
+            var row=rows.Single(r=>(string)r["transaction_id"]==id);
+            Check((string)row["outcome"]=="unavailable"&&(bool)row["recovery_available"]==false&&row["target"].Type==JTokenType.Null,"damaged entry looked recoverable");
+            Reject(()=>store.Restore(id,()=>true),"damaged transaction restored");
+        }
+        Check(File.ReadAllText(file)=="class Changed {}\n","listing damaged history mutated source");
+        Check((string)store.Restore((string)receipt["transaction_id"],()=>true)["outcome"]=="restored","intact transaction inaccessible");
+    });
+    static void ImmutablePreparedJournal()=>WithFixture((store,root,file)=>
+    {
+        byte[] prepared=null;string journal=null;int calls=0;
+        var receipt=store.Write("Assets/A.cs",store.Capture("Assets/A.cs"),"class Changed {}\n",()=>{
+            if(++calls==2)
+            {
+                journal=Directory.GetFiles(Path.Combine(root,"UserSettings/VRChatAgent/ScriptBackups"),"record.json",SearchOption.AllDirectories).Single();
+                prepared=File.ReadAllBytes(journal);
+            }
+            return true;
+        });
+        Check(prepared!=null&&File.ReadAllBytes(journal).SequenceEqual(prepared),"write outcome overwrote sole prepared recovery record");
+        Check((string)store.History()[0]["outcome"]=="changed","separate write outcome missing");
+        store.Restore((string)receipt["transaction_id"],()=>true);
+        Check(File.ReadAllBytes(journal).SequenceEqual(prepared),"restore outcome overwrote prepared recovery record");
+        Check((string)store.History()[0]["outcome"]=="restored","separate restore outcome missing");
+    });
+    static void TornOutcomeRecovery()=>WithFixture((store,root,file)=>
+    {
+        var receipt=store.Write("Assets/A.cs",store.Capture("Assets/A.cs"),"class Changed {}\n",()=>true);
+        string id=(string)receipt["transaction_id"],directory=Path.Combine(root,"UserSettings/VRChatAgent/ScriptBackups",id);
+        byte[] prepared=File.ReadAllBytes(Path.Combine(directory,"record.json"));
+        File.WriteAllText(Path.Combine(directory,"write-result.json"),"{\"version\":");
+        store=new Yukino.VRChatAgent.ScriptFileStore(root,_=>{});
+        var row=store.History().Single();
+        Check((string)row["outcome"]=="unknown"&&(string)row["error"]=="journal_state_unavailable"&&(string)row["target"]=="Assets/A.cs","torn outcome lost prepared evidence or claimed success");
+        Reject(()=>store.Restore(id,()=>false),"torn state granted recovery");
+        File.WriteAllText(file,"class UserEdit {}\n");Reject(()=>store.Restore(id,()=>true),"torn state bypassed postimage conflict");
+        File.WriteAllText(file,"class Changed {}\n");
+        Check((string)store.Restore(id,()=>true)["outcome"]=="restored","torn outcome destroyed exact-postimage recovery");
+        Check(File.ReadAllText(file)=="class A {}\n"&&File.ReadAllBytes(Path.Combine(directory,"record.json")).SequenceEqual(prepared),"recovery corrupted immutable evidence");
+    });
     public static int Main()
     {
         try
@@ -225,6 +294,10 @@ static class ScriptWriteCases
             ReentrantRevocation();Console.WriteLine("PASS SW007 prepare_reentrant_stop_no_resurrection");
             RecoveryRevocation();Console.WriteLine("PASS SW008 recovery_reentrant_stop");
             GateRejections();Console.WriteLine("PASS SW009 gate_rejection_matrix");
+            DurableHistory();Console.WriteLine("PASS SW010 durable_local_history_no_automatic_restore");
+            IncompleteHistory();Console.WriteLine("PASS SW011 incomplete_history_isolated");
+            ImmutablePreparedJournal();Console.WriteLine("PASS SW012 prepared_journal_immutable");
+            TornOutcomeRecovery();Console.WriteLine("PASS SW013 torn_outcome_preserves_guarded_recovery");
             return 0;
         }
         catch(Exception ex){Console.WriteLine("FAIL "+ex);return 1;}

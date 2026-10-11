@@ -15,6 +15,12 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Preserve diagnostic baseline (not an acceptance gate)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -I -B -X utf8 -W always::ResourceWarning 'Candidate~/tests/lock-baseline/tests/verify_script_windows.py' script-kernel/baseline.json
+          exit $LASTEXITCODE
       - name: Execute exact-source synthetic kernel cases
         shell: pwsh
         run: |

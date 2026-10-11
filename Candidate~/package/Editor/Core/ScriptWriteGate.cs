@@ -91,7 +91,7 @@ namespace Yukino.VRChatAgent
         internal JObject Dispatch(JObject input)
         {
             bool stop=(string)input?["kind"]=="stop";if(busy&&!stop)return Fail("execution_in_progress");
-            bool previousBusy=busy;busy=true;string client=null;
+            bool previousBusy=busy;busy=true;string client=null;Plan executing=null;
             try
             {
                 Need(input!=null&&System.Text.Encoding.UTF8.GetByteCount(input.ToString(Formatting.None))<=1024*1024,"request_budget");
@@ -116,6 +116,7 @@ namespace Yukino.VRChatAgent
                     plan=p;return Ok(new JObject{["status"]="pending",["plan_id"]=p.Id,["digest"]=p.Digest});
                 }
                 var active=plan;Need(active!=null&&active.Client==client&&active.Task==task&&Text(r["plan_id"])==active.Id,"plan_not_current");
+                executing=active;
                 if(kind=="stop"){Keys(body);StopAll("任务停止；保留直接修改和备份");return Ok(new JObject{["status"]="stopped"});}
                 Need(kind=="execute","unknown_kind");Keys(body,"content");Need(body["content"]?.Type==JTokenType.String,"invalid_source_text");
                 Current(active,true);Verify(active);Current(active,true);
@@ -133,7 +134,7 @@ namespace Yukino.VRChatAgent
             }
             catch(Exception ex)
             {
-                if(!stop&&plan!=null&&plan.Client==client)StopAll("调用失败；原件现场与备份保留");
+                if(!stop&&executing!=null&&ReferenceEquals(plan,executing))StopAll("调用失败；原件现场与备份保留");
                 return Fail(ex is CandidateWriteDenied?ex.Message:"local_validation_failed");
             }
             finally{busy=previousBusy;}

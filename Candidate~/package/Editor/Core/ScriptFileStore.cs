@@ -1,10 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -21,7 +19,7 @@ namespace Yukino.VRChatAgent
         readonly Action<FileStream> inspectHandle;
         static readonly UTF8Encoding Utf8=new UTF8Encoding(false,true);
         internal ScriptFileStore(string root,Action<FileStream> inspectHandle=null)
-        {this.root=Path.GetFullPath(root);this.inspectHandle=inspectHandle??WindowsSingleLink;}
+        {if(inspectHandle==null)ScriptPathLease.ValidatePath(root);this.root=Path.GetFullPath(root);this.inspectHandle=inspectHandle;}
         static void Need(bool ok,string code){if(!ok)throw new CandidateWriteDenied(code);}
         internal static string Hash(byte[] value)
         {using(var h=SHA256.Create())return BitConverter.ToString(h.ComputeHash(value)).Replace("-","").ToLowerInvariant();}
@@ -49,16 +47,17 @@ namespace Yukino.VRChatAgent
         FileStream Open(string full,bool write,int budget)
         {
             Chain(full);
-            var stream=new FileStream(full,FileMode.Open,write?FileAccess.ReadWrite:FileAccess.Read,write?FileShare.None:FileShare.Read);
-            try{inspectHandle(stream);Need(stream.Length<=budget,"source_budget");Chain(full);return stream;}
+            var stream=inspectHandle==null?ScriptPathLease.Open(full,write):
+                new FileStream(full,FileMode.Open,write?FileAccess.ReadWrite:FileAccess.Read,write?FileShare.None:FileShare.Read);
+            try{inspectHandle?.Invoke(stream);Need(stream.Length<=budget,"source_budget");Chain(full);return stream;}
             catch{stream.Dispose();throw;}
         }
         static byte[] Read(FileStream stream,int budget)
         {
-            Need(stream.Length<=budget,"source_budget");stream.Position=0;
+            string stamp=ScriptPathLease.Stamp(stream);Need(stream.Length<=budget,"source_budget");stream.Position=0;
             byte[] bytes=new byte[(int)stream.Length];int offset=0,count;
             while(offset<bytes.Length && (count=stream.Read(bytes,offset,bytes.Length-offset))>0)offset+=count;
-            Need(offset==bytes.Length && stream.ReadByte()==-1,"source_changed");return bytes;
+            Need(offset==bytes.Length && stream.ReadByte()==-1 && stamp==ScriptPathLease.Stamp(stream),"source_changed");return bytes;
         }
         static JObject Snapshot(byte[] source,byte[] meta)=>new JObject{["sha256"]=Hash(source),["meta_sha256"]=Hash(meta)};
         internal JObject Capture(string target)
@@ -68,6 +67,8 @@ namespace Yukino.VRChatAgent
                 return Snapshot(Read(source,Budget),Read(meta,1048576));
         }
         string BackupRoot=>Path.Combine(root,"UserSettings","VRChatAgent","ScriptBackups");
+        IDisposable HoldDirectory(string path,bool create=false)
+        {if(inspectHandle==null)return ScriptPathLease.Directory(path,create);if(create)Directory.CreateDirectory(path);Chain(path);return null;}
         void CreateBackupRoot()
         {
             string p=root;Chain(p);
@@ -80,15 +81,15 @@ namespace Yukino.VRChatAgent
         void SaveNew(string path,byte[] bytes)
         {
             Chain(Path.GetDirectoryName(path));
-            using(var s=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None))
-            {inspectHandle(s);s.Write(bytes,0,bytes.Length);s.Flush(true);}
+            using(var s=inspectHandle==null?ScriptPathLease.Open(path,true,true):new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None))
+            {inspectHandle?.Invoke(s);s.Write(bytes,0,bytes.Length);s.Flush(true);ScriptPathLease.Stamp(s);}
             Chain(path);
         }
-        void SaveRecord(string path,JObject record,bool create)
+        void SaveRecord(string path,JObject record)
         {
-            byte[] bytes=Utf8.GetBytes(record.ToString(Formatting.None));Need(bytes.Length<=8192,"record_budget");
-            if(create){SaveNew(path,bytes);return;}
-            using(var s=Open(path,true,8192)){s.Position=0;s.Write(bytes,0,bytes.Length);s.SetLength(bytes.Length);s.Flush(true);}
+            var persisted=(JObject)record.DeepClone();persisted.Remove("journal_error");
+            byte[] bytes=Utf8.GetBytes(persisted.ToString(Formatting.None));Need(bytes.Length<=8192,"record_budget");
+            SaveNew(path,bytes); // Immutable: outcome writes never destroy prepared recovery data.
         }
         static byte[] Replacement(byte[] before,string content)
         {
@@ -102,9 +103,9 @@ namespace Yukino.VRChatAgent
             Need(result.Length<=Budget,"source_budget");return result;
         }
         static void WriteHeld(FileStream source,byte[] bytes)
-        {source.Position=0;source.Write(bytes,0,bytes.Length);source.SetLength(bytes.Length);source.Flush(true);}
+        {ScriptPathLease.Stamp(source);source.Position=0;source.Write(bytes,0,bytes.Length);source.SetLength(bytes.Length);source.Flush(true);ScriptPathLease.Stamp(source);}
         JObject Result(JObject record,string outcome,string error=null)=>new JObject{
-            ["transaction_id"]=record["id"],["target"]=record["target"],["outcome"]=outcome,["error"]=error==null?JValue.CreateNull():new JValue(error),
+            ["transaction_id"]=record["id"],["target"]=record["target"],["outcome"]=outcome,["error"]=(error??(string)record["journal_error"])==null?JValue.CreateNull():new JValue(error??(string)record["journal_error"]),
             ["before_sha256"]=record["before"],["expected_after_sha256"]=record["after"],
             ["meta_sha256"]=record["meta"],["backup_retained"]=true,["import_requested"]=false};
         internal JObject Write(string target,JObject expected,string content,Func<bool> authorized)
@@ -116,12 +117,13 @@ namespace Yukino.VRChatAgent
                 Need(JToken.DeepEquals(expected,Snapshot(before,metaBytes)),"relevant_evidence_changed");
                 byte[] after=Replacement(before,content);Need(!before.SequenceEqual(after),"no_change");
                 Need(authorized!=null && authorized(),"plan_revoked");
-                CreateBackupRoot();string id=Guid.NewGuid().ToString("N"),directory=Path.Combine(BackupRoot,id);
-                Directory.CreateDirectory(directory);Chain(directory);
+                using var backupRoot=HoldDirectory(BackupRoot,true);CreateBackupRoot();
+                string id=Guid.NewGuid().ToString("N"),directory=Path.Combine(BackupRoot,id);
+                using var backupDirectory=HoldDirectory(directory,true);
                 SaveNew(Path.Combine(directory,"before.bytes"),before);
                 var record=new JObject{["version"]=1,["id"]=id,["project"]=Hash(Utf8.GetBytes(root)),["target"]=target,
                     ["before"]=Hash(before),["after"]=Hash(after),["meta"]=Hash(metaBytes),["state"]="prepared"};
-                string receipt=Path.Combine(directory,"record.json");SaveRecord(receipt,record,true);
+                string receipt=Path.Combine(directory,"record.json");SaveRecord(receipt,record);
                 bool entered=false;string outcome="unchanged",error=null;
                 try
                 {
@@ -131,13 +133,13 @@ namespace Yukino.VRChatAgent
                 }
                 catch(Exception ex){outcome=entered?"unknown":"unchanged";error=ex is CandidateWriteDenied?ex.Message:"write_state_unknown";}
                 record["state"]=outcome;
-                try{SaveRecord(receipt,record,false);}catch{error="journal_update_failed";}
+                try{SaveRecord(Path.Combine(directory,"write-result.json"),record);}catch{error="journal_update_failed";}
                 return Result(record,outcome,error);
             }
         }
-        JObject Record(string id)
+        JObject ReadRecord(string id,string name)
         {
-            string path=Path.Combine(BackupRoot,Transaction(id),"record.json");JObject record;
+            string path=Path.Combine(BackupRoot,Transaction(id),name);JObject record;
             using(var s=Open(path,false,8192))
             using(var reader=new JsonTextReader(new StringReader(Utf8.GetString(Read(s,8192)))){MaxDepth=4})
             {record=JObject.Load(reader,new JsonLoadSettings{DuplicatePropertyNameHandling=DuplicatePropertyNameHandling.Error});Need(!reader.Read(),"invalid_record");}
@@ -147,12 +149,65 @@ namespace Yukino.VRChatAgent
                 record["target"]?.Type==JTokenType.String && record["state"]?.Type==JTokenType.String,"invalid_record");
             Target((string)record["target"]);return record;
         }
+        JObject Record(string id)
+        {
+            var record=ReadRecord(id,"record.json");
+            foreach(string name in new[]{"write-result.json","restore-result.json"})
+            {
+                try
+                {
+                    JObject next;
+                    try{next=ReadRecord(id,name);}
+                    catch(FileNotFoundException){continue;}
+                    string state=(string)next["state"];
+                    Need((name=="write-result.json"?new[]{"changed","unknown","unchanged"}:new[]{"restored"}).Contains(state),"invalid_record");
+                    var original=(JObject)record.DeepClone();original["state"]=state;
+                    Need(JToken.DeepEquals(original,next),"outcome_record_mismatch");record=next;
+                }
+                catch(Exception)
+                {
+                    // Only optional outcome state is uncertain. The validated
+                    // immutable record and exact-postimage recovery checks remain.
+                    record["state"]="unknown";record["journal_error"]="journal_state_unavailable";return record;
+                }
+            }
+            return record;
+        }
+        internal JArray History()
+        {
+            // Local UI inventory only; listing never restores grants or bytes.
+            if(!Directory.Exists(BackupRoot))return new JArray();
+            using var directory=HoldDirectory(BackupRoot);
+            var paths=Directory.EnumerateFileSystemEntries(BackupRoot).Take(129).ToArray();
+            Need(paths.Length<=128,"backup_capacity");var rows=new JArray();
+            foreach(string path in paths.OrderBy(p=>p,StringComparer.Ordinal))
+            {
+                string id=Transaction(Path.GetFileName(path));
+                try
+                {
+                    using var transaction=HoldDirectory(path);
+                    var record=Record(id);string state=(string)record["state"];
+                    Need(new[]{"prepared","changed","unknown","unchanged","restored"}.Contains(state),"invalid_record");
+                    rows.Add(Result(record,state));
+                }
+                catch(Exception)
+                {
+                    // An interrupted preparation must not hide other transactions.
+                    // No inferred target, backup integrity, or recovery authority.
+                    rows.Add(new JObject{["transaction_id"]=id,["target"]=JValue.CreateNull(),
+                        ["outcome"]="unavailable",["error"]="transaction_record_unavailable",
+                        ["recovery_available"]=false,["backup_retained"]=JValue.CreateNull(),["import_requested"]=false});
+                }
+            }
+            return rows;
+        }
         internal JObject Restore(string id,Func<bool> authorized)
         {
             // Local operator only. A fresh caller may recover after reload, but this
             // never restores an editing grant. A damaged journal fails closed.
             // A crash can leave "prepared" after the source was flushed. Recovery
             // still requires the exact intended postimage and an explicit local act.
+            using var directory=HoldDirectory(Path.Combine(BackupRoot,Transaction(id)));
             var record=Record(id);Need(new[]{"prepared","changed","unknown"}.Contains((string)record["state"]),"transaction_not_restorable");
             byte[] before;
             using(var s=Open(Path.Combine(BackupRoot,id,"before.bytes"),false,Budget))before=Read(s,Budget);
@@ -166,18 +221,9 @@ namespace Yukino.VRChatAgent
                 try{WriteHeld(source,before);Need(Read(source,Budget).SequenceEqual(before),"restore_readback_mismatch");outcome="restored";}
                 catch(Exception ex){error=ex is CandidateWriteDenied?ex.Message:"restore_state_unknown";}
                 if(outcome=="restored")record["state"]="restored";
-                try{SaveRecord(Path.Combine(BackupRoot,id,"record.json"),record,false);}catch{error="journal_update_failed";}
+                try{if(outcome=="restored")SaveRecord(Path.Combine(BackupRoot,id,"restore-result.json"),record);}catch{error="journal_update_failed";}
                 return Result(record,outcome,error);
             }
-        }
-        [StructLayout(LayoutKind.Sequential)]struct FileTime{internal uint Low,High;}
-        [StructLayout(LayoutKind.Sequential)]struct Information
-        {internal uint Attributes;internal FileTime Created,Accessed,Written;internal uint Volume,SizeHigh,SizeLow,Links,IndexHigh,IndexLow;}
-        [DllImport("kernel32.dll",SetLastError=true)]static extern bool GetFileInformationByHandle(SafeFileHandle handle,out Information info);
-        static void WindowsSingleLink(FileStream stream)
-        {
-            Need(Environment.OSVersion.Platform==PlatformID.Win32NT,"windows_file_contract_required");
-            Need(GetFileInformationByHandle(stream.SafeFileHandle,out var info) && info.Links==1 && (info.Attributes&0x410)==0,"file_identity_unsupported");
         }
     }
 }

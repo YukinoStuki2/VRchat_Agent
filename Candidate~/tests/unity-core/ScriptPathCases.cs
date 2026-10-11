@@ -52,12 +52,27 @@ static class ScriptPathCases
         finally{if(moved)Directory.Move(destination,source);}
     }
     static void HeldAncestors()=>Fixture((store,root,file)=>{
+        // Isolate directory ownership: no leaf HANDLE can hide a weak lease.
+        string empty=Path.Combine(root,"Empty");Directory.CreateDirectory(empty);
+        using(var lease=ScriptPathLease.Directory(empty))
+        {
+            RenameDenied(empty,empty+"-moved","directory-only lease allowed rename");
+            lease.Verify();
+        }
+        Directory.Move(empty,empty+"-moved");Directory.Move(empty+"-moved",empty);
         var snapshot=store.Capture("Assets/A.cs");int entered=0;
         var row=store.Write("Assets/A.cs",snapshot,"class New {}\n",()=>{
             entered++;
             RenameDenied(Path.Combine(root,"Assets"),Path.Combine(root,"Moved"),"ancestor renamed during authorization");
             RenameDenied(root,root+"-moved","project root renamed during authorization");
             Denied(()=>{using(var s=new FileStream(file,FileMode.Open,FileAccess.Write,FileShare.ReadWrite|FileShare.Delete)){}},"writer entered held leaf");
+            string backups=Path.Combine(root,"UserSettings","VRChatAgent","ScriptBackups");
+            if(Directory.Exists(backups))
+            {
+                RenameDenied(backups,backups+"-moved","backup root renamed before source write");
+                string transaction=System.Linq.Enumerable.Single(Directory.EnumerateDirectories(backups));
+                RenameDenied(transaction,transaction+"-moved","transaction directory renamed before source write");
+            }
             return true;
         });
         Check(entered==2&&(string)row["outcome"]=="changed",row.ToString());
@@ -87,6 +102,17 @@ static class ScriptPathCases
         Denied(()=>store.Capture("Assets/a.cs"),"case alias admitted");
         Denied(()=>new ScriptFileStore(root+"\\.").Capture("Assets/A.cs"),"root dot alias admitted");
     });
+    static void NativeHistory()=>Fixture((store,root,file)=>{
+        var receipt=store.Write("Assets/A.cs",store.Capture("Assets/A.cs"),"class New {}\n",()=>true);
+        string id=(string)receipt["transaction_id"],backups=Path.Combine(root,"UserSettings/VRChatAgent/ScriptBackups");
+        string incomplete=Guid.NewGuid().ToString("N");Directory.CreateDirectory(Path.Combine(backups,incomplete));
+        var fresh=new ScriptFileStore(root);var rows=fresh.History();
+        Check(rows.Count==2,"native history failed to isolate incomplete record");
+        File.WriteAllText(Path.Combine(backups,id,"write-result.json"),"{");
+        rows=fresh.History();
+        Check(System.Linq.Enumerable.Any(rows,r=>(string)r["transaction_id"]==id&&(string)r["outcome"]=="unknown"&&(string)r["error"]=="journal_state_unavailable"),"native torn outcome not disclosed");
+        Check((string)fresh.Restore(id,()=>true)["outcome"]=="restored"&&File.ReadAllText(file)=="class A {}\n","native exact-postimage recovery lost");
+    });
     public static int Main()
     {
         try
@@ -99,6 +125,7 @@ static class ScriptPathCases
             Hardlinks();Console.WriteLine("PASS WP005 hardlinks_denied");
             Reparse();Console.WriteLine("PASS WP006 directory_and_leaf_reparse_denied");
             Aliases();Console.WriteLine("PASS WP007_aliases_denied".Replace("WP007_","WP007 "));
+            NativeHistory();Console.WriteLine("PASS WP008 native_history_incomplete_and_torn_state");
             return 0;
         }
         catch(Exception ex){Console.WriteLine("FAIL "+ex);return 1;}

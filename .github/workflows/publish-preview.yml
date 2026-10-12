@@ -1,0 +1,59 @@
+name: Publish isolated Hermes preview once
+on:
+  push:
+    tags: ['hermes-preview-0.2.0-preview.1']
+permissions: {}
+concurrency:
+  group: hermes-preview-0.2.0-preview.1
+  cancel-in-progress: false
+jobs:
+  distribute:
+    if: github.repository == 'YukinoStuki2/VRchat_Agent' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Fetch exactly the frozen runtime artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/YukinoStuki2/VRchat_Agent/actions/artifacts/11670546119/zip > "$RUNNER_TEMP/runtime-input.zip"
+      - name: Assemble and verify every frozen payload member
+        run: python3 -I -B assemble.py "$RUNNER_TEMP/runtime-input.zip" "$RUNNER_TEMP/release-assets"
+      - name: Create a new non-latest prerelease draft without replacing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create hermes-preview-0.2.0-preview.1 \
+            --repo YukinoStuki2/VRchat_Agent --verify-tag --draft --prerelease --latest=false \
+            --title 'Hermes 优先预览 0.2.0-preview.1（待 Unity 实机验收）' --notes-file README.md \
+            "$RUNNER_TEMP/release-assets/com.yukino.vrchat-agent-0.2.0-preview.1.zip" \
+            "$RUNNER_TEMP/release-assets/vrchat-agent-hermes-0.2.0-preview.1.zip" \
+            "$RUNNER_TEMP/release-assets/index.json" "$RUNNER_TEMP/release-assets/README.md" \
+            "$RUNNER_TEMP/release-assets/SHA256SUMS.json"
+      - name: Read back all uploaded draft assets before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --dir "$RUNNER_TEMP/readback"
+          python3 -I -B - <<'PY'
+          import os, hashlib
+          from pathlib import Path
+          original = Path(os.environ['RUNNER_TEMP'])/'release-assets'
+          downloaded = Path(os.environ['RUNNER_TEMP'])/'readback'
+          a = {p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in original.iterdir()}
+          b = {p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in downloaded.iterdir()}
+          assert a == b, 'uploaded draft differs from verified local assembly'
+          print('All uploaded draft assets match verified assembly')
+          PY
+      - name: Publish only this isolated preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --draft=false --prerelease --latest=false
+          gh release view hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --json url,isDraft,isPrerelease,assets

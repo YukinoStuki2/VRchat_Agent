@@ -1,18 +1,18 @@
 {
-  "tag": "hermes-preview-0.2.0-preview.1",
-  "branch": "vpm-hermes-preview",
+  "tag": "hermes-preview-0.2.0-preview.2",
+  "branch": "vpm-hermes-preview-deps",
   "repository": "YukinoStuki2/VRchat_Agent",
   "runtime_artifact_id": 11670546119,
   "runtime_archive_sha256": "dd40f9118ae7eacfb48963092b713ea1b06e5a6e44af51dc21f8e73aa9a472f5",
-  "candidate_filename": "com.yukino.vrchat-agent-0.2.0-preview.1.zip",
+  "candidate_filename": "com.yukino.vrchat-agent-0.2.0-preview.2.zip",
   "plugin_filename": "vrchat-agent-hermes-0.2.0-preview.1.zip",
   "plugin_sha256": "d65fdb58e9b948ef568949b4d59783bd4f1fbe8a84e3b807c4b409a60b0f1461",
-  "overlay_sha256": "27dfc896b946f21f58c98695fe506dce0b6535242b353dd6e957048035b616a3",
+  "overlay_sha256": "04fa78972f3acaeb3a641a536a42831ebecfa5996935bc5b27fe5fc7bebe7f47",
   "source_review": "main-agent-exception-not-independent",
   "Windows_checks": "deferred_by_user",
   "Unity_verified": false,
   "members": {
-    "CANDIDATE_STATUS.md": "6619b780e4b820ec28163e3fe699ad2d816d8b1de6f4e2bd1fa9295aa469eb70",
+    "CANDIDATE_STATUS.md": "fa1727c0b94812267453ae8b81d1fe1af6a46bf40641137c39076d5fbef0fbc9",
     "CANDIDATE_STATUS.md.meta": "e82d99bb552644a1ea3bf5cbb55e6d6c366171842c03cd5903cd56b4cb6afcab",
     "Editor.meta": "43986f94d044ada2a3329b0daf185e4f78d6b72e78c6ac93c076ec6d48a53c8a",
     "Editor/AssetObservation.cs": "45d6d64f02c549f4402b444687eb5ec915acf25875a57579818c75968d8f54db",
@@ -113,7 +113,7 @@
     "Editor/Yukino.VRChatAgent.Editor.asmdef.meta": "9d1764e06caad207237e980d333a056a1b64df121f17b7682aa11b9d55104948",
     "LICENSE": "dbab968b886aeee38ff07ce13473d96d55bb489c73381aa59d477bb4adec7eaf",
     "LICENSE.meta": "fc65eeb80a5e0998a863a834318a1f55fb7aacc57a14f5a5b2361e3bb861a07e",
-    "README.md": "bfcd01d14904fe5f5aba4564bd7d450491c65ec952f06526da8d0da5e8b8f1a1",
+    "README.md": "2afa87c6fed7da27b7f29eced0bc6c765e6b364079506aa02b2364df0ddfe6d0",
     "README.md.meta": "202450cc8b6f516d911094c8a0e3041abef594f6df8db47c5cb8da34a9f25e68",
     "Runtime~.meta": "c9945554fd5329cea10d5799c06cbc6aa16266d0de04e7cd7092b43714c6c295",
     "Runtime~/catalog.meta": "72bf7b4eccc01f952ac1d477b9e7212295d87818d8893f6d814d8092d2cdfbd9",
@@ -13360,13 +13360,17 @@
     "Runtime~/wheel-notices/texts/zipp/4.1.0/zipp-4.1.0.dist-info/licenses/LICENSE": "9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683",
     "THIRD_PARTY_NOTICES.md": "e05da1e5ab3234924c23774ad99e5156e7c288444cae09ebe50d6ac8dca2ea7f",
     "THIRD_PARTY_NOTICES.md.meta": "0fd9742e24a0cba92d0341b949d00de8c5248110b9fdc486cd88de1477f12e61",
-    "package.json": "ed9d8db267b08d52f9b46f3309c3307884861b154b012dae641a8d83cea57638",
+    "package.json": "27344c5467e0dac75212460be762ac554113157a6807a440d972590f235033cb",
     "package.json.meta": "57f90f53bb89571aac27b3b836e67c9b392a945c962d36d761b9177f853ac32a"
   },
   "repository_identity": {
-    "name": "Yukino VRChat Agent — Hermes 优先预览",
+    "name": "Yukino VRChat Agent — Hermes 预览（自动依赖）",
     "author": "Yukino",
-    "id": "com.yukino.vrchat-agent.hermes-preview.vpm",
-    "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.1/index.json"
-  }
+    "id": "com.yukino.vrchat-agent.hermes-dependencies-preview.vpm",
+    "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.2/index.json"
+  },
+  "coplay_filename": "com.coplaydev.unity-mcp-10.2.0-vpm.zip",
+  "coplay_sha256": "9409c972fb801eb991e00028d5f3a8e3f54931077476cd6c01e34242eb72e46a",
+  "coplay_provenance_sha256": "83372ff4914364de0f1caa02a3812e66e084bacb520f876c2b02bb584a8f0af6",
+  "previous_index_sha256": "fed8151fa3ccb2d92a9d091f669352d481f22c90e21611e1cc58c0a158e80d8c"
 }

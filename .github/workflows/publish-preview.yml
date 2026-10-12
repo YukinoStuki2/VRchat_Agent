@@ -1,10 +1,10 @@
-name: Publish isolated Hermes preview once
+name: Publish isolated Hermes dependency preview once
 on:
   push:
-    tags: ['hermes-preview-0.2.0-preview.1']
+    tags: ['hermes-preview-0.2.0-preview.2']
 permissions: {}
 concurrency:
-  group: hermes-preview-0.2.0-preview.1
+  group: hermes-preview-0.2.0-preview.2
   cancel-in-progress: false
 jobs:
   distribute:
@@ -23,16 +23,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api repos/YukinoStuki2/VRchat_Agent/actions/artifacts/11670546119/zip > "$RUNNER_TEMP/runtime-input.zip"
-      - name: Assemble and verify every frozen payload member
+      - name: Assemble and verify both frozen packages
         run: python3 -I -B assemble.py "$RUNNER_TEMP/runtime-input.zip" "$RUNNER_TEMP/release-assets"
       - name: Create a new non-latest prerelease draft without replacing assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create hermes-preview-0.2.0-preview.1 \
+          gh release create hermes-preview-0.2.0-preview.2 \
             --repo YukinoStuki2/VRchat_Agent --verify-tag --draft --prerelease --latest=false \
-            --title 'Hermes 优先预览 0.2.0-preview.1（待 Unity 实机验收）' --notes-file README.md \
-            "$RUNNER_TEMP/release-assets/com.yukino.vrchat-agent-0.2.0-preview.1.zip" \
+            --title 'Hermes 预览 0.2.0-preview.2（自动安装 Coplay 依赖）' --notes-file README.md \
+            "$RUNNER_TEMP/release-assets/com.yukino.vrchat-agent-0.2.0-preview.2.zip" \
+            "$RUNNER_TEMP/release-assets/com.coplaydev.unity-mcp-10.2.0-vpm.zip" \
+            "$RUNNER_TEMP/release-assets/coplay-provenance.json" \
             "$RUNNER_TEMP/release-assets/vrchat-agent-hermes-0.2.0-preview.1.zip" \
             "$RUNNER_TEMP/release-assets/index.json" "$RUNNER_TEMP/release-assets/README.md" \
             "$RUNNER_TEMP/release-assets/SHA256SUMS.json"
@@ -40,7 +42,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --dir "$RUNNER_TEMP/readback"
+          gh release download hermes-preview-0.2.0-preview.2 --repo YukinoStuki2/VRchat_Agent --dir "$RUNNER_TEMP/readback"
           python3 -I -B - <<'PY'
           import os, hashlib
           from pathlib import Path
@@ -55,5 +57,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --draft=false --prerelease --latest=false
-          gh release view hermes-preview-0.2.0-preview.1 --repo YukinoStuki2/VRchat_Agent --json url,isDraft,isPrerelease,assets
+          gh release edit hermes-preview-0.2.0-preview.2 --repo YukinoStuki2/VRchat_Agent --draft=false --prerelease --latest=false
+          gh release view hermes-preview-0.2.0-preview.2 --repo YukinoStuki2/VRchat_Agent --json url,isDraft,isPrerelease,assets

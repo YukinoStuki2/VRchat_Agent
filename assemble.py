@@ -49,8 +49,28 @@ def assemble(runtime, output):
     manifest = json.loads(files['package.json'])
     archive = layout.zip_bytes(files)
     entry = dict(manifest, zipSHA256=sha(archive))
-    index = dict(plan['repository_identity'], packages={manifest['name']: {'versions': {manifest['version']: entry}}})
+    coplay_bytes = (HERE/plan['coplay_filename']).read_bytes()
+    assert sha(coplay_bytes) == plan['coplay_sha256'], 'Coplay archive hash mismatch'
+    provenance_bytes = (HERE/'coplay-provenance.json').read_bytes()
+    assert sha(provenance_bytes) == plan['coplay_provenance_sha256'], 'Coplay provenance hash mismatch'
+    provenance = json.loads(provenance_bytes)
+    with zipfile.ZipFile(HERE/plan['coplay_filename']) as dependency:
+        assert dependency.testzip() is None
+        assert len(dependency.namelist()) == len(set(dependency.namelist()))
+        assert {n:sha(dependency.read(n)) for n in dependency.namelist()} == provenance['distribution_files']
+        coplay = json.loads(dependency.read('package.json'))
+    assert coplay['name'] == 'com.coplaydev.unity-mcp' and coplay['version'] == '10.2.0'
+    assert manifest['vpmDependencies'] == {coplay['name']: '=10.2.0'}
+    previous_bytes = (HERE/'previous-index.json').read_bytes()
+    assert sha(previous_bytes) == plan['previous_index_sha256'], 'previous index hash mismatch'
+    packages = json.loads(previous_bytes)['packages']
+    assert manifest['version'] not in packages[manifest['name']]['versions'], 'refuse replacing version'
+    packages[manifest['name']]['versions'][manifest['version']] = entry
+    assert coplay['name'] not in packages, 'refuse replacing dependency'
+    packages[coplay['name']] = {'versions': {coplay['version']: dict(coplay, zipSHA256=sha(coplay_bytes))}}
+    index = dict(plan['repository_identity'], packages=packages)
     assets = {plan['candidate_filename']: archive, plan['plugin_filename']: plugin.read_bytes(),
+              plan['coplay_filename']: coplay_bytes, 'coplay-provenance.json': provenance_bytes,
               'index.json': layout.json_bytes(index), 'README.md': (HERE/'README.md').read_bytes()}
     assets['SHA256SUMS.json'] = layout.json_bytes({n: sha(b) for n, b in assets.items()})
     output.mkdir(parents=True)

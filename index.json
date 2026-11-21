@@ -166,6 +166,143 @@
           "zipSHA256": "9043f215a9a29938d75f05501edc699063a39f214b7770467d87471fca80512d"
         }
       }
+    },
+    "com.yukino.vrchat-agent": {
+      "versions": {
+        "0.2.0-preview.1": {
+          "name": "com.yukino.vrchat-agent",
+          "version": "0.2.0-preview.1",
+          "displayName": "Yukino VRChat Agent（Hermes 优先预览）",
+          "description": "供独立测试工程验收的 Hermes 优先候选；非稳定发行，真实 Unity/模型尚未验收。",
+          "unity": "2022.3",
+          "author": {
+            "name": "Yukino"
+          },
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2",
+            "com.unity.test-framework": "1.1.31"
+          },
+          "vpmDependencies": {},
+          "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.1/com.yukino.vrchat-agent-0.2.0-preview.1.zip",
+          "vrchatAgentVerification": {
+            "scope": "hermes-first",
+            "windows_kernel_checks": "deferred_by_user",
+            "unity_verified": false,
+            "main_review_authorization_sha256": "a077551dae6742baa877960f028e721aa74c660e242ad8d4f516d0ad6e76d6d7",
+            "main_review_report_sha256": "b6a008b58cb81e109098df47142b40e914b8bc3c5b63aa629180fde9ed110a3e",
+            "source_review": "main-agent-exception",
+            "independent_source_reviews_passed": false
+          },
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/blob/vpm-hermes-preview/README.md",
+          "zipSHA256": "70996a5378dd7841f3d8793bee1e470823c8b72e4234db1942943388e2a38b8f"
+        },
+        "0.2.0-preview.2": {
+          "name": "com.yukino.vrchat-agent",
+          "version": "0.2.0-preview.2",
+          "displayName": "Yukino VRChat Agent（Hermes 优先预览）",
+          "description": "供独立测试工程验收的 Hermes 优先候选；非稳定发行，真实 Unity/模型尚未验收。",
+          "unity": "2022.3",
+          "author": {
+            "name": "Yukino"
+          },
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2",
+            "com.unity.test-framework": "1.1.31"
+          },
+          "vpmDependencies": {
+            "com.coplaydev.unity-mcp": "=10.2.0"
+          },
+          "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.2/com.yukino.vrchat-agent-0.2.0-preview.2.zip",
+          "vrchatAgentVerification": {
+            "scope": "hermes-first",
+            "windows_kernel_checks": "deferred_by_user",
+            "unity_verified": false,
+            "main_review_authorization_sha256": "a077551dae6742baa877960f028e721aa74c660e242ad8d4f516d0ad6e76d6d7",
+            "main_review_report_sha256": "b6a008b58cb81e109098df47142b40e914b8bc3c5b63aa629180fde9ed110a3e",
+            "source_review": "main-agent-exception",
+            "independent_source_reviews_passed": false
+          },
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/blob/hermes-preview-0.2.0-preview.2/README.md",
+          "zipSHA256": "8b2a8c189f2a27516d3c15a009bb752a21c691aa4c0ca867f6615ebd563ff425"
+        },
+        "0.2.0-preview.3": {
+          "name": "com.yukino.vrchat-agent",
+          "version": "0.2.0-preview.3",
+          "displayName": "Yukino VRChat Agent（Hermes 优先预览）",
+          "description": "供独立测试工程验收的 Hermes 优先候选；非稳定发行，真实 Unity/模型尚未验收。",
+          "unity": "2022.3",
+          "author": {
+            "name": "Yukino"
+          },
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2",
+            "com.unity.test-framework": "1.1.31"
+          },
+          "vpmDependencies": {
+            "com.coplaydev.unity-mcp": "=10.2.0"
+          },
+          "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.3/com.yukino.vrchat-agent-0.2.0-preview.3.zip",
+          "vrchatAgentVerification": {
+            "scope": "hermes-first",
+            "windows_kernel_checks": "deferred_by_user",
+            "unity_verified": false,
+            "main_review_authorization_sha256": "a077551dae6742baa877960f028e721aa74c660e242ad8d4f516d0ad6e76d6d7",
+            "main_review_report_sha256": "b6a008b58cb81e109098df47142b40e914b8bc3c5b63aa629180fde9ed110a3e",
+            "source_review": "main-agent-exception",
+            "independent_source_reviews_passed": false
+          },
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/releases/tag/hermes-preview-0.2.0-preview.3",
+          "zipSHA256": "0be6452af64b4334d81055c581039e4c13da6470d9fcb929b8fb423085bf6835"
+        }
+      }
+    },
+    "com.coplaydev.unity-mcp": {
+      "versions": {
+        "10.2.0": {
+          "name": "com.coplaydev.unity-mcp",
+          "version": "10.2.0",
+          "displayName": "MCP for Unity",
+          "description": "A bridge that connects AI assistants to Unity via the MCP (Model Context Protocol). Allows AI clients like Claude Code, Cursor, and VSCode to directly control your Unity Editor for enhanced development workflows.\n\nFeatures automated setup wizard, cross-platform support, and seamless integration with popular AI development tools.\n\nJoin Our Discord: https://discord.gg/y4p8KfzrN4",
+          "unity": "2021.3",
+          "documentationUrl": "https://github.com/CoplayDev/unity-mcp",
+          "licensesUrl": "https://github.com/CoplayDev/unity-mcp/blob/30d22075093d1d35dfb0091c1c7550e9ad948577/LICENSE",
+          "dependencies": {
+            "com.unity.modules.animation": "1.0.0",
+            "com.unity.modules.imageconversion": "1.0.0",
+            "com.unity.modules.physics": "1.0.0",
+            "com.unity.modules.physics2d": "1.0.0",
+            "com.unity.modules.uielements": "1.0.0",
+            "com.unity.modules.screencapture": "1.0.0",
+            "com.unity.modules.unitywebrequest": "1.0.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2",
+            "com.unity.test-framework": "1.1.31"
+          },
+          "keywords": [
+            "unity",
+            "ai",
+            "llm",
+            "mcp",
+            "model-context-protocol",
+            "mcp-server",
+            "mcp-client"
+          ],
+          "author": {
+            "name": "Coplay",
+            "email": "support@coplay.dev",
+            "url": "https://coplay.dev"
+          },
+          "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.2/com.coplaydev.unity-mcp-10.2.0-vpm.zip",
+          "vpmDependencies": {},
+          "license": "MIT",
+          "zipSHA256": "9409c972fb801eb991e00028d5f3a8e3f54931077476cd6c01e34242eb72e46a"
+        }
+      }
     }
   }
 }

@@ -1,0 +1,34 @@
+name: Publish readable Unity panel
+on:
+  push:
+    tags: ['hermes-preview-0.2.0-preview.5']
+permissions: {}
+jobs:
+  publish:
+    if: github.repository == 'YukinoStuki2/VRchat_Agent' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and verify exact public package contents
+        run: |
+          set -eu
+          base=https://github.com/YukinoStuki2/VRchat_Agent/releases/download
+          curl -fLsS --retry 2 -o "$RUNNER_TEMP/prev.zip" "$base/hermes-preview-0.2.0-preview.4/com.yukino.vrchat-agent-0.2.0-preview.4.zip"
+          python3 -IB panel5/build.py "$RUNNER_TEMP/prev.zip" "$RUNNER_TEMP/out"
+          python3 -IB panel5/check.py "$RUNNER_TEMP/out/com.yukino.vrchat-agent-0.2.0-preview.5.zip"
+      - name: Publish only new prerelease after draft asset readback
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: hermes-preview-0.2.0-preview.5
+          REPO: YukinoStuki2/VRchat_Agent
+        run: |
+          set -eu
+          gh release create "$TAG" "$RUNNER_TEMP/out/"* --repo "$REPO" --verify-tag --draft --prerelease --latest=false --title 'VRChat Agent 0.2.0-preview.5 · Unity 面板改版' --notes-file panel5/release-notes.md
+          gh release download "$TAG" --repo "$REPO" --dir "$RUNNER_TEMP/downloaded"
+          diff --recursive --brief "$RUNNER_TEMP/out" "$RUNNER_TEMP/downloaded"
+          gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease --latest=false

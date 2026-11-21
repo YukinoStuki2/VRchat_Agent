@@ -290,6 +290,37 @@
           },
           "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/releases/tag/hermes-preview-0.2.0-preview.4",
           "zipSHA256": "e28dd3bdfb214d0eba23d1c240a1e145d3e1c4a4cedd5f38a628bd6c9285e470"
+        },
+        "0.2.0-preview.5": {
+          "name": "com.yukino.vrchat-agent",
+          "version": "0.2.0-preview.5",
+          "displayName": "Yukino VRChat Agent（Hermes 优先预览）",
+          "description": "供独立测试工程验收的 Hermes 优先候选；非稳定发行，真实 Unity/模型尚未验收。",
+          "unity": "2022.3",
+          "author": {
+            "name": "Yukino"
+          },
+          "license": "MIT",
+          "dependencies": {
+            "com.coplaydev.unity-mcp": "10.2.0",
+            "com.unity.nuget.newtonsoft-json": "3.0.2",
+            "com.unity.test-framework": "1.1.31"
+          },
+          "vpmDependencies": {
+            "com.coplaydev.unity-mcp": "=10.2.0"
+          },
+          "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.5/com.yukino.vrchat-agent-0.2.0-preview.5.zip",
+          "vrchatAgentVerification": {
+            "scope": "hermes-first",
+            "windows_kernel_checks": "deferred_by_user",
+            "unity_verified": false,
+            "main_review_authorization_sha256": "a077551dae6742baa877960f028e721aa74c660e242ad8d4f516d0ad6e76d6d7",
+            "main_review_report_sha256": "b6a008b58cb81e109098df47142b40e914b8bc3c5b63aa629180fde9ed110a3e",
+            "source_review": "main-agent-exception",
+            "independent_source_reviews_passed": false
+          },
+          "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/releases/tag/hermes-preview-0.2.0-preview.5",
+          "zipSHA256": "4504da807ea876c5cbb1b1890bcd7f2e56f609508e2024e97577ce1805ba27e9"
         }
       }
     },

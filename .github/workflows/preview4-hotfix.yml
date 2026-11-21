@@ -1,0 +1,37 @@
+name: Publish scoped asset and metadata fix
+on:
+  push:
+    tags: ['hermes-preview-0.2.0-preview.4']
+permissions: {}
+jobs:
+  publish:
+    if: github.repository == 'YukinoStuki2/VRchat_Agent' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Compile old and new package against pinned Coplay sources
+        run: |
+          set -eu
+          base=https://github.com/YukinoStuki2/VRchat_Agent/releases/download
+          cd "$RUNNER_TEMP"
+          curl -fLsS --retry 2 -o previous.zip "$base/hermes-preview-0.2.0-preview.3/com.yukino.vrchat-agent-0.2.0-preview.3.zip"
+          curl -fLsS --retry 2 -o coplay.zip "$base/hermes-preview-0.2.0-preview.2/com.coplaydev.unity-mcp-10.2.0-vpm.zip"
+          python3 -IB "$GITHUB_WORKSPACE/hotfix4/build.py" previous.zip out
+          python3 -IB "$GITHUB_WORKSPACE/hotfix4/verify.py" previous.zip coplay.zip dotnet --red
+          python3 -IB "$GITHUB_WORKSPACE/hotfix4/verify.py" out/com.yukino.vrchat-agent-0.2.0-preview.4.zip coplay.zip dotnet
+      - name: Upload, read back and publish new prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: hermes-preview-0.2.0-preview.4
+          REPO: YukinoStuki2/VRchat_Agent
+        run: |
+          set -eu
+          gh release create "$TAG" "$RUNNER_TEMP/out/"* --repo "$REPO" --verify-tag --draft --prerelease --latest=false --title 'VRChat Agent 0.2.0-preview.4 · 资产脚本 CS1061 修复' --notes-file hotfix4/release-notes.md
+          gh release download "$TAG" --repo "$REPO" --dir "$RUNNER_TEMP/downloaded"
+          diff --recursive --brief "$RUNNER_TEMP/out" "$RUNNER_TEMP/downloaded"
+          gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease --latest=false

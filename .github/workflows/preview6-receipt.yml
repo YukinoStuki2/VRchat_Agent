@@ -1,0 +1,43 @@
+name: Publish scoped scene receipt preview
+on:
+  push:
+    tags: ['hermes-preview-0.2.0-preview.6']
+permissions: {}
+jobs:
+  release:
+    if: github.repository == 'YukinoStuki2/VRchat_Agent' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      REPO: YukinoStuki2/VRchat_Agent
+      TAG: hermes-preview-0.2.0-preview.6
+      EDITOR: com.yukino.vrchat-agent-0.2.0-preview.6.zip
+      HOST: vrchat-agent-hermes-0.2.0-receipt.host.1.zip
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Recover exact reviewed bytes (do not run package code)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/receipt6"
+          mkdir "$dir"
+          curl -fLsS --retry 2 -o "$RUNNER_TEMP/prev.zip" "https://github.com/$REPO/releases/download/hermes-preview-0.2.0-preview.5/com.yukino.vrchat-agent-0.2.0-preview.5.zip"
+          printf '%s  %s\n' 4504da807ea876c5cbb1b1890bcd7f2e56f609508e2024e97577ce1805ba27e9 "$RUNNER_TEMP/prev.zip" | sha256sum -c -
+          zstd -dq --patch-from="$RUNNER_TEMP/prev.zip" receipt6/preview.5-to-.6.zst -o "$dir/$EDITOR"
+          cp "receipt6/$HOST" receipt6/vpm-entry.json "$dir/"
+          (cd "$dir" && sha256sum -c "$GITHUB_WORKSPACE/receipt6/assets.sha256")
+      - name: Publish only the new non-latest preview after draft readback
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/receipt6"
+          gh release create "$TAG" "$dir/$EDITOR" "$dir/$HOST" "$dir/vpm-entry.json" --repo "$REPO" --verify-tag --draft --prerelease --latest=false --title 'VRChat Agent preview.6 · 私聊只读场景回执' --notes-file receipt6/notes.md
+          gh release download "$TAG" --repo "$REPO" --dir "$RUNNER_TEMP/readback"
+          diff --recursive --brief "$dir" "$RUNNER_TEMP/readback"
+          gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease --latest=false

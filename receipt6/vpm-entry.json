@@ -1,0 +1,29 @@
+{
+  "name": "com.yukino.vrchat-agent",
+  "version": "0.2.0-preview.6",
+  "displayName": "Yukino VRChat Agent（Hermes 优先预览）",
+  "description": "供独立测试工程验收的 Hermes 优先候选；非稳定发行，真实 Unity/模型尚未验收。",
+  "unity": "2022.3",
+  "author": {
+    "name": "Yukino"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "com.coplaydev.unity-mcp": "10.2.0",
+    "com.unity.nuget.newtonsoft-json": "3.0.2",
+    "com.unity.test-framework": "1.1.31"
+  },
+  "vpmDependencies": {
+    "com.coplaydev.unity-mcp": "=10.2.0"
+  },
+  "url": "https://github.com/YukinoStuki2/VRchat_Agent/releases/download/hermes-preview-0.2.0-preview.6/com.yukino.vrchat-agent-0.2.0-preview.6.zip",
+  "vrchatAgentVerification": {
+    "scope": "scene-receipt-offline-candidate",
+    "source_review": "not-reviewed",
+    "independent_source_reviews_passed": false,
+    "unity_verified": false,
+    "windows_kernel_checks": "not_run"
+  },
+  "documentationUrl": "https://github.com/YukinoStuki2/VRchat_Agent/releases/tag/hermes-preview-0.2.0-preview.6",
+  "zipSHA256": "65da28b3d69519fd58502bd1b7790e1962bae3cae30d6f06e0d42ee1214b3e83"
+}
